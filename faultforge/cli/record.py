@@ -21,7 +21,7 @@ from faultforge.data import (
 )
 from faultforge.dtype import DnnDtype
 from faultforge.encoding.bit_pattern import BitPattern, BitPatternEncoder
-from faultforge.encoding.embedded_parity import EmbeddedParityEncoder
+from faultforge.encoding.embedded_parity import EmbeddedParityEncoder, EpScheme
 from faultforge.encoding.msb import MsbEncoder
 from faultforge.encoding.secded import SecdedEncoder
 from faultforge.encoding.sequence import EncoderSequence, TensorEncoder
@@ -162,6 +162,16 @@ a chunk size of 64 should be used.",
             rich_help_panel="Encoding settings",
         ),
     ] = False,
+    embedded_parity_scheme: Annotated[
+        EpScheme,
+        typer.Option(
+            help="""\
+Which scheme to use for embedded parity. The number after D determines the
+number of data bits per parity bits (P). The default is most likely optimal.
+            """,
+            rich_help_panel="Encoding settings",
+        ),
+    ] = EpScheme.D3P1,
     device: Annotated[  # pyright: ignore[reportRedeclaration]
         str,
         typer.Option(
@@ -303,8 +313,8 @@ This also greatly reduces the output file size for large numbers of faults.",
 
     if embedded_parity:
         if encoder is None:
-            logger.debug("Using EmbeddedParityEncoder")
-            encoder = EmbeddedParityEncoder()
+            logger.debug(f"Using EmbeddedParityEncoder with {embedded_parity_scheme}")
+            encoder = EmbeddedParityEncoder(embedded_parity_scheme)
         else:
             head_encoders.append(EmbeddedParityEncoder())
 
