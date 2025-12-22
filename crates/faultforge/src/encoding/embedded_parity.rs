@@ -378,3 +378,49 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn encode_decode_roundtrip(
+            (mut buffer, (source_bits, target_bit)) in prop::collection::vec(any::<u8>(), 1..1024)
+            .prop_flat_map(|buffer| (
+                Just(buffer.clone()),
+                prop::collection::hash_set(0usize..buffer.len(), 1..buffer.len())
+                .prop_flat_map(move |source_bits| (
+                    Just(source_bits.clone()),
+                    (0..buffer.len()).prop_filter(
+                        "target_bit not in source_bits",
+                        move |target_bit| !source_bits.contains(target_bit)
+                    )
+                )),
+            )),
+        ) {
+            let mut mapped = buffer.clone();
+            mapped.set_0(target_bit);
+
+            let mut ones = 0;
+            for b in source_bits.iter() {
+                if buffer.is_1(*b) {
+                    ones += 1;
+                }
+            }
+
+            encode(source_bits.clone(), target_bit, &mut buffer).unwrap();
+
+            if ones % 2 == 0 {
+                assert!(buffer.is_0(target_bit))
+            } else {
+                assert!(buffer.is_1(target_bit))
+            }
+
+            decode(source_bits, target_bit, &mut buffer).unwrap();
+
+            assert_eq!(mapped, buffer)
+        }
+    }
+}
