@@ -51,6 +51,7 @@ default-groups = ["dev", "all"]
 typeCheckingMode = "recommended"
 reportExplicitAny = false
 reportMissingTypeStubs = false
+reportPrivateUsage = false
 
 [build-system]
 requires = ["maturin>=1.8,<2.0"]

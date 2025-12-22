@@ -46,6 +46,8 @@ mod _core {
     use crate::single_bit_encoding::bit30_encode_f32;
 
     #[pymodule_export]
+    use crate::embedded_parity::EpScheme;
+    #[pymodule_export]
     use crate::embedded_parity::embedded_parity_decode_f32;
     #[pymodule_export]
     use crate::embedded_parity::embedded_parity_decode_u16;
