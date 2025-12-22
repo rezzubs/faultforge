@@ -44,12 +44,6 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
 
 @dataclass
 class EmbeddedParityEncoding(TensorEncodingHelper):
-    _encoded_data: list[Tensor]
-    _bits_count: int
-    _decoded_tensors: list[Tensor]
-    _dtype: torch.dtype
-    _needs_recompute: bool = True
-
     @override
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
