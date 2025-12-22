@@ -6,6 +6,9 @@ wheels
 *.so
 *.pyd
 
+# Hypothesis
+.hypothesis/
+
 # Common Rust
 target
 

@@ -20,6 +20,8 @@ classifiers = [
 [dependency-groups]
 dev = [
     "basedpyright>=1.32.1",
+    "hypothesis>=6.148.7",
+    "pytest>=9.0.2",
     "ruff>=0.12.4",
 ]
 torchvision = [
