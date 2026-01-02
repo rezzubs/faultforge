@@ -61,6 +61,7 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
     @override
     def encoder_add_metadata(self, metadata: dict[str, str]) -> None:
         metadata["embedded_parity"] = "true"
+        metadata["embedded_parity_scheme"] = self.scheme.value
 
 
 @dataclass
