@@ -1,7 +1,7 @@
 import abc
 import logging
 from dataclasses import dataclass
-from typing import Self, override
+from typing import override
 
 import torch
 from torch import Tensor
@@ -123,15 +123,3 @@ class TensorEncodingHelper(TensorEncoding, abc.ABC):
     @override
     def encoding_bits_count(self) -> int:
         return self._bits_count
-
-    @override
-    def encoding_clone(self) -> Self:
-        copied_data = [t.clone() for t in self._encoded_data]
-        copied_decoded = [t.clone() for t in self._decoded_tensors]
-        return self.__class__(
-            copied_data,
-            self._bits_count,
-            copied_decoded,
-            self._dtype,
-            self._needs_recompute,
-        )

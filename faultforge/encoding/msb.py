@@ -66,3 +66,15 @@ class MsbEncoding(TensorEncodingHelper):
         encoded_np = t.numpy(force=True).copy()
         faultforge._core.bit30_decode_f32(encoded_np)
         return torch.from_numpy(encoded_np)  # pyright: ignore[reportUnknownMemberType]
+
+    @override
+    def encoding_clone(self) -> MsbEncoding:
+        copied_data = [t.clone() for t in self._encoded_data]
+        copied_decoded = [t.clone() for t in self._decoded_tensors]
+        return self.__class__(
+            copied_data,
+            self._bits_count,
+            copied_decoded,
+            self._dtype,
+            self._needs_recompute,
+        )
