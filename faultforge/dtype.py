@@ -1,3 +1,5 @@
+"""The supported data types for different functions grouped by use case."""
+
 from __future__ import annotations
 
 import enum
@@ -13,6 +15,7 @@ class DnnDtype(enum.Enum):
 
     def to_torch(self) -> torch.dtype:
         """Convert to an equivalent pytorch data type."""
+
         match self:
             case DnnDtype.Float32:
                 return torch.float32
@@ -23,10 +26,9 @@ class DnnDtype(enum.Enum):
     def from_torch(cls, dtype: torch.dtype) -> DnnDtype:
         """Get the equivalent of a pytorch data type.
 
-        Raises:
-            ValueError:
-                For incompatible data types
+        :raises ValueError: For incompatible data types
         """
+
         match dtype:
             case torch.float32:
                 return DnnDtype.Float32
@@ -64,10 +66,9 @@ class FiDtype(enum.Enum):
     def from_torch(cls, dtype: torch.dtype) -> FiDtype:
         """Get the equivalent of a pytorch data type.
 
-        Raises:
-            ValueError:
-                For incompatible data types
+        :raises ValueError: For incompatible data types
         """
+
         match dtype:
             case torch.float32:
                 return FiDtype.Float32

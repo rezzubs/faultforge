@@ -1,4 +1,10 @@
-"""General utilities used throughout the library."""
+"""General utilities used throughout the library.
+
+Warnings
+--------
+These functions not really meant for public consumption and can change at any
+time. Otherwise fine to use.
+"""
 
 import logging
 from collections.abc import Callable
@@ -11,6 +17,7 @@ _logger = logging.getLogger(__name__)
 
 def dtype_bits_count(dtype: torch.dtype) -> int:
     """Return the number of bits for a PyTorch data type."""
+
     match dtype:
         case torch.float64 | torch.uint64 | torch.int64:
             return 32
@@ -57,9 +64,10 @@ def build_map_layer(*params: str) -> MapLayer:
 def map_layer_recursive(map_layer: MapLayer, data: nn.Module) -> list[torch.Tensor]:
     """Apply a map_layer function recursively to a module and its children.
 
-    Returns:
-        A list of parameter tensors extracted from the module and its children.
+    :return: A list of parameter tensors extracted from the module and its
+    children.
     """
+
     tensors = map_layer(data)
 
     for child in data.children():

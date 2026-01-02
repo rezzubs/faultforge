@@ -1,3 +1,5 @@
+"""Recording statistics for fault injection experiments."""
+
 from __future__ import annotations
 
 import copy
@@ -19,11 +21,15 @@ _logger = logging.getLogger(__name__)
 
 
 class MetaDataError(Exception):
-    """The metadata didn't match"""
+    """The metadata didn't match
+
+    See :func:`Stats.record_entry`
+    """
 
 
 def _count_ones(number: int) -> int:
-    """Count the number of bits set to one for an integer"""
+    """Count the number of bits set to one for an integer."""
+
     # NOTE: `bit_count` counts ones for the absolute value. The values for this
     # are returned from rust as usize which are not expected to be negative but
     # it's best to make sure.
@@ -32,6 +38,8 @@ def _count_ones(number: int) -> int:
 
 
 def metadata_str(metadata: dict[str, str], bit_error_rate: float | None) -> str:
+    """Generate a string representation of metadata for file naming."""
+
     parts = list(metadata.items())
     parts.sort(key=lambda x: x[0])
 
@@ -66,13 +74,15 @@ def _get_path(
 
 @dataclass
 class Autosave:
+    """Autosave configuration for :class:`Stats`."""
+
     interval: int
     path: Path
     metadata_name: bool
 
 
 class Stats(BaseModel):
-    """Fault injection statistics for a system."""
+    """Fault injection statistics for a :class:`BaseSystem`."""
 
     faults_count: int
     bits_count: int
@@ -90,6 +100,8 @@ class Stats(BaseModel):
 
         @dataclass
         class Summary:
+            """Summary of an entry."""
+
             accuracy: float
             faults_count: int
             bits_count: int
@@ -121,7 +133,8 @@ Accuracy: {self.accuracy:.2f}%
 {output_str}{error_counts_str}"""
 
             def error_counts_sorted(self) -> list[tuple[int, int]] | None:
-                """Return the `n_bit_error_counts` sorted by the number of bits"""
+                """Return the ``n_bit_error_counts`` sorted by the number of bits."""
+
                 if self.n_bit_error_counts is None:
                     # Parameter faults were not recorded
                     return None
@@ -131,13 +144,14 @@ Accuracy: {self.accuracy:.2f}%
                 return counts
 
             def bit_error_rate(self) -> float:
-                """Return the input bit error rate for fault injection"""
+                """Return the input bit error rate for fault injection."""
                 return self.faults_count / self.bits_count
 
             def output_faulty_parameters_count(self) -> int | None:
                 """Count the number of parameters hit by fault injection.
 
-                Returns None if faults were not recorded.
+                :returns: None if faults were not recorded, otherwise the number
+                of parameters hit.
                 """
                 if self.n_bit_error_counts is None:
                     return None
@@ -149,8 +163,10 @@ Accuracy: {self.accuracy:.2f}%
 
                 This is different from the number of bits injected because encodign might mask a number of faults.
 
-                Returns None if faults were not recorded.
+                :returns: None if faults were not recorded, otherwise the number
+                of bits affected.
                 """
+
                 if self.n_bit_error_counts is None:
                     return None
 
@@ -162,8 +178,11 @@ Accuracy: {self.accuracy:.2f}%
             def masked_percentage(self) -> float | None:
                 """How many bits were masked by encoding.
 
-                Returns None if there were no faults to begin with or if faults were not recorded.
+                :returns: None if there were no faults to begin with or if
+                faults were not recorded, otherwise the percentage of bits that
+                were masked.
                 """
+
                 if self.faults_count == 0:
                     return None
                 faulty = self.output_faulty_bits_count()
@@ -172,6 +191,8 @@ Accuracy: {self.accuracy:.2f}%
                 return (1 - (faulty / self.faults_count)) * 100
 
         def summary(self, parent: Stats) -> Stats.Entry.Summary:
+            """Get the summary of an :class:`Stats.Entry`."""
+
             out = Stats.Entry.Summary(
                 accuracy=self.accuracy,
                 bits_count=parent.bits_count,
@@ -203,10 +224,10 @@ Accuracy: {self.accuracy:.2f}%
             The keys of the dictionary map to the indices and the value to the
             number of faults.
 
-            Returns:
-                A dictionary mapping bit indices to the number of faults at that
-                index. None if the faulty parameters were not recorded.
+            :returns: A dictionary mapping bit indices to the number of faults
+            at that index. None if the faulty parameters were not recorded.
             """
+
             index_map: dict[int, int] = dict()
 
             if self.faulty_parameters is None:
@@ -226,6 +247,7 @@ Accuracy: {self.accuracy:.2f}%
 
     def bit_error_rate(self) -> float:
         """Get the bit error rate of the given configuration."""
+
         return self.faults_count / self.bits_count
 
     def record_entry[T](
@@ -235,7 +257,10 @@ Accuracy: {self.accuracy:.2f}%
         summary: bool = False,
         skip_comparison: bool = False,
     ) -> Stats.Entry:
-        """Record a new entry for the given `system`"""
+        """Record a new entry for the given ``system``.
+
+        :param summary: Whether to print a summary after recording.
+        """
 
         _logger.debug("Recording new entry")
 
@@ -293,6 +318,11 @@ Accuracy: {self.accuracy:.2f}%
         skip_comparison: bool = False,
         autosave: Autosave | None = None,
     ):
+        """Record ``n`` entries for the given ``system``.
+
+        :param summary: Whether to print a summary after recording.
+        """
+
         _logger.debug(f"Recording {n} runs")
         if n <= 0:
             raise ValueError("Expected `n` to be a positive nonzero integer")
@@ -319,6 +349,15 @@ Accuracy: {self.accuracy:.2f}%
         skip_comparison: bool = False,
         autosave: Autosave | None = None,
     ):
+        """Record new entries until the results are stable.
+
+        :param stable_within: The number of cycles to consider for stability.
+        :param threshold: The maximum mean accuracy deviation percentage within
+        the last ``stable_within`` cycles.
+        :param min_runs: The minimum number of runs to record.
+        :param summary: Whether to print a summary after recording.
+        """
+
         _logger.debug(
             f"Recording until mean is within {threshold}% in the last {stable_within} cycles"
         )
@@ -381,12 +420,11 @@ Accuracy: {self.accuracy:.2f}%
         If path doesn't exist, it will create a new file with the given name.
         The parent is expected to exist.
 
-        If the path is a directory then a file called `data.json` will be
+        If the path is a directory then a file called `stats.json` will be
         created in that directory.
 
-        If `metadata_name` is True then the file name is set based on the
-        metadata and bit error rate. `save_path` must be a directory in this
-        case.
+        :param metadata_name: Use :func:`metadata_str` to generate the name of
+        the output file which will be placed relative to ``save_path``.
         """
 
         save_path = _get_path(
@@ -406,6 +444,11 @@ Accuracy: {self.accuracy:.2f}%
         cls,
         save_path: Path,
     ) -> Stats:
+        """Load existing statistic entries from disk.
+
+        For a non-fallible version see :func:`Stats.load_or_create`.
+        """
+
         with open(save_path, "r") as f:
             content = f.read()
             return Stats.model_validate_json(content)
@@ -422,7 +465,7 @@ Accuracy: {self.accuracy:.2f}%
     ) -> Stats:
         """Load existing data from disk or create a new instance if it doesn't exist.
 
-        Note: This doesn't actually create the file. For that use `save`.
+        This doesn't actually create the file. For that use :func:`Stats.save`.
         """
 
         def create():
@@ -454,7 +497,8 @@ Accuracy: {self.accuracy:.2f}%
         )
 
     def mean_until(self, until: int) -> float | None:
-        """Return the mean of the accuracy until the given cycle (inclusive)"""
+        """Get the mean of the accuracy until the given cycle (inclusive)"""
+
         if until < 0:
             raise ValueError("`until` must be non-negative")
 
@@ -470,6 +514,8 @@ Accuracy: {self.accuracy:.2f}%
         return helper(until)
 
     def means(self) -> list[float]:
+        """Get the means of all entries."""
+
         output: list[float] = []
 
         for i in range(len(self.entries)):
@@ -482,8 +528,9 @@ Accuracy: {self.accuracy:.2f}%
     def mean_drift(self, within: int) -> tuple[float, float] | None:
         """Get the minimum and maximum mean value within the final n cycles.
 
-        Returns None if there isn't enough data
+        :returns: None if there isn't enough data
         """
+
         if len(self.entries) < within:
             return None
 
@@ -494,6 +541,8 @@ Accuracy: {self.accuracy:.2f}%
         return (min(bounded), max(bounded))
 
     def is_stable(self, within: int, threshold: float) -> bool:
+        """Check if the mean accuracy is stable within the final n cycles."""
+
         drift: tuple[float, float] | None = self.mean_drift(within)
 
         if drift is None:

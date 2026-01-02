@@ -1,3 +1,5 @@
+"""Utility functions for tensors and lists of tensors."""
+
 import logging
 
 import torch
@@ -18,13 +20,11 @@ _logger = logging.getLogger(__name__)
 def tensor_list_dtype(ts: list[torch.Tensor]) -> torch.dtype | None:
     """Confirms that all tensors in `ts` have the same datatype.
 
-    Returns:
-        The common dtype of `ts` or None if `ts` is empty.
+    :returns: The common dtype of `ts` or None if `ts` is empty.
 
-    Raises:
-        DtypeMismatchError:
-            If dtype values don't match.
+    :raises DtypeError: If dtype values don't match.
     """
+
     dtype = None
 
     for i, t in enumerate(ts):
@@ -40,6 +40,7 @@ def tensor_list_dtype(ts: list[torch.Tensor]) -> torch.dtype | None:
 
 def tensor_list_bits_count(ts: list[torch.Tensor]) -> int:
     """Get the total number of bits in a list of tensors."""
+
     total = 0
 
     for t in ts:
@@ -49,15 +50,14 @@ def tensor_list_bits_count(ts: list[torch.Tensor]) -> int:
 
 
 def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
-    """Flip `faults_count` unique bits in `ts`.
+    """Flip `faults_count` unique bits in ``ts``.
 
-    Raises:
-        DtypeMismatchError:
-            If values in `ts` don't all have the same data type.
-        ValueError:
-            - If faults_count is greated than the number of bits `ts`.
-            - If the data type is unsupported, see `FiDtype`.
+    :raises DtypeError: If values in ``ts`` don't all have the same data type.
+    :raises ValueError:
+        - If faults_count is greated than the number of bits ``ts``.
+        - If the data type is unsupported. See :class:`FiDtype`.
     """
+
     dtype = tensor_list_dtype(ts)
 
     if dtype is None:
@@ -110,6 +110,8 @@ def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
 def tensor_list_compare_bitwise(
     left: list[torch.Tensor], right: list[torch.Tensor]
 ) -> list[int]:
+    """Return a bitwise xor of all tensors in `left` and `right` as unsigned integers."""
+
     left_dtype = tensor_list_dtype(left)
     right_dtype = tensor_list_dtype(right)
 
