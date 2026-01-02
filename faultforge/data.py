@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from .system import BaseSystem
@@ -83,7 +83,10 @@ class Data(BaseModel):
         """An entry corresponding a single run of fault injection."""
 
         accuracy: float
-        faulty_parameters: list[int]
+        faulty_parameters: list[int] | None = Field(
+            default=None,
+            exclude_if=lambda x: x is None,  # pyright: ignore[reportAny]
+        )
 
         @dataclass
         class Summary:
@@ -91,13 +94,18 @@ class Data(BaseModel):
             faults_count: int
             bits_count: int
             # number of faulty bits per parameter: number of occurences
-            n_bit_error_counts: dict[int, int]
+            n_bit_error_counts: dict[int, int] | None
 
             @override
             def __str__(self) -> str:
-                error_counts_str = "\n".join(
-                    f"{params_count} parameters had {faults_count} faulty bits"
-                    for faults_count, params_count in self.error_counts_sorted()
+                error_counts = self.error_counts_sorted()
+                error_counts_str = (
+                    "\n".join(
+                        f"{params_count} parameters had {faults_count} faulty bits"
+                        for faults_count, params_count in error_counts
+                    )
+                    if error_counts is not None
+                    else ""
                 )
 
                 output_str = (
@@ -112,8 +120,12 @@ class Data(BaseModel):
 Accuracy: {self.accuracy:.2f}%
 {output_str}{error_counts_str}"""
 
-            def error_counts_sorted(self) -> list[tuple[int, int]]:
+            def error_counts_sorted(self) -> list[tuple[int, int]] | None:
                 """Return the `n_bit_error_counts` sorted by the number of bits"""
+                if self.n_bit_error_counts is None:
+                    # Parameter faults were not recorded
+                    return None
+
                 counts = list(self.n_bit_error_counts.items())
                 counts.sort(key=lambda x: x[0])
                 return counts
@@ -122,15 +134,26 @@ Accuracy: {self.accuracy:.2f}%
                 """Return the input bit error rate for fault injection"""
                 return self.faults_count / self.bits_count
 
-            def output_faulty_parameters_count(self) -> int:
-                """Count the number of parameters hit by fault injection"""
+            def output_faulty_parameters_count(self) -> int | None:
+                """Count the number of parameters hit by fault injection.
+
+                Returns None if faults were not recorded.
+                """
+                if self.n_bit_error_counts is None:
+                    return None
+
                 return sum(self.n_bit_error_counts.values())
 
-            def output_faulty_bits_count(self) -> int:
+            def output_faulty_bits_count(self) -> int | None:
                 """Count the number of bits that were actually affected by fault injection.
 
                 This is different from the number of bits injected because encodign might mask a number of faults.
+
+                Returns None if faults were not recorded.
                 """
+                if self.n_bit_error_counts is None:
+                    return None
+
                 count = 0
                 for faults_count, parameters_count in self.n_bit_error_counts.items():
                     count += faults_count * parameters_count
@@ -139,11 +162,14 @@ Accuracy: {self.accuracy:.2f}%
             def masked_percentage(self) -> float | None:
                 """How many bits were masked by encoding.
 
-                Returns None if there were no faults to begin with
+                Returns None if there were no faults to begin with or if faults were not recorded.
                 """
                 if self.faults_count == 0:
                     return None
-                return (1 - (self.output_faulty_bits_count() / self.faults_count)) * 100
+                faulty = self.output_faulty_bits_count()
+                if faulty is None:
+                    return None
+                return (1 - (faulty / self.faults_count)) * 100
 
         def summary(self, parent: Data) -> Data.Entry.Summary:
             out = Data.Entry.Summary(
@@ -153,24 +179,38 @@ Accuracy: {self.accuracy:.2f}%
                 n_bit_error_counts=dict(),
             )
 
-            for faulty in self.faulty_parameters:
-                invalid_bits_count = _count_ones(faulty)
-                try:
-                    out.n_bit_error_counts[invalid_bits_count] += 1
-                except KeyError:
-                    out.n_bit_error_counts[invalid_bits_count] = 1
+            if self.faulty_parameters is None:
+                out.n_bit_error_counts = None
+
+            else:
+                # Assigned just above but pyright doesn't get it.
+                assert out.n_bit_error_counts is not None
+
+                for faulty in self.faulty_parameters:
+                    invalid_bits_count = _count_ones(faulty)
+                    try:
+                        out.n_bit_error_counts[invalid_bits_count] += 1
+                    except KeyError:
+                        out.n_bit_error_counts[invalid_bits_count] = 1
 
             return out
 
         def faults_per_bit_index(
             self, skip_multi_bit_faults: bool = False
-        ) -> dict[int, int]:
+        ) -> dict[int, int] | None:
             """Get the number of faults for each bit index.
 
             The keys of the dictionary map to the indices and the value to the
             number of faults.
+
+            Returns:
+                A dictionary mapping bit indices to the number of faults at that
+                index. None if the faulty parameters were not recorded.
             """
             index_map: dict[int, int] = dict()
+
+            if self.faulty_parameters is None:
+                return None
 
             for fault_mask in self.faulty_parameters:
                 binary_str = bin(fault_mask)
@@ -229,7 +269,8 @@ Accuracy: {self.accuracy:.2f}%
             )
             _logger.debug("Finished comparing outputs")
         else:
-            faulty_parameters = []
+            _logger.debug("Skipping output comparison")
+            faulty_parameters = None
 
         entry = Data.Entry(
             accuracy=accuracy,

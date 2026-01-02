@@ -111,11 +111,15 @@ This parameter defines the x-axis resolution",
     total_xs: list[float] = []
     total_ys: list[int] = []
 
-    for entry in entries:
+    for i, entry in enumerate(entries):
         if entry.accuracy > max_accuracy or entry.accuracy < min_accuracy:
             continue
 
         fault_map = entry.faults_per_bit_index(skip_multi_bit_faults)
+        if fault_map is None:
+            logger.debug(f"Faulty parameters not recorded for entry {i}")
+            continue
+
         total_faults = sum(fault_map.values())
 
         if max_total_faults is not None and total_faults > max_total_faults:
