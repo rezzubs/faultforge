@@ -316,7 +316,7 @@ This also greatly reduces the output file size for large numbers of faults.",
             logger.debug(f"Using EmbeddedParityEncoder with {embedded_parity_scheme}")
             encoder = EmbeddedParityEncoder(embedded_parity_scheme)
         else:
-            head_encoders.append(EmbeddedParityEncoder())
+            head_encoders.append(EmbeddedParityEncoder(embedded_parity_scheme))
 
     if len(head_encoders) > 0:
         assert encoder is not None

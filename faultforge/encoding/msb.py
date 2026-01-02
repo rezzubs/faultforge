@@ -39,7 +39,7 @@ class MsbEncoder(TensorEncoderHelper):
         decoded_tensors: list[Tensor],
         dtype: torch.dtype,
     ) -> TensorEncoding:
-        return MsbEncoding(data, bits_count, decoded_tensors, dtype)
+        return MsbEncoding(data, bits_count, decoded_tensors, dtype, True)
 
     @override
     def encoder_add_metadata(self, metadata: dict[str, str]) -> None:

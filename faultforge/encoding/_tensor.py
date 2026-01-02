@@ -73,7 +73,7 @@ class TensorEncodingHelper(TensorEncoding, abc.ABC):
     _bits_count: int
     _decoded_tensors: list[Tensor]
     _dtype: torch.dtype
-    _needs_recompute: bool = True
+    _needs_recompute: bool
 
     @abc.abstractmethod
     def decode_float32(self, t: Tensor) -> Tensor: ...

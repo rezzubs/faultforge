@@ -27,6 +27,11 @@ class EpScheme(enum.Enum):
             case EpScheme.D15P1:
                 return _core.EpScheme.D15P1
 
+    @staticmethod
+    def default() -> EpScheme:
+        """Return the default scheme."""
+        return EpScheme.D3P1
+
 
 @dataclass
 class EmbeddedParityEncoder(TensorEncoderHelper):
@@ -55,7 +60,12 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
         dtype: torch.dtype,
     ) -> TensorEncoding:
         return EmbeddedParityEncoding(
-            data, bits_count, decoded_tensors, dtype, _scheme=self.scheme
+            data,
+            bits_count,
+            decoded_tensors,
+            dtype,
+            True,
+            _scheme=self.scheme,
         )
 
     @override
@@ -66,16 +76,16 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
 
 @dataclass
 class EmbeddedParityEncoding(TensorEncodingHelper):
-    _scheme: EpScheme = EpScheme.D3P1
+    _scheme: EpScheme
 
     @override
     def encoding_clone(self) -> EmbeddedParityEncoding:
-        copied_data = [t.clone() for t in self._encoded_data]
-        copied_decoded = [t.clone() for t in self._decoded_tensors]
+        data_tensors = [t.clone() for t in self._encoded_data]
+        decoded_tensors = [t.clone() for t in self._decoded_tensors]
         return EmbeddedParityEncoding(
-            copied_data,
+            data_tensors,
             self._bits_count,
-            copied_decoded,
+            decoded_tensors,
             self._dtype,
             self._needs_recompute,
             self._scheme,
