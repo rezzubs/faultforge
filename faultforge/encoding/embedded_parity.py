@@ -68,6 +68,19 @@ class EmbeddedParityEncoding(TensorEncodingHelper):
     _scheme: EpScheme = EpScheme.D3P1
 
     @override
+    def encoding_clone(self) -> EmbeddedParityEncoding:
+        copied_data = [t.clone() for t in self._encoded_data]
+        copied_decoded = [t.clone() for t in self._decoded_tensors]
+        return EmbeddedParityEncoding(
+            copied_data,
+            self._bits_count,
+            copied_decoded,
+            self._dtype,
+            self._needs_recompute,
+            self._scheme,
+        )
+
+    @override
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
         _core.embedded_parity_decode_u16(encoded_np, self._scheme._core())
