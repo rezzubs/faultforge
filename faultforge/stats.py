@@ -54,8 +54,8 @@ def _get_path(
             _logger.debug("generating file name from metadata")
             root = root.joinpath(metadata_str(metadata, bit_error_rate) + ".json")
         else:
-            _logger.debug("metadata_name not set, defaulting to data.json")
-            root = root.joinpath("data.json")
+            _logger.debug("metadata_name not set, defaulting to stats.json")
+            root = root.joinpath("stats.json")
     elif metadata_name:
         raise ValueError(
             "`metadata_name` can only be used together with directory paths"
@@ -71,13 +71,13 @@ class Autosave:
     metadata_name: bool
 
 
-class Data(BaseModel):
-    """Fault injection data for a system."""
+class Stats(BaseModel):
+    """Fault injection statistics for a system."""
 
     faults_count: int
     bits_count: int
     metadata: dict[str, str]
-    entries: list[Data.Entry]
+    entries: list[Stats.Entry]
 
     class Entry(BaseModel):
         """An entry corresponding a single run of fault injection."""
@@ -171,8 +171,8 @@ Accuracy: {self.accuracy:.2f}%
                     return None
                 return (1 - (faulty / self.faults_count)) * 100
 
-        def summary(self, parent: Data) -> Data.Entry.Summary:
-            out = Data.Entry.Summary(
+        def summary(self, parent: Stats) -> Stats.Entry.Summary:
+            out = Stats.Entry.Summary(
                 accuracy=self.accuracy,
                 bits_count=parent.bits_count,
                 faults_count=parent.faults_count,
@@ -234,15 +234,15 @@ Accuracy: {self.accuracy:.2f}%
         *,
         summary: bool = False,
         skip_comparison: bool = False,
-    ) -> Data.Entry:
-        """Record a new data entry for the given `system`"""
+    ) -> Stats.Entry:
+        """Record a new entry for the given `system`"""
 
-        _logger.debug("Recording new data entry")
+        _logger.debug("Recording new entry")
 
         if system.system_metadata() != self.metadata:
             raise MetaDataError(
                 f"""Data has different metadata than the given system:
-                data: {self.metadata}
+                existing: {self.metadata}
                 system: {system.system_metadata()}
                 """
             )
@@ -272,7 +272,7 @@ Accuracy: {self.accuracy:.2f}%
             _logger.debug("Skipping output comparison")
             faulty_parameters = None
 
-        entry = Data.Entry(
+        entry = Stats.Entry(
             accuracy=accuracy,
             faulty_parameters=faulty_parameters,
         )
@@ -373,9 +373,9 @@ Accuracy: {self.accuracy:.2f}%
                     remaining = autosave.interval - rem
                     _logger.debug(f"{remaining} runs until autosave")
 
-        _logger.info("Data mean is stable")
+        _logger.info("Accuracy mean is stable")
 
-    def save(self, data_path: Path, metadata_name: bool = False) -> None:
+    def save(self, save_path: Path, metadata_name: bool = False) -> None:
         """Save the data to the given file path in json format.
 
         If path doesn't exist, it will create a new file with the given name.
@@ -384,42 +384,42 @@ Accuracy: {self.accuracy:.2f}%
         If the path is a directory then a file called `data.json` will be
         created in that directory.
 
-        If `metadata_path` is True then the file name is set based on the
-        metadata and bit error rate. `data_path` must be a directory in this
+        If `metadata_name` is True then the file name is set based on the
+        metadata and bit error rate. `save_path` must be a directory in this
         case.
         """
 
-        data_path = _get_path(
-            data_path, self.faults_count / self.bits_count, self.metadata, metadata_name
+        save_path = _get_path(
+            save_path, self.faults_count / self.bits_count, self.metadata, metadata_name
         )
 
-        if data_path.exists():
-            _logger.info(f'Saving data to "{data_path}"')
+        if save_path.exists():
+            _logger.info(f'Saving data to "{save_path}"')
         else:
-            _logger.info(f'Saving data to a new file at "{data_path}"')
+            _logger.info(f'Saving data to a new file at "{save_path}"')
 
-        with open(data_path, "w") as f:
+        with open(save_path, "w") as f:
             _ = f.write(self.model_dump_json())
 
     @classmethod
     def load(
         cls,
-        data_path: Path,
-    ) -> Data:
-        with open(data_path, "r") as f:
+        save_path: Path,
+    ) -> Stats:
+        with open(save_path, "r") as f:
             content = f.read()
-            return Data.model_validate_json(content)
+            return Stats.model_validate_json(content)
 
     @classmethod
     def load_or_create(
         cls,
-        data_path: Path | None,
+        save_path: Path | None,
         *,
         faults_count: int,
         bits_count: int,
         metadata: dict[str, str],
         metadata_name: bool = False,
-    ) -> Data:
+    ) -> Stats:
         """Load existing data from disk or create a new instance if it doesn't exist.
 
         Note: This doesn't actually create the file. For that use `save`.
@@ -433,24 +433,24 @@ Accuracy: {self.accuracy:.2f}%
                 entries=[],
             )
 
-        if data_path is None:
+        if save_path is None:
             _logger.debug("Creating new data")
             return create()
 
-        data_path = _get_path(
-            data_path, faults_count / bits_count, metadata, metadata_name
+        save_path = _get_path(
+            save_path, faults_count / bits_count, metadata, metadata_name
         )
 
-        if not data_path.exists():
+        if not save_path.exists():
             _logger.warning(
-                f'Didn\'t find existing data at "{data_path}", creating a new instance'
+                f'Didn\'t find existing data at "{save_path}", creating a new instance'
             )
             return create()
 
         _logger.info('Loading existing data from "{path}"')
 
         return cls.load(
-            data_path,
+            save_path,
         )
 
     def mean_until(self, until: int) -> float | None:

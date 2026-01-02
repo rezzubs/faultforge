@@ -15,10 +15,6 @@ from faultforge.cifar.dataset import Cifar
 from faultforge.cifar.model import CachedModel as CifarModel
 from faultforge.cifar.system import System as CifarSystem
 from faultforge.cli.utils import setup_logging
-from faultforge.data import (
-    Autosave,
-    Data,
-)
 from faultforge.dtype import DnnDtype
 from faultforge.encoding.bit_pattern import BitPattern, BitPatternEncoder
 from faultforge.encoding.embedded_parity import EmbeddedParityEncoder, EpScheme
@@ -29,6 +25,10 @@ from faultforge.encoding.system import EncodedSystem
 from faultforge.imagenet.dataset import ImageNet
 from faultforge.imagenet.model import Model as ImagenetModel
 from faultforge.imagenet.system import System as ImagenetSystem
+from faultforge.stats import (
+    Autosave,
+    Stats,
+)
 from faultforge.system import BaseSystem
 
 logger = logging.getLogger(__name__)
@@ -204,12 +204,12 @@ number of data bits per parity bits (P). The default is most likely optimal.
             rich_help_panel="Recording settings",
         ),
     ] = 1,
-    output_path: Annotated[
+    save_path: Annotated[
         Path | None,
         typer.Option(
             help="The path of the file to save the results into. \
 If the file doesn't exist then it will be created. \
-If the path is a directory (existing) then the file will be called data.json",
+If the path is a directory (existing) then the file will be called stats.json",
             rich_help_panel="Recording settings",
         ),
     ] = None,
@@ -246,7 +246,7 @@ This also greatly reduces the output file size for large numbers of faults.",
         ),
     ] = False,
 ):
-    """Record data entries for a model and dataset."""
+    """Record evaluation statistics for a model and dataset."""
     device: torch.device = torch.device(device)
 
     if cifar_cache is None:
@@ -340,33 +340,33 @@ This also greatly reduces the output file size for large numbers of faults.",
             print("Choose one of --bit_error_rate and --faults_count")
             raise typer.Exit()
 
-    if output_path is not None:
-        output_path = output_path.expanduser()
+    if save_path is not None:
+        save_path = save_path.expanduser()
 
-    data = Data.load_or_create(
-        output_path,
+    stats = Stats.load_or_create(
+        save_path,
         faults_count=faults_count,
         bits_count=bits_count_total,
         metadata=system.system_metadata(),
         metadata_name=metadata_name,
     )
 
-    logger.debug(f"Proceeding with metadata: {data.metadata}")
+    logger.debug(f"Proceeding with metadata: {stats.metadata}")
 
     match (runs, until_stable):
         case (None, None):
-            _ = data.record_entry(
+            _ = stats.record_entry(
                 cast(BaseSystem[Any], system),
                 summary=summary,
                 skip_comparison=skip_comparison,
             )
         case (_, None):
-            if autosave is not None and output_path is not None:
-                save_config = Autosave(autosave, output_path, metadata_name)
+            if autosave is not None and save_path is not None:
+                save_config = Autosave(autosave, save_path, metadata_name)
             else:
                 save_config = None
 
-            data.record_entries(
+            stats.record_entries(
                 cast(BaseSystem[Any], system),
                 runs,
                 summary=summary,
@@ -374,12 +374,12 @@ This also greatly reduces the output file size for large numbers of faults.",
                 autosave=save_config,
             )
         case _:
-            if autosave is not None and output_path is not None:
-                save_config = Autosave(autosave, output_path, metadata_name)
+            if autosave is not None and save_path is not None:
+                save_config = Autosave(autosave, save_path, metadata_name)
             else:
                 save_config = None
 
-            _ = data.record_until_stable(
+            _ = stats.record_until_stable(
                 cast(BaseSystem[Any], system),
                 threshold=stability_threshold,
                 stable_within=until_stable,
@@ -389,8 +389,8 @@ This also greatly reduces the output file size for large numbers of faults.",
                 summary=summary,
             )
 
-    if output_path:
-        data.save(output_path, metadata_name)
+    if save_path:
+        stats.save(save_path, metadata_name)
 
 
 if __name__ == "__main__":

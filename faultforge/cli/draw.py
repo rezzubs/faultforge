@@ -10,32 +10,34 @@ import typer
 from matplotlib import patches
 from matplotlib.colors import LogNorm
 
-from faultforge.data import Data
+from faultforge.stats import Stats
 
 logger = logging.getLogger(__name__)
 
 app = typer.Typer()
 
 
-def path_sequence_data(paths: Iterable[Path]) -> list[Data]:
-    data: list[Data] = []
+def load_path_sequence_stats(paths: Iterable[Path]) -> list[Stats]:
+    stats: list[Stats] = []
 
     for path in paths:
         path = path.expanduser()
 
         if path.is_dir():
-            data.extend(path_sequence_data(path.iterdir()))
+            stats.extend(load_path_sequence_stats(path.iterdir()))
             continue
 
         try:
-            d = Data.load(path)
+            s = Stats.load(path)
         except Exception as e:
-            logger.warning(f"Failed to load data from path `{path}` - skipping\n-> {e}")
+            logger.warning(
+                f"Failed to load stats from path `{path}` - skipping\n-> {e}"
+            )
             continue
 
-        data.append(d)
+        stats.append(s)
 
-    return data
+    return stats
 
 
 @app.command()
@@ -43,7 +45,7 @@ def scatter(
     paths: Annotated[
         list[Path],
         typer.Argument(
-            help="All the paths that contain data. These paths will be searched recursively."
+            help="All the paths that contain stats. These paths will be searched recursively."
         ),
     ],
     max_accuracy: Annotated[
@@ -97,12 +99,12 @@ This parameter defines the x-axis resolution",
         ),
     ] = None,
 ):
-    """Draw a scatter plot for all the entries in the given data.
+    """Draw a scatter plot for all the entries in the given stats.
 
     The z-axis corresponds to the number of faults in each bit for a given accuracy.
     """
-    data = path_sequence_data(paths)
-    entries = [e for d in data for e in d.entries]
+    stats = load_path_sequence_stats(paths)
+    entries = [e for d in stats for e in d.entries]
 
     xs: list[float] = []
     ys: list[int] = []
@@ -211,7 +213,7 @@ def mean(
     paths: Annotated[
         list[Path],
         typer.Argument(
-            help="Paths which store the files where data is recorded.",
+            help="Paths which store the files where stats are recorded.",
         ),
     ],
     stability_threshold: Annotated[
@@ -231,30 +233,30 @@ def mean(
 ):
     """Plot the progression of the mean accuracy value over the number of runs."""
 
-    data = path_sequence_data(paths)
+    stats = load_path_sequence_stats(paths)
 
-    for d in data:
+    for s in stats:
         fig, ax = plt.subplots()  # pyright: ignore[reportUnknownMemberType]
 
         _ = ax.set_title(  # pyright: ignore[reportUnknownMemberType]
             "\n".join(
-                [f"{k}={v}" for k, v in d.metadata.items()]
-                + [f"BER={d.faults_count / d.bits_count:.2e}"]
+                [f"{k}={v}" for k, v in s.metadata.items()]
+                + [f"BER={s.faults_count / s.bits_count:.2e}"]
             )
         )
 
-        means = d.means()
+        means = s.means()
 
         _ = ax.plot(means)  # pyright: ignore[reportUnknownMemberType]
 
-        result = d.mean_drift(stable_within)
+        result = s.mean_drift(stable_within)
         if result is None:
             plt.show()  # pyright: ignore[reportUnknownMemberType]
             return
 
         drift_min, drift_max = result
 
-        entries_count = len(d.entries)
+        entries_count = len(s.entries)
 
         box_start_x = entries_count - stable_within
 
@@ -308,7 +310,7 @@ def configurations(
     paths: Annotated[
         list[Path],
         typer.Argument(
-            help="Paths which store the files where data is recorded.",
+            help="Paths which store the files where stats are recorded.",
         ),
     ],
     percentile: Annotated[
@@ -350,34 +352,34 @@ def configurations(
         ),
     ] = False,
 ):
-    """Compare different configurations in the data configurations.
+    """Compare different configurations for recorded stats.
 
     Entries with the same metadata and bit error rate will be merged.
     """
-    data = path_sequence_data(paths)
+    stats = load_path_sequence_stats(paths)
 
     by_metadata: dict[
-        tuple[tuple[str, str], ...], tuple[dict[float, list[Data.Entry]], float]
+        tuple[tuple[str, str], ...], tuple[dict[float, list[Stats.Entry]], float]
     ] = dict()
 
-    for d in data:
-        overhead_str = d.metadata.get("memory_overhead", None)
+    for s in stats:
+        overhead_str = s.metadata.get("memory_overhead", None)
         if overhead_str is not None:
             overhead_float_part = overhead_str.split("%")[0]
             overhead_parsed = float(overhead_float_part)
         else:
             overhead_parsed = 0
 
-        metadata = list(d.metadata.items())
+        metadata = list(s.metadata.items())
         metadata.sort(key=lambda x: x[0])
         metadata = tuple(metadata)
 
         by_bit_error_rate, _ = by_metadata.get(metadata, (dict(), 0))
 
-        entries = by_bit_error_rate.get(d.bit_error_rate(), [])
-        entries.extend(d.entries)
+        entries = by_bit_error_rate.get(s.bit_error_rate(), [])
+        entries.extend(s.entries)
 
-        by_bit_error_rate[d.bit_error_rate()] = entries
+        by_bit_error_rate[s.bit_error_rate()] = entries
         by_metadata[metadata] = (by_bit_error_rate, overhead_parsed)
 
     fig = plt.figure()  # pyright: ignore[reportUnknownMemberType]
