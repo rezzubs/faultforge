@@ -13,7 +13,7 @@ from .tensor_ops import (
 )
 
 
-class BaseSystem[T](abc.ABC):
+class System[T](abc.ABC):
     """Base class for systems.
 
     All of the methods of this class should be examined carefully before
@@ -30,12 +30,12 @@ class BaseSystem[T](abc.ABC):
 
     A custom system implementation should implement at least the following
     methods:
-    - :func:`BaseSystem.system_data`
-    - :func:`BaseSystem.system_accuracy`
-    - :func:`BaseSystem.system_data_tensors`
-    - :func:`BaseSystem.system_fault_injection` (A default implementation is
+    - :func:`System.system_data`
+    - :func:`System.system_accuracy`
+    - :func:`System.system_data_tensors`
+    - :func:`System.system_fault_injection` (A default implementation is
       provided for cases where the system data maps 1:1 to tensors. Note that
-      :func:`BaseSystem.system_data_tensors` **must** return a reference to the
+      :func:`System.system_data_tensors` **must** return a reference to the
       underlying data or the default implementation will not work.)
     """
 
@@ -49,7 +49,7 @@ class BaseSystem[T](abc.ABC):
         really be anything.
 
         Other methods may receive this instance directly or copies of the data.
-        See :func:`BaseSystem.system_clone_data`.
+        See :func:`System.system_clone_data`.
         """
 
     @abc.abstractmethod

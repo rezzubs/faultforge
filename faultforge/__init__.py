@@ -2,7 +2,7 @@
 
 Systems
 -------
-At the core of this library is the :class:`system.BaseSystem` class, which
+At the core of this library is the :class:`system.System` class, which
 represents a neural network model and its associated data. The system needs to
 expose a core data object and provide a method to get an accuracy metric based
 on that object. The system is also responsible for fault injection.

@@ -12,7 +12,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
-from .system import BaseSystem
+from .system import System
 from .tensor_ops import (
     tensor_list_compare_bitwise,
 )
@@ -82,7 +82,7 @@ class Autosave:
 
 
 class Stats(BaseModel):
-    """Fault injection statistics for a :class:`BaseSystem`."""
+    """Fault injection statistics for a :class:`System`."""
 
     faults_count: int
     bits_count: int
@@ -252,7 +252,7 @@ Accuracy: {self.accuracy:.2f}%
 
     def record_entry[T](
         self,
-        system: BaseSystem[T],
+        system: System[T],
         *,
         summary: bool = False,
         skip_comparison: bool = False,
@@ -311,7 +311,7 @@ Accuracy: {self.accuracy:.2f}%
 
     def record_entries[T](
         self,
-        system: BaseSystem[T],
+        system: System[T],
         n: int,
         *,
         summary: bool = False,
@@ -340,7 +340,7 @@ Accuracy: {self.accuracy:.2f}%
 
     def record_until_stable[T](
         self,
-        system: BaseSystem[T],
+        system: System[T],
         *,
         threshold: float,
         stable_within: int,

@@ -7,14 +7,14 @@ from torch import Tensor, nn
 from faultforge.dtype import DnnDtype
 from faultforge.imagenet.dataset import ImageNet
 from faultforge.imagenet.model import Model
-from faultforge.system import BaseSystem
+from faultforge.system import System
 from faultforge.utils import build_map_layer, map_layer_recursive
 
 _map_layer = build_map_layer("weight", "bias")
 
 
 @dataclass
-class System(BaseSystem[nn.Module]):
+class ImagenetSystem(System[nn.Module]):
     batch_size: int
     device: torch.device
     dtype: DnnDtype

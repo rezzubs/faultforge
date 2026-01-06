@@ -13,7 +13,7 @@ import typer
 
 from faultforge.cifar.dataset import Cifar
 from faultforge.cifar.model import CachedModel as CifarModel
-from faultforge.cifar.system import System as CifarSystem
+from faultforge.cifar.system import CifarSystem as CifarSystem
 from faultforge.cli.utils import setup_logging
 from faultforge.dtype import DnnDtype
 from faultforge.encoding.bit_pattern import BitPattern, BitPatternEncoder
@@ -24,12 +24,12 @@ from faultforge.encoding.sequence import EncoderSequence, TensorEncoder
 from faultforge.encoding.system import EncodedSystem
 from faultforge.imagenet.dataset import ImageNet
 from faultforge.imagenet.model import Model as ImagenetModel
-from faultforge.imagenet.system import System as ImagenetSystem
+from faultforge.imagenet.system import ImagenetSystem as ImagenetSystem
 from faultforge.stats import (
     Autosave,
     Stats,
 )
-from faultforge.system import BaseSystem
+from faultforge.system import System
 
 logger = logging.getLogger(__name__)
 
@@ -286,7 +286,7 @@ This also greatly reduces the output file size for large numbers of faults.",
             print("Only one model can be used at once")
             raise typer.Exit()
 
-    system = cast(BaseSystem[Any], system)
+    system = cast(System[Any], system)
 
     match (secded, bit_pattern):
         case (_, BitPattern()):
@@ -356,7 +356,7 @@ This also greatly reduces the output file size for large numbers of faults.",
     match (runs, until_stable):
         case (None, None):
             _ = stats.record_entry(
-                cast(BaseSystem[Any], system),
+                cast(System[Any], system),
                 summary=summary,
                 skip_comparison=skip_comparison,
             )
@@ -367,7 +367,7 @@ This also greatly reduces the output file size for large numbers of faults.",
                 save_config = None
 
             stats.record_entries(
-                cast(BaseSystem[Any], system),
+                cast(System[Any], system),
                 runs,
                 summary=summary,
                 skip_comparison=skip_comparison,
@@ -380,7 +380,7 @@ This also greatly reduces the output file size for large numbers of faults.",
                 save_config = None
 
             _ = stats.record_until_stable(
-                cast(BaseSystem[Any], system),
+                cast(System[Any], system),
                 threshold=stability_threshold,
                 stable_within=until_stable,
                 min_runs=runs,

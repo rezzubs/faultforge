@@ -6,12 +6,12 @@ import torch
 from torch import Tensor
 
 from faultforge.encoding.encoding import Encoder, Encoding
-from faultforge.system import BaseSystem
+from faultforge.system import System
 
 logger = logging.getLogger(__name__)
 
 
-class EncodedSystem[T](BaseSystem[Encoding]):
+class EncodedSystem[T](System[Encoding]):
     """Apply an `Encoding` on top of the data tensors.
 
     `EncodedSystem` expects its `base` to be a system where:
@@ -26,10 +26,10 @@ class EncodedSystem[T](BaseSystem[Encoding]):
 
     def __init__(
         self,
-        base: BaseSystem[T],
+        base: System[T],
         encoder: Encoder,
     ) -> None:
-        self.base: BaseSystem[T] = base
+        self.base: System[T] = base
         self.encoded_data: Encoding | None = None
         self.encoder: Encoder = encoder
 
