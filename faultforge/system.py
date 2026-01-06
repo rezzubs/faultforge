@@ -37,6 +37,12 @@ class System[T](abc.ABC):
       provided for cases where the system data maps 1:1 to tensors. Note that
       :func:`System.system_data_tensors` **must** return a reference to the
       underlying data or the default implementation will not work.)
+
+    See the following modules for examples of **system** implementations:
+    - :mod:`faultforge.cifar.system`
+    - :mod:`faultforge.imagenet.system`
+    - :mod:`faultforge.encoding.system`: A **system** which provides additional
+      functionality on top of an existing **system**.
     """
 
     @abc.abstractmethod
