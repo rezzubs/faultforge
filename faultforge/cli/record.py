@@ -181,7 +181,7 @@ number of data bits per parity bits (P). The default is most likely optimal.
     runs: Annotated[
         int | None,
         typer.Option(
-            min=2,
+            min=1,
             help="How many runs to perform.",
             rich_help_panel="Recording settings. 1 run is done by default.",
         ),
