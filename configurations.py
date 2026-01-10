@@ -32,26 +32,31 @@ def partition(path: str) -> dict[str, list[tuple[float, float]]]:
             target = "unprotected"
 
         ber = stats.bit_error_rate()
-        print(ber)
         output[target][ber] = float(np.mean([e.accuracy for e in stats.entries]))
 
     return {category: sorted(rates.items()) for category, rates in output.items()}
 
 
 models = [
-    ("ViT", "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/vit_base-f32"),
-    ("DeiT", "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/deit-base-f32"),
     (
-        "Swin (tiny)",
-        "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/swin-tiny-f32",
+        "ViT-base",
+        "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/vit_base-f32",
     ),
     (
         "ResNet152",
         "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/resnet152-f32",
     ),
     (
+        "DeiT-base",
+        "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/deit-base-f32",
+    ),
+    (
         "MobileNet",
         "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/mobilenet-f32",
+    ),
+    (
+        "Swin-tiny",
+        "/Users/rezzubs/Documents/work/transformers/2026-01-09_2/swin-tiny-f32",
     ),
     (
         "Inception",
@@ -64,17 +69,20 @@ labels = {
     "unprotected": ("Unprotected", cmap(5), "<"),
     "ecc": ("ECC", cmap(4), ">"),
     "mset+ecc": ("MSET+ECC", cmap(2), "^"),
-    "ep+ecc": ("EP+ECC", cmap(0), "o"),
+    "ep+ecc": ("CEP+ECC", cmap(0), "o"),
     "mset": ("MSET", cmap(3), "s"),
-    "ep": ("EP", cmap(1), "v"),
+    "ep": ("CEP", cmap(1), "v"),
 }
 
 
+width = 6
+aspect_ratio = 1
+height = width / aspect_ratio
+
 fig, axes = plt.subplots(
-    2,
     3,
-    sharey=True,
-    sharex=True,
+    2,
+    figsize=(width, height),
 )
 
 for i, ((model_name, path), ax) in enumerate(zip(models, axes.flatten())):
@@ -88,16 +96,17 @@ for i, ((model_name, path), ax) in enumerate(zip(models, axes.flatten())):
 
         ax.plot(ber, accuracy, color=color, marker=marker)
 
+    ax.set_ylim(0, 100)
     ax.set_title(model_name)
     ax.set_xscale("log")
 
-    if i in [0, 3]:
+    if i in [0, 2, 4]:
         ax.set_ylabel("Accuracy [%]")
 
-    if i in [3, 4, 5]:
+    if i in [4, 5]:
         ax.set_xlabel("BER")
 
-fig.subplots_adjust(top=0.82, right=0.98, left=0.10, bottom=0.10)
+fig.subplots_adjust(top=0.85, right=0.98, left=0.10, bottom=0.10, hspace=0.6)
 fig.legend(
     handles=[
         plt.Line2D([0], [0], color=c, marker=m, lw=2) for _, c, m in labels.values()

@@ -47,7 +47,7 @@ f16 = [
     for entries in [f16d3.entries, f16d7.entries, f16d15.entries]
 ]
 
-groups = ["float32", "float16"]
+groups = ["FP32", "FP16"]
 accuracy_vs_config = {
     "3 bit": [f32[0], f16[0]],
     "7 bit": [f32[1], f16[1]],
@@ -58,7 +58,11 @@ x = np.arange(len(groups))  # the label locations
 width = 0.25  # the width of the bars
 multiplier = 0
 
-fig, ax = plt.subplots(layout="constrained")
+figure_width = 6
+aspect_ratio = 2.5
+figure_height = figure_width / aspect_ratio
+
+fig, ax = plt.subplots(layout="constrained", figsize=(figure_width, figure_height))
 
 for attribute, accuracy in accuracy_vs_config.items():
     offset = width * multiplier
