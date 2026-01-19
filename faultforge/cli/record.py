@@ -12,7 +12,7 @@ import torch
 import typer
 
 from faultforge.cifar.dataset import Cifar
-from faultforge.cifar.model import CachedModel as CifarModel
+from faultforge.cifar.model import CifarModel as CifarModel
 from faultforge.cifar.system import CifarSystem as CifarSystem
 from faultforge.cli.utils import setup_logging
 from faultforge.dtype import DnnDtype

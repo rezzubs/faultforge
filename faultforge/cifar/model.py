@@ -11,10 +11,12 @@ from faultforge.cifar.dataset import Cifar
 
 logger = logging.getLogger(__name__)
 
-_ROOT_MODULE_CACHE: dict[CachedModel, nn.Module] = dict()
+_ROOT_MODULE_CACHE: dict[CifarModel, nn.Module] = dict()
 
 
-class CachedModel(enum.Enum):
+class CifarModel(enum.Enum):
+    """A CIFAR model with a global cache."""
+
     ResNet20 = "resnet20"
     VGG11 = "vgg11_bn"
 
