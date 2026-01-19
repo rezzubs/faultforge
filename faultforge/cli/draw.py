@@ -10,6 +10,7 @@ import typer
 from matplotlib import patches
 from matplotlib.colors import LogNorm
 
+from faultforge.cli.record import DEFAULT_STABILITY_THRESHOLD
 from faultforge.experiment import Experiment
 
 logger = logging.getLogger(__name__)
@@ -227,7 +228,7 @@ def mean(
     stable_within: Annotated[
         int,
         typer.Option(
-            min=1,
+            min=DEFAULT_STABILITY_THRESHOLD,
         ),
     ] = 100,
 ):

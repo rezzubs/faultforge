@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer()
 
+DEFAULT_STABILITY_THRESHOLD = 1
+
 
 @app.command()
 def record(
@@ -203,7 +205,7 @@ number of data bits per parity bits (P). The default is most likely optimal.
             help="run until the accuracy mean within this many runs has not fluctuated over --stability-threshold %",
             rich_help_panel="Recording settings",
         ),
-    ] = 1,
+    ] = DEFAULT_STABILITY_THRESHOLD,
     save_path: Annotated[
         Path | None,
         typer.Option(
