@@ -20,6 +20,8 @@ _CACHE: dict[Cifar.Kind, Dataset] = dict()
 
 @dataclass
 class Cifar:
+    """A CIFAR dataset with a global cache."""
+
     kind: Cifar.Kind
     on_disk_cache: Path
     _batches_cache: dict[
@@ -32,7 +34,10 @@ class Cifar:
         CIFAR100 = "cifar100"
 
     def load_data(self) -> Dataset:
+        """Load the CIFAR dataset."""
+
         _logger.info(f"Loading dataset `{self.kind.name}`")
+
         try:
             match self.kind:
                 case Cifar.Kind.CIFAR10:
@@ -87,6 +92,10 @@ class Cifar:
         dtype: torch.dtype,
         device: torch.device,
     ) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        """Compute batches for the CIFAR dataset.
+
+        :param batch_size: The number of elements in a batch.
+        """
         cache_key = (batch_size, dtype, device)
 
         if cache_key in self._batches_cache:
