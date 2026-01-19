@@ -86,8 +86,8 @@ class EncodedSystem[T](System[Encoding]):
         overhead = (
             self.system_total_bits_count() / self.base.system_total_bits_count() - 1
         ) * 100
-        metadata["memory_overhead"] = f"{overhead:.1f}%"
-        metadata["protected"] = "true"
+        if overhead != 0:
+            metadata["memory_overhead"] = f"{overhead:.2f}%"
 
         return metadata
 
