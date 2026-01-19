@@ -33,3 +33,8 @@ class CifarModel(enum.Enum):
             _ROOT_MODULE_CACHE[self] = model
 
         return copy.deepcopy(model)
+
+    @staticmethod
+    def clear_cache():
+        """Clear the cached models."""
+        _ROOT_MODULE_CACHE.clear()

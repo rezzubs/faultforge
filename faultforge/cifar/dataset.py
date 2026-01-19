@@ -133,3 +133,8 @@ dtype={dtype}, device={device}"
 
         self._batches_cache[cache_key] = batches
         return batches
+
+    @staticmethod
+    def clear_cache():
+        """Clear the cached datasets."""
+        _CACHE.clear()

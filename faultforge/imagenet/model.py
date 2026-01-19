@@ -114,3 +114,8 @@ class Model(enum.Enum):
                 weights = torchvision.models.ResNet152_Weights.IMAGENET1K_V2
 
         return weights.transforms()  # pyright: ignore[reportAny]
+
+    @staticmethod
+    def clear_cache():
+        """Clear the cached models."""
+        _root_module_cache.clear()
