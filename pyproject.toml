@@ -46,6 +46,9 @@ all = [
     { include-group = "imagenet"},
 ]
 
+[project.scripts]
+faultforge = "faultforge.cli.main:main"
+
 [tool.uv]
 default-groups = ["dev", "all"]
 
