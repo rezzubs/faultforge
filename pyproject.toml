@@ -17,6 +17,32 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
+
+[project.optional-dependencies]
+all = [
+    "matplotlib>=3.10.5",
+    "pillow>=11.3.0",
+    "timm>=1.0.22",
+    "torchvision>=0.22.1",
+    "typer>=0.20.0",
+]
+cifar = [
+    "torchvision>=0.22.1",
+]
+cli = [
+    "matplotlib>=3.10.5",
+    "torchvision>=0.22.1",
+    "typer>=0.20.0",
+]
+imagenet = [
+    "pillow>=11.3.0",
+    "timm>=1.0.22",
+    "torchvision>=0.22.1",
+]
+
+[project.scripts]
+faultforge = "faultforge.cli.main:main"
+
 [dependency-groups]
 dev = [
     "basedpyright>=1.32.1",
@@ -24,33 +50,9 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.12.4",
 ]
-torchvision = [
-    "torchvision>=0.22.1",
-]
-cifar = [
-    { include-group = "torchvision"}
-]
-cli = [
-    "matplotlib>=3.10.5",
-    "typer>=0.20.0",
-    { include-group = "cifar"},
-]
-imagenet = [
-    "pillow>=11.3.0",
-    "timm>=1.0.22",
-    { include-group = "torchvision"}
-]
-all = [
-    { include-group = "cifar"},
-    { include-group = "cli"},
-    { include-group = "imagenet"},
-]
-
-[project.scripts]
-faultforge = "faultforge.cli.main:main"
 
 [tool.uv]
-default-groups = ["dev", "all"]
+default-groups = ["dev"]
 
 [tool.basedpyright]
 typeCheckingMode = "recommended"
