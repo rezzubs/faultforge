@@ -1,3 +1,5 @@
+"""The ImageNet dataset."""
+
 import json
 import logging
 import typing
@@ -34,21 +36,20 @@ def _load_name_to_id(dataset_root: Path) -> dict[str, int]:
 class ImageNet(Dataset[tuple[Tensor, int]]):
     """The ImageNet dataset.
 
-    Args:
-        data_path:
-            Path to the dataset directory. Expects the following structure:
-            - images: A directory containing jpg images
-            - name_to_id.json: A dictionary containing a map from the image file
+    :param data_path: Path to the dataset directory. Expects the following
+        structure:
+        - images: A directory containing jpg images
+        - name_to_id.json: A dictionary containing a map from the image file
             name to the corresponding label ID.
-        limit:
-            Optional maximum number of images to load from the dataset. If None,
-            all images are loaded.
-        transform:
-            Optional transformation function that overrides the default
-            transform.
-        eager:
-            Whether to load the dataset eagerly. If True, the dataset is loaded
-            immediately. If False, the dataset is loaded lazily.
+
+    :param limit: Optional maximum number of images to load from the dataset. If
+        None, all images are loaded.
+
+    :param transform: Optional transformation function that overrides the
+        default transform.
+
+    :param eager: Whether to load the dataset eagerly. If True, the dataset is loaded
+        immediately. If False, the dataset is loaded lazily.
     """
 
     def __init__(
@@ -76,10 +77,11 @@ class ImageNet(Dataset[tuple[Tensor, int]]):
     def _load(self) -> list[tuple[Tensor, int]]:
         """Load the dataset.
 
-        Overwrites existing imagenet values. Old values are restored if loading fails.
+        Overwrites existing imagenet values. Old values are restored if loading
+        fails.
 
-        Returns:
-            A list of tuples containing the image tensor and its corresponding label.
+        :returns: A list of tuples containing the image tensor and its
+            corresponding label.
         """
         _logger.info("Loading ImageNet from disk")
 
@@ -142,6 +144,11 @@ class ImageNet(Dataset[tuple[Tensor, int]]):
         dtype: torch.dtype,
         device: torch.device,
     ) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        """Compute batches for the images.
+
+        The batches are cached to avoid recomputation and stored inside the
+        instance.
+        """
         cache_key = (batch_size, dtype, device)
 
         if cache_key in self._batches_cache:

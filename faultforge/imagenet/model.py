@@ -1,3 +1,5 @@
+"""ImageNet DNN models."""
+
 import copy
 import enum
 import logging
@@ -37,6 +39,8 @@ def _get_tim_transform(model: nn.Module) -> Transform:
 
 
 class Model(enum.Enum):
+    """ImageNet DNN models."""
+
     # Hugging Face models
     DeitTiny = "deit_tiny_patch16_224"
     DeitBase = "deit_base_patch16_224"

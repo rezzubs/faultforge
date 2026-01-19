@@ -1,3 +1,5 @@
+"""A :class:`System` implementation for ImageNet DNN models."""
+
 from dataclasses import dataclass
 from typing import override
 
@@ -15,6 +17,8 @@ _map_layer = build_map_layer("weight", "bias")
 
 @dataclass
 class ImagenetSystem(System[nn.Module]):
+    """The :class:`System` implementation for ImageNet DNN models."""
+
     batch_size: int
     device: torch.device
     dtype: DnnDtype

@@ -1,1 +1,1 @@
-"""A System implementation for ImageNet"""
+"""A :class:`System` implementation for ImageNet models."""
