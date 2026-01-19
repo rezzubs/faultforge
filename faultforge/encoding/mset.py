@@ -1,4 +1,4 @@
-"""Protection for a most significant bit"""
+"""Most Significant Exponent bit Triplication (MSET)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ from faultforge.encoding.sequence import TensorEncoding
 _logger = logging.getLogger(__name__)
 
 
-class MsbEncoder(TensorEncoderHelper):
+class MsetEncoder(TensorEncoderHelper):
+    """An encoder for :class:`MsetEncoding`."""
+
     @override
     def encode_float32(self, t: Tensor) -> Tensor:
         with torch.no_grad():
@@ -39,7 +41,7 @@ class MsbEncoder(TensorEncoderHelper):
         decoded_tensors: list[Tensor],
         dtype: torch.dtype,
     ) -> TensorEncoding:
-        return MsbEncoding(data, bits_count, decoded_tensors, dtype, True)
+        return MsetEncoding(data, bits_count, decoded_tensors, dtype, True)
 
     @override
     def encoder_add_metadata(self, metadata: dict[str, str]) -> None:
@@ -47,12 +49,13 @@ class MsbEncoder(TensorEncoderHelper):
 
 
 @dataclass
-class MsbEncoding(TensorEncodingHelper):
-    """An encoding format for protecting the most significant bits of parameter tensors.
+class MsetEncoding(TensorEncodingHelper):
+    """MSET based encoding.
 
-    Most significant in this case referres to the second highest bit — the one
-    after the sign bit. That bit will be copied to the lowest bits and those
-    will be used to recover from single-bit errors.
+    MSET stands for Most Significant Exponent bit Triplication. Depending on the
+    data type, the second highest bit will be copied to the lowest bits. A
+    majority voting scheme will be used to determine the final value of the
+    exponent bit.
     """
 
     @override
@@ -68,7 +71,7 @@ class MsbEncoding(TensorEncodingHelper):
         return torch.from_numpy(encoded_np)  # pyright: ignore[reportUnknownMemberType]
 
     @override
-    def encoding_clone(self) -> MsbEncoding:
+    def encoding_clone(self) -> MsetEncoding:
         copied_data = [t.clone() for t in self._encoded_data]
         copied_decoded = [t.clone() for t in self._decoded_tensors]
         return self.__class__(

@@ -1,3 +1,5 @@
+"""Chunked Embedded Parity (CEP)."""
+
 import enum
 import logging
 from dataclasses import dataclass
@@ -14,6 +16,12 @@ _logger = logging.getLogger(__name__)
 
 
 class EpScheme(enum.Enum):
+    """How many data bits to use per parity bit.
+
+    D3P1 should result in the best accuracy in most cases because it results in
+    the biggest number of chunks per parameter - it can mitigate more faults.
+    """
+
     D3P1 = "d3p1"
     D7P1 = "d7p1"
     D15P1 = "d15p1"
@@ -35,6 +43,8 @@ class EpScheme(enum.Enum):
 
 @dataclass
 class EmbeddedParityEncoder(TensorEncoderHelper):
+    """An encoder for :class:`EmbeddedParityEncoding`."""
+
     scheme: EpScheme = EpScheme.D3P1
 
     @override
@@ -76,6 +86,14 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
 
 @dataclass
 class EmbeddedParityEncoding(TensorEncodingHelper):
+    """An encoding that embeds parity bits into the data.
+
+    The higher bits of the data are chunked based on the provided scheme and
+    each chunk will be given a matching parity bit which is embedded inside the
+    lower bits. If a parity bit doesn't match during decoding, the corresponding
+    chunk will be set to zero.
+    """
+
     _scheme: EpScheme
 
     @override

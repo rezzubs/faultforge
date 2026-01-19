@@ -1,3 +1,5 @@
+"""Encoding of sequences."""
+
 import abc
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -26,7 +28,11 @@ class TensorEncoder(Encoder, abc.ABC):
 
 
 class TensorEncoding(Encoding, abc.ABC):
-    """An encoding that uses tensors as the underlying data structure."""
+    """An encoding that uses tensors as the underlying data structure.
+
+    If your encoding format stores tensors directly then it's appropriate to
+    subclass this class instead of :class:`Encoding`.
+    """
 
     @abc.abstractmethod
     def tensor_encoding_tensors(self) -> list[Tensor]:

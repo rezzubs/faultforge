@@ -18,7 +18,7 @@ from faultforge.cli.utils import setup_logging
 from faultforge.dtype import DnnDtype
 from faultforge.encoding.bit_pattern import BitPattern, BitPatternEncoder
 from faultforge.encoding.embedded_parity import EmbeddedParityEncoder, EpScheme
-from faultforge.encoding.msb import MsbEncoder
+from faultforge.encoding.mset import MsetEncoder
 from faultforge.encoding.secded import SecdedEncoder
 from faultforge.encoding.sequence import EncoderSequence, TensorEncoder
 from faultforge.encoding.system import EncodedSystem
@@ -307,9 +307,9 @@ This also greatly reduces the output file size for large numbers of faults.",
     if duplicate_msb:
         if encoder is None:
             logger.debug("Using MsbEncoder")
-            encoder = MsbEncoder()
+            encoder = MsetEncoder()
         else:
-            head_encoders.append(MsbEncoder())
+            head_encoders.append(MsetEncoder())
 
     if embedded_parity:
         if encoder is None:

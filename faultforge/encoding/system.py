@@ -12,16 +12,18 @@ logger = logging.getLogger(__name__)
 
 
 class EncodedSystem[T](System[Encoding]):
-    """Apply an `Encoding` on top of the data tensors.
+    """Apply an **encoding** on top of the data tensors.
 
-    `EncodedSystem` expects its `base` to be a system where:
-    - The tensors returned by `system_data_tensors()` are the actual source of truth
+    This class expects its ``base`` to be a system where:
+    - The tensors returned by :func:`System.system_data_tensors()` are the
+      actual source of truth.
     - Modifying those tensors directly changes the system state and by
-    extension, fault injection into those tensors affects system behavior
+      extension, fault injection into those tensors affects system behavior.
 
-    This is unlike EncodedSystem itself where the source of truth is more
+    This is unlike ``EncodedSystem`` itself where the source of truth is more
     abstract and depends on the specific encoding used. For this reason,
-    EncodedSystem cannot be used as a `base` of another `EncodedSystem`.
+    EncodedSystem cannot be used as a `base` of another `EncodedSystem`. For
+    composing encoders, see :mod:`faultforge.encoding.sequence` instead.
     """
 
     def __init__(
@@ -33,12 +35,16 @@ class EncodedSystem[T](System[Encoding]):
         self.encoded_data: Encoding | None = None
         self.encoder: Encoder = encoder
 
-    def encode_base(self) -> Encoding:
+    def _encode_base(self) -> Encoding:
+        """Apply the encoder to the base system data tensors."""
+
         logger.debug("Encoding data tensors")
         data_tensors = self.base.system_data_tensors(self.base.system_data())
         return self.encoder.encoder_encode_tensor_list(data_tensors)
 
     def decoded_data(self, data: Encoding) -> T:
+        """Decode the encoded data and return the original data structure."""
+
         decoded_tensors = data.encoding_decode_tensor_list()
 
         # Create a T structure and populate its tensors with decoded values
@@ -55,7 +61,7 @@ class EncodedSystem[T](System[Encoding]):
     @override
     def system_data(self) -> Encoding:
         if self.encoded_data is None:
-            self.encoded_data = self.encode_base()
+            self.encoded_data = self._encode_base()
 
         return self.encoded_data
 

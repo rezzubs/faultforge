@@ -1,3 +1,5 @@
+"""Single Error Correction Double Error Detection (SECDED) encoding."""
+
 from __future__ import annotations
 
 import logging
@@ -16,6 +18,14 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class SecdedEncoder(Encoder):
+    """The encoder for :class:`SecdedEncoding`.
+
+    :param bits_per_chunk: The number of data bits to protect with a single
+    hamming code. Equivalent to the memory line size in hardware. Can be any
+    positive integer but multiples of 8 bits have better performance (CPU time
+    not accuracy).
+    """
+
     bits_per_chunk: int
 
     @override
@@ -43,7 +53,7 @@ class SecdedEncoder(Encoder):
                         rust_input, self.bits_per_chunk
                     )
 
-        return FullEncoding(
+        return SecdedEncoding(
             encoded_data,
             decoded_tensors,
             dtype,
@@ -55,7 +65,14 @@ class SecdedEncoder(Encoder):
 
 
 @dataclass
-class FullEncoding(Encoding):
+class SecdedEncoding(Encoding):
+    """A Single Error Correction Double Error Detection (SECDED) encoding based on hamming codes.
+
+    This encoding is used to detect and correct single-bit errors in a memory
+    line and detect double-bit errors. Note that the double error detection
+    results are not currently used.
+    """
+
     _encoded_data: faultforge._core.FullEncoding
     _decoded_tensors: list[torch.Tensor]
     _dtype: torch.dtype
@@ -97,8 +114,8 @@ class FullEncoding(Encoding):
         return self._decoded_tensors
 
     @override
-    def encoding_clone(self) -> FullEncoding:
-        return FullEncoding(
+    def encoding_clone(self) -> SecdedEncoding:
+        return SecdedEncoding(
             self._encoded_data.clone(),
             self._decoded_tensors,
             self._dtype,

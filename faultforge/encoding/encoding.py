@@ -1,3 +1,5 @@
+"""The definitions of the encoding API."""
+
 import abc
 from typing import Self
 
@@ -5,6 +7,11 @@ from torch import Tensor
 
 
 class Encoder(abc.ABC):
+    """The base class for encoders.
+
+    See :mod:`faultforge.encoding` for more information.
+    """
+
     @abc.abstractmethod
     def encoder_encode_tensor_list(self, ts: list[Tensor]) -> Encoding:
         """Encode a list of tensors."""
@@ -17,6 +24,17 @@ class Encoder(abc.ABC):
 
 
 class Encoding(abc.ABC):
+    """The base class for encodings.
+
+    Created by a :class:`Encoder`.
+
+    Consider subclassing :class:`faultforge.encoding.sequence.TensorEncoding`
+    instead when your encoding format stores tensors directly. This way it's
+    possible to use it as the non-final element in a chain of encodings.
+
+    See :mod:`faultforge.encoding` for more information.
+    """
+
     @abc.abstractmethod
     def encoding_decode_tensor_list(self) -> list[Tensor]:
         """Decode and return the list of tensors.

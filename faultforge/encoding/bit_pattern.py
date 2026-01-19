@@ -1,3 +1,5 @@
+"""Bit pattern based encoding for Systems."""
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +18,7 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclass
-class RangeInclusive:
+class _RangeInclusive:
     start: int
     end: int
 
@@ -49,7 +51,7 @@ class RangeInclusive:
         return range(self.start, self.end + 1).__iter__()
 
 
-def parse_range_or_int(text: str) -> RangeInclusive | int:
+def parse_range_or_int(text: str) -> _RangeInclusive | int:
     split = text.split("-")
     if len(split) == 1:
         try:
@@ -61,7 +63,7 @@ def parse_range_or_int(text: str) -> RangeInclusive | int:
 
     try:
         [start, end] = split
-        return RangeInclusive(start, end)
+        return _RangeInclusive(start, end)
     except ValueError as e:
         raise ValueError(
             f"Invalid range `{text}`, expected two integers separated by a `-`\n-> {e}"
@@ -69,15 +71,15 @@ def parse_range_or_int(text: str) -> RangeInclusive | int:
 
 
 @dataclass
-class Ranges:
-    ranges: list[RangeInclusive]
+class _Ranges:
+    ranges: list[_RangeInclusive]
 
     @override
     def __repr__(self) -> str:
         return "_".join([r.__repr__() for r in self.ranges])
 
     def start_new(self, start: int) -> None:
-        self.ranges.append(RangeInclusive(start, start))
+        self.ranges.append(_RangeInclusive(start, start))
 
     def extend_last(self) -> None:
         self.ranges[-1].end += 1
@@ -103,7 +105,7 @@ class BitPattern:
         bits = list(self.bits)
         bits.sort()
 
-        ranges = Ranges([])
+        ranges = _Ranges([])
         previous = None
         for bit in bits:
             if previous is None:
@@ -131,7 +133,7 @@ class BitPattern:
                 if isinstance(range_or_int, int):
                     bits.add(range_or_int)
                     continue
-                assert isinstance(range_or_int, RangeInclusive)
+                assert isinstance(range_or_int, _RangeInclusive)
 
                 for i in range_or_int:
                     bits.add(i)
@@ -145,6 +147,8 @@ class BitPattern:
 
 @dataclass
 class BitPatternEncoder(Encoder):
+    """An encoder for :class:`BitPatternEncoding`."""
+
     pattern: BitPattern
     pattern_length: int
     bits_per_chunk: int
@@ -191,6 +195,14 @@ class BitPatternEncoder(Encoder):
 
 @dataclass
 class BitPatternEncoding(Encoding):
+    """Bit pattern based SECDED encoding.
+
+    This encoding provides Hamming Code based encoding for Systems. The memory
+    will be partitioned into protected and unprotected regions by a bit pattern.
+
+    See also: :mod:`faultforge.encoding.secded`.
+    """
+
     _encoded_data: faultforge._core.BitPatternEncoding
     _decoded_tensors: list[torch.Tensor]
     _dtype: torch.dtype
