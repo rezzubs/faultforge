@@ -1,4 +1,4 @@
-"""Recording statistics for fault injection experiments."""
+"""Fault injection experiments for a :class:`System`"""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ _logger = logging.getLogger(__name__)
 class MetaDataError(Exception):
     """The metadata didn't match
 
-    See :func:`Stats.record_entry`
+    See :func:`Experiment.record_entry`
     """
 
 
@@ -62,8 +62,8 @@ def _get_path(
             _logger.debug("generating file name from metadata")
             root = root.joinpath(metadata_str(metadata, bit_error_rate) + ".json")
         else:
-            _logger.debug("metadata_name not set, defaulting to stats.json")
-            root = root.joinpath("stats.json")
+            _logger.debug("metadata_name not set, defaulting to experiment.json")
+            root = root.joinpath("experiment.json")
     elif metadata_name:
         raise ValueError(
             "`metadata_name` can only be used together with directory paths"
@@ -74,20 +74,20 @@ def _get_path(
 
 @dataclass
 class Autosave:
-    """Autosave configuration for :class:`Stats`."""
+    """Autosave configuration for :class:`Experiment`."""
 
     interval: int
     path: Path
     metadata_name: bool
 
 
-class Stats(BaseModel):
-    """Fault injection statistics for a :class:`System`."""
+class Experiment(BaseModel):
+    """Fault injection experiment for a :class:`System`."""
 
     faults_count: int
     bits_count: int
     metadata: dict[str, str]
-    entries: list[Stats.Entry]
+    entries: list[Experiment.Entry]
 
     class Entry(BaseModel):
         """An entry corresponding a single run of fault injection."""
@@ -190,10 +190,10 @@ Accuracy: {self.accuracy:.2f}%
                     return None
                 return (1 - (faulty / self.faults_count)) * 100
 
-        def summary(self, parent: Stats) -> Stats.Entry.Summary:
-            """Get the summary of an :class:`Stats.Entry`."""
+        def summary(self, parent: Experiment) -> Experiment.Entry.Summary:
+            """Get the summary of an :class:`Experiment.Entry`."""
 
-            out = Stats.Entry.Summary(
+            out = Experiment.Entry.Summary(
                 accuracy=self.accuracy,
                 bits_count=parent.bits_count,
                 faults_count=parent.faults_count,
@@ -256,7 +256,7 @@ Accuracy: {self.accuracy:.2f}%
         *,
         summary: bool = False,
         skip_comparison: bool = False,
-    ) -> Stats.Entry:
+    ) -> Experiment.Entry:
         """Record a new entry for the given ``system``.
 
         :param summary: Whether to print a summary after recording.
@@ -297,7 +297,7 @@ Accuracy: {self.accuracy:.2f}%
             _logger.debug("Skipping output comparison")
             faulty_parameters = None
 
-        entry = Stats.Entry(
+        entry = Experiment.Entry(
             accuracy=accuracy,
             faulty_parameters=faulty_parameters,
         )
@@ -420,7 +420,7 @@ Accuracy: {self.accuracy:.2f}%
         If path doesn't exist, it will create a new file with the given name.
         The parent is expected to exist.
 
-        If the path is a directory then a file called `stats.json` will be
+        If the path is a directory then a file called `experiment.json` will be
         created in that directory.
 
         :param metadata_name: Use :func:`metadata_str` to generate the name of
@@ -443,15 +443,15 @@ Accuracy: {self.accuracy:.2f}%
     def load(
         cls,
         save_path: Path,
-    ) -> Stats:
-        """Load existing statistic entries from disk.
+    ) -> Experiment:
+        """Load existing experiment entries from disk.
 
-        For a non-fallible version see :func:`Stats.load_or_create`.
+        For a non-fallible version see :func:`Experiment.load_or_create`.
         """
 
         with open(save_path, "r") as f:
             content = f.read()
-            return Stats.model_validate_json(content)
+            return Experiment.model_validate_json(content)
 
     @classmethod
     def load_or_create(
@@ -462,10 +462,10 @@ Accuracy: {self.accuracy:.2f}%
         bits_count: int,
         metadata: dict[str, str],
         metadata_name: bool = False,
-    ) -> Stats:
+    ) -> Experiment:
         """Load existing data from disk or create a new instance if it doesn't exist.
 
-        This doesn't actually create the file. For that use :func:`Stats.save`.
+        This doesn't actually create the file. For that use :func:`Experiment.save`.
         """
 
         def create():

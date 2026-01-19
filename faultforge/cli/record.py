@@ -22,13 +22,13 @@ from faultforge.encoding.msb import MsbEncoder
 from faultforge.encoding.secded import SecdedEncoder
 from faultforge.encoding.sequence import EncoderSequence, TensorEncoder
 from faultforge.encoding.system import EncodedSystem
+from faultforge.experiment import (
+    Autosave,
+    Experiment,
+)
 from faultforge.imagenet.dataset import ImageNet
 from faultforge.imagenet.model import Model as ImagenetModel
 from faultforge.imagenet.system import ImagenetSystem as ImagenetSystem
-from faultforge.stats import (
-    Autosave,
-    Stats,
-)
 from faultforge.system import System
 
 logger = logging.getLogger(__name__)
@@ -209,7 +209,7 @@ number of data bits per parity bits (P). The default is most likely optimal.
         typer.Option(
             help="The path of the file to save the results into. \
 If the file doesn't exist then it will be created. \
-If the path is a directory (existing) then the file will be called stats.json",
+If the path is a directory (existing) then the file will be called experiment.json",
             rich_help_panel="Recording settings",
         ),
     ] = None,
@@ -246,7 +246,7 @@ This also greatly reduces the output file size for large numbers of faults.",
         ),
     ] = False,
 ):
-    """Record evaluation statistics for a model and dataset."""
+    """Record fault injection runs for a model and dataset."""
     device: torch.device = torch.device(device)
 
     if cifar_cache is None:
@@ -343,7 +343,7 @@ This also greatly reduces the output file size for large numbers of faults.",
     if save_path is not None:
         save_path = save_path.expanduser()
 
-    stats = Stats.load_or_create(
+    experiment = Experiment.load_or_create(
         save_path,
         faults_count=faults_count,
         bits_count=bits_count_total,
@@ -351,11 +351,11 @@ This also greatly reduces the output file size for large numbers of faults.",
         metadata_name=metadata_name,
     )
 
-    logger.debug(f"Proceeding with metadata: {stats.metadata}")
+    logger.debug(f"Proceeding with metadata: {experiment.metadata}")
 
     match (runs, until_stable):
         case (None, None):
-            _ = stats.record_entry(
+            _ = experiment.record_entry(
                 cast(System[Any], system),
                 summary=summary,
                 skip_comparison=skip_comparison,
@@ -366,7 +366,7 @@ This also greatly reduces the output file size for large numbers of faults.",
             else:
                 save_config = None
 
-            stats.record_entries(
+            experiment.record_entries(
                 cast(System[Any], system),
                 runs,
                 summary=summary,
@@ -379,7 +379,7 @@ This also greatly reduces the output file size for large numbers of faults.",
             else:
                 save_config = None
 
-            _ = stats.record_until_stable(
+            _ = experiment.record_until_stable(
                 cast(System[Any], system),
                 threshold=stability_threshold,
                 stable_within=until_stable,
@@ -390,7 +390,7 @@ This also greatly reduces the output file size for large numbers of faults.",
             )
 
     if save_path:
-        stats.save(save_path, metadata_name)
+        experiment.save(save_path, metadata_name)
 
 
 if __name__ == "__main__":

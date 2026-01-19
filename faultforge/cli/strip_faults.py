@@ -5,7 +5,7 @@ from typing import Annotated
 
 import typer
 
-from faultforge.stats import Stats
+from faultforge.experiment import Experiment
 
 _logger = logging.getLogger(__name__)
 
@@ -23,21 +23,21 @@ def recursive_paths(root: Path) -> Generator[Path]:
 
 @app.command()
 def strip_faults(
-    paths: Annotated[list[Path], typer.Argument(help="Paths to stat files")],
+    paths: Annotated[list[Path], typer.Argument(help="Paths to experiment files")],
 ):
-    """Strip the recorded faults from the provided stat files"""
+    """Strip the recorded faults from the provided experiment files"""
 
     paths = [leaf for root in paths for leaf in recursive_paths(root)]
 
     for path in paths:
         _logger.info(f"Stripping faults from {path}")
         try:
-            stats = Stats.load(path)
+            experiment = Experiment.load(path)
             _logger.debug("Loading finished")
         except Exception as e:
-            _logger.warning(f"Failed to load statistics from {path}: {e}")
+            _logger.warning(f"Failed to load experiment from {path}: {e}")
             continue
-        for entry in stats.entries:
+        for entry in experiment.entries:
             entry.faulty_parameters = []
-        stats.save(path)
-        del stats
+        experiment.save(path)
+        del experiment

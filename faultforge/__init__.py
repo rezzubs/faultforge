@@ -7,8 +7,8 @@ represents a neural network model and its associated data. The system needs to
 expose a core data object and provide a method to get an accuracy metric based
 on that object. The system is also responsible for fault injection.
 
-The :class:`stats.Stats` class can be used to record statistics for a system
-over many runs of fault injection.
+The :class:`experiment.Experiment` class can be used to record experiments for a
+system over many runs of fault injection.
 
 System Implementations
 ----------------------

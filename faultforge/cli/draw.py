@@ -10,34 +10,34 @@ import typer
 from matplotlib import patches
 from matplotlib.colors import LogNorm
 
-from faultforge.stats import Stats
+from faultforge.experiment import Experiment
 
 logger = logging.getLogger(__name__)
 
 app = typer.Typer()
 
 
-def load_path_sequence_stats(paths: Iterable[Path]) -> list[Stats]:
-    stats: list[Stats] = []
+def load_path_sequence_experiments(paths: Iterable[Path]) -> list[Experiment]:
+    experiments: list[Experiment] = []
 
     for path in paths:
         path = path.expanduser()
 
         if path.is_dir():
-            stats.extend(load_path_sequence_stats(path.iterdir()))
+            experiments.extend(load_path_sequence_experiments(path.iterdir()))
             continue
 
         try:
-            s = Stats.load(path)
+            s = Experiment.load(path)
         except Exception as e:
             logger.warning(
-                f"Failed to load stats from path `{path}` - skipping\n-> {e}"
+                f"Failed to load experiment from path `{path}` - skipping\n-> {e}"
             )
             continue
 
-        stats.append(s)
+        experiments.append(s)
 
-    return stats
+    return experiments
 
 
 @app.command()
@@ -45,7 +45,7 @@ def scatter(
     paths: Annotated[
         list[Path],
         typer.Argument(
-            help="All the paths that contain stats. These paths will be searched recursively."
+            help="All the paths that contain experiments. These paths will be searched recursively."
         ),
     ],
     max_accuracy: Annotated[
@@ -99,12 +99,12 @@ This parameter defines the x-axis resolution",
         ),
     ] = None,
 ):
-    """Draw a scatter plot for all the entries in the given stats.
+    """Draw a scatter plot for all the entries in the given experiment.
 
     The z-axis corresponds to the number of faults in each bit for a given accuracy.
     """
-    stats = load_path_sequence_stats(paths)
-    entries = [e for d in stats for e in d.entries]
+    experiments = load_path_sequence_experiments(paths)
+    entries = [e for experiment in experiments for e in experiment.entries]
 
     xs: list[float] = []
     ys: list[int] = []
@@ -213,7 +213,7 @@ def mean(
     paths: Annotated[
         list[Path],
         typer.Argument(
-            help="Paths which store the files where stats are recorded.",
+            help="Paths which store the files where experiments are recorded.",
         ),
     ],
     stability_threshold: Annotated[
@@ -233,30 +233,30 @@ def mean(
 ):
     """Plot the progression of the mean accuracy value over the number of runs."""
 
-    stats = load_path_sequence_stats(paths)
+    experiments = load_path_sequence_experiments(paths)
 
-    for s in stats:
+    for experiment in experiments:
         fig, ax = plt.subplots()  # pyright: ignore[reportUnknownMemberType]
 
         _ = ax.set_title(  # pyright: ignore[reportUnknownMemberType]
             "\n".join(
-                [f"{k}={v}" for k, v in s.metadata.items()]
-                + [f"BER={s.faults_count / s.bits_count:.2e}"]
+                [f"{k}={v}" for k, v in experiment.metadata.items()]
+                + [f"BER={experiment.faults_count / experiment.bits_count:.2e}"]
             )
         )
 
-        means = s.means()
+        means = experiment.means()
 
         _ = ax.plot(means)  # pyright: ignore[reportUnknownMemberType]
 
-        result = s.mean_drift(stable_within)
+        result = experiment.mean_drift(stable_within)
         if result is None:
             plt.show()  # pyright: ignore[reportUnknownMemberType]
             return
 
         drift_min, drift_max = result
 
-        entries_count = len(s.entries)
+        entries_count = len(experiment.entries)
 
         box_start_x = entries_count - stable_within
 
@@ -310,7 +310,7 @@ def configurations(
     paths: Annotated[
         list[Path],
         typer.Argument(
-            help="Paths which store the files where stats are recorded.",
+            help="Paths which store the files where experiments are recorded.",
         ),
     ],
     percentile: Annotated[
@@ -352,34 +352,34 @@ def configurations(
         ),
     ] = False,
 ):
-    """Compare different configurations for recorded stats.
+    """Compare different configurations for recorded experiments.
 
     Entries with the same metadata and bit error rate will be merged.
     """
-    stats = load_path_sequence_stats(paths)
+    experiments = load_path_sequence_experiments(paths)
 
     by_metadata: dict[
-        tuple[tuple[str, str], ...], tuple[dict[float, list[Stats.Entry]], float]
+        tuple[tuple[str, str], ...], tuple[dict[float, list[Experiment.Entry]], float]
     ] = dict()
 
-    for s in stats:
-        overhead_str = s.metadata.get("memory_overhead", None)
+    for experiment in experiments:
+        overhead_str = experiment.metadata.get("memory_overhead", None)
         if overhead_str is not None:
             overhead_float_part = overhead_str.split("%")[0]
             overhead_parsed = float(overhead_float_part)
         else:
             overhead_parsed = 0
 
-        metadata = list(s.metadata.items())
+        metadata = list(experiment.metadata.items())
         metadata.sort(key=lambda x: x[0])
         metadata = tuple(metadata)
 
         by_bit_error_rate, _ = by_metadata.get(metadata, (dict(), 0))
 
-        entries = by_bit_error_rate.get(s.bit_error_rate(), [])
-        entries.extend(s.entries)
+        entries = by_bit_error_rate.get(experiment.bit_error_rate(), [])
+        entries.extend(experiment.entries)
 
-        by_bit_error_rate[s.bit_error_rate()] = entries
+        by_bit_error_rate[experiment.bit_error_rate()] = entries
         by_metadata[metadata] = (by_bit_error_rate, overhead_parsed)
 
     fig = plt.figure()  # pyright: ignore[reportUnknownMemberType]
