@@ -1,10 +1,4 @@
-"""General utilities used throughout the library.
-
-Warnings
---------
-These functions not really meant for public consumption and can change at any
-time. Otherwise fine to use.
-"""
+"""General utilities used throughout the library."""
 
 import logging
 from collections.abc import Callable

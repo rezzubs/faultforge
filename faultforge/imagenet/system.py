@@ -6,11 +6,11 @@ from typing import override
 import torch
 from torch import Tensor, nn
 
+from faultforge._utils import build_map_layer, map_layer_recursive
 from faultforge.dtype import DnnDtype
 from faultforge.imagenet.dataset import ImageNet
 from faultforge.imagenet.model import Model
 from faultforge.system import System
-from faultforge.utils import build_map_layer, map_layer_recursive
 
 _map_layer = build_map_layer("weight", "bias")
 

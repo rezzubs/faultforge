@@ -6,11 +6,11 @@ import torch
 from torch import nn
 from typing_extensions import override
 
+from faultforge._utils import build_map_layer, map_layer_recursive
 from faultforge.cifar.dataset import Cifar
 from faultforge.cifar.model import CifarModel
 from faultforge.dtype import DnnDtype
 from faultforge.system import System
-from faultforge.utils import build_map_layer, map_layer_recursive
 
 _map_layer = build_map_layer("weight", "bias", "running_mean", "running_var")
 

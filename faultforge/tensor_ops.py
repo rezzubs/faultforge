@@ -5,7 +5,7 @@ import logging
 import torch
 
 import faultforge._core
-from faultforge.utils import dtype_bits_count
+from faultforge._utils import dtype_bits_count
 
 from .dtype import DnnDtype, FiDtype
 
