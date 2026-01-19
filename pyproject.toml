@@ -1,7 +1,7 @@
 [project]
 name = "faultforge"
 version = "0.0.0"
-description = "Error correction and fault simulation for PyTorch"
+description = "Fault mitigation simulations on PyTorch models"
 authors = [
     { name = "Marten Roots", email = "marten.roots@gmail.com" }
 ]
