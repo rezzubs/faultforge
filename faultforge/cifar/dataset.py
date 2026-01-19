@@ -69,7 +69,7 @@ class Cifar:
         finally:
             _logger.debug("Dataset loading finished")
 
-    def dataset(self) -> Dataset:
+    def _dataset(self) -> Dataset:
         dataset = _CACHE.get(self.kind)
 
         if dataset is None:
@@ -103,7 +103,7 @@ dtype={dtype}, device={device}"
         dataloader = typing.cast(
             DataLoader[list[torch.Tensor]],
             DataLoader(
-                self.dataset(),
+                self._dataset(),
                 batch_size=batch_size,
                 shuffle=False,
             ),
