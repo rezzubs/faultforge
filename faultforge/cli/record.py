@@ -134,11 +134,11 @@ Use --cifar-kind to specify the exact dataset.
         BitPattern | None,
         typer.Option(
             "--secded-bit-pattern",
-            "--secded-bits",
             parser=BitPattern.parse,
-            help="""Encode the specified repeating bit-pattern with hamming codes. Syntax: `_`
-separated bit indices or ranges of indices. For example, 0-4_14_18-19. The bit
-indices cannot exceed the number of bits in the data type.""",
+            help="Encode the specified repeating bit-pattern with hamming codes. \
+Syntax: `_` separated bit indices or ranges of indices. For example, 0-4_14_18-19. \
+The bit indices cannot exceed the number of bits in the data type. \
+All bits will be protected if not specified.",
             rich_help_panel="Encoding settings",
         ),
     ] = None,
@@ -146,23 +146,27 @@ indices cannot exceed the number of bits in the data type.""",
         int,
         typer.Option(
             "--secded-chunk-size",
-            help="How many bits to encode as a chunk. \
-For example if we want to have 1 ecc per 2 float32 values (with all bits protected), \
-a chunk size of 64 should be used.",
+            help="The number of data bits to protect with a single hamming code. \
+Equivalent to the memory line size in hardware. \
+Can be any positive integer but multiples of 8 bits have better performance (CPU time not accuracy).",
             rich_help_panel="Encoding settings",
         ),
     ] = 64,
-    duplicate_msb: Annotated[
+    mset: Annotated[
         bool,
         typer.Option(
-            help="Duplicate the most significant bit inside two lowest ones.",
+            help="Use Most Significant Exponent bit Triplication (MSET) encoding. \
+The second highest bit will be duplicated inside two lower ones.",
             rich_help_panel="Encoding settings",
         ),
     ] = False,
     embedded_parity: Annotated[
         bool,
         typer.Option(
-            help="Use embedded parity encoding",
+            help="Use Chunked Embedded Parity (CEP) encoding. \
+The data bits will be divided into equally sized chunks and each chunk will be protected by a parity bit. \
+The parity bits are stored in the lower bits. \
+During decoding, the non-matching chunks will be set to zero.",
             rich_help_panel="Encoding settings",
         ),
     ] = False,
@@ -204,7 +208,7 @@ number of data bits per parity bits (P). The default is most likely optimal.
         typer.Option(
             min=0,
             max=100,
-            help="run until the accuracy mean within this many runs has not fluctuated over --stability-threshold %",
+            help="The percentage threshold to determine stability for --until-stable.",
             rich_help_panel="Recording settings",
         ),
     ] = DEFAULT_STABILITY_THRESHOLD,
@@ -244,8 +248,8 @@ The default is to only save at the very end",
         bool,
         typer.Option(
             help="Skip the bitwise comparison of tensors after fault injection. \
-This can speed up recording when only accuracy is needed. \
-This also greatly reduces the output file size for large numbers of faults.",
+This can speed up recording when only the accuracy metric is deemed important. \
+This also greatly reduces the output file size for configurations with large numbers of faults.",
             rich_help_panel="Recording settings",
         ),
     ] = False,
@@ -253,6 +257,37 @@ This also greatly reduces the output file size for large numbers of faults.",
     """Record fault injection runs for a model and dataset.
 
     Either --cifar-model or --imagenet-model must be provided.
+
+    [bold]General Flow[/bold]:
+
+    User choices:
+    1. Choose DNN model
+    2. Choose zero or more encodings.
+
+    Application:
+    1. Load dataset and model parameters.
+    2. Encode parameters.
+    3. Inject faults into encoded data.
+    4. Decode the faulty parameters.
+    5. Evaluate the decoded model to get an accuracy metric.
+    6. Compare decoded faulty parameters with the originals (Unless the `--skip-comparison` flag is given)
+    7. Restore the model to a non-faulty state and repeat from step 3 onwards until an end condition is met.
+
+    If no encoding is chosen then steps 2 and 4 are skipped.
+
+    If a model for ImageNet is chosen then `--imagenet-path` must be provided.
+    The path is expected to be a directory with the following structure
+    - `images`: A directory containing jpg images.
+    - `name_to_id.json`: A mapping from image file names to the corresponding
+      label IDs.
+
+    Example name_to_id.json:
+    {
+        "ILSVRC2012_val_00049927.JPEG": 887,
+        "ILSVRC2012_val_00028335.JPEG": 685,
+        "ILSVRC2012_val_00041118.JPEG": 202
+    }
+
     """
     device: torch.device = torch.device(device)
 
@@ -311,11 +346,12 @@ This also greatly reduces the output file size for large numbers of faults.",
 
     head_encoders: list[TensorEncoder] = []
 
-    if duplicate_msb:
+    if mset:
         if encoder is None:
-            logger.debug("Using MsbEncoder")
+            logger.debug("Using the MSET encoder")
             encoder = MsetEncoder()
         else:
+            logger.debug("Appending the MSET encoder to the list")
             head_encoders.append(MsetEncoder())
 
     if embedded_parity:
