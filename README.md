@@ -256,6 +256,34 @@ In a lot of cases the **encoding** might also use tensors as the storage type.
 In this case it's recommended to subclass `TensorEncoding` and `TensorEncoder` instead (defined in `faultforge.encoding.sequence`).
 Doing so enables the sequential application of such **encoders** using `SequenceEncoder` (the final link of a sequence can still be a regular encoder).
 
+### Experiment
+
+Fault injection experiments for a **system**.
+
+The `Experiment` class (from `faultforge.experiment`) defines the fault configuration for a **system** and performs runs of fault injection on it.
+At the end of each run the faulty parameters will be compared with the originals to determine how many faults were masked and where faults got through the encoding.
+
+A run results in an `Entry` within the `Experiment` which stores the run accuracy and masks for faults.
+A mask is a bitwise xor between the faulty parameters and the originals.
+For example `0b0101` would mean that bits 0 and 2 were flipped.
+
+The experiment contains a metadata dictionary to determine its uniqueness.
+A **system**'s metadata will be appended.
+
+> [!TIP]
+> At the end of a run a short summary like this can be printed:
+> ```
+> Flipped 204458/204458400 bits - BER: 1.00e-03
+> Accuracy: 0.10%
+> 9717 parameters were affected
+> 12614 bits were measured faulty (93.83% masked)
+> 6879 parameters had 1 faulty bit
+> 2790 parameters had 2 faulty bits
+> 37 parameters had 3 faulty bits
+> 11 parameters had 4 faulty bits
+> ```
+> This is for a run with bit error rate `1e-3` and SECDED encoding with 64 bit chunks.
+
 ### Utilities
 
 The library exposes some tensor related utility functions such as fault injection in `faultforge.tensor_ops`.
