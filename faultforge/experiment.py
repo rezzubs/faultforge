@@ -113,7 +113,7 @@ class Experiment(BaseModel):
                 error_counts = self.error_counts_sorted()
                 error_counts_str = (
                     "\n".join(
-                        f"{params_count} parameters had {faults_count} faulty bits"
+                        f"{params_count} parameters had {faults_count} faulty bit{'s' if faults_count > 1 else ''}"
                         for faults_count, params_count in error_counts
                     )
                     if error_counts is not None
