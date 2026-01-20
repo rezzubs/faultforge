@@ -18,7 +18,23 @@ class CifarModel(enum.Enum):
     """A CIFAR model with a global cache."""
 
     ResNet20 = "resnet20"
-    VGG11 = "vgg11_bn"
+    ResNet32 = "resnet32"
+    ResNet56 = "resnet56"
+    Vgg11 = "vgg11_bn"
+    Vgg13 = "vgg13_bn"
+    Vgg16 = "vgg16_bn"
+    Vgg19 = "vgg19_bn"
+    MobileNetV2_X0_5 = "mobilenetv2_x0_5"
+    MobileNetV2_X0_75 = "mobilenetv2_x0_75"
+    MobileNetV2_X1_0 = "mobilenetv2_x1_0"
+    MobileNetV2_X1_5 = "mobilenetv2_x1_5"
+    ShuffleNetV2_X0_5 = "shufflenetv2_x0_5"
+    ShuffleNetV2_X1_0 = "shufflenetv2_x1_0"
+    ShuffleNetV2_X1_5 = "shufflenetv2_x1_5"
+    ShuffleNetV2_X2_0 = "shufflenetv2_x2_0"
+    RepVggA0 = "repvgg_a0"
+    RepVggA1 = "repvgg_a1"
+    RepVggA2 = "repvgg_a2"
 
     def root_module(self, dataset: Cifar) -> nn.Module:
         model = _ROOT_MODULE_CACHE.get(self)
