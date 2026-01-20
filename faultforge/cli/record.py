@@ -43,18 +43,21 @@ def record(
     imagenet_model: Annotated[
         ImagenetModel | None,
         typer.Option(
-            help="The model to run ImageNet on. \
-See --cifar-kind to specify the exact dataset. \
-Incompatible with --cifar-model.",
+            help="""\
+The model to run ImageNet on.
+Incompatible with --cifar-model.
+""",
             rich_help_panel="Model setup",
         ),
     ] = None,
     cifar_model: Annotated[
         CifarModel | None,
         typer.Option(
-            help="Choose an an model to run CIFAR on. \
-See --cifar-kind to specify the exact dataset. \
-",
+            help="""\
+Choose an an model to run CIFAR on.
+Incompatible with --imagenet-model.
+Use --cifar-kind to specify the exact dataset.
+""",
             rich_help_panel="Model setup",
         ),
     ] = None,
@@ -75,8 +78,7 @@ See --cifar-kind to specify the exact dataset. \
     cifar_kind: Annotated[
         Cifar.Kind,
         typer.Option(
-            "--dataset",
-            "-d",
+            "--cifar-kind",
             help="The dataset to use for evaluating a --cifar-model.",
             rich_help_panel="Model setup",
         ),
@@ -248,7 +250,10 @@ This also greatly reduces the output file size for large numbers of faults.",
         ),
     ] = False,
 ):
-    """Record fault injection runs for a model and dataset."""
+    """Record fault injection runs for a model and dataset.
+
+    Either --cifar-model or --imagenet-model must be provided.
+    """
     device: torch.device = torch.device(device)
 
     if cifar_cache is None:
@@ -257,7 +262,7 @@ This also greatly reduces the output file size for large numbers of faults.",
 
     match (cifar_model, imagenet_model):
         case (None, None):
-            print("No model provided")
+            print("No model provided. Use --cifar-model or --imagenet-model.")
             raise typer.Abort()
         case (_, None):
             system = CifarSystem(
