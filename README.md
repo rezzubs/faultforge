@@ -117,6 +117,8 @@ Relevant CLI options:
 - `--secded`
 - `--secded-chunk-size`
 
+Implementation: `faultforge.encoding.secded`
+
 An encoding format based on [Hamming Codes](https://en.wikipedia.org/wiki/Hamming_code).
 The memory for the model parameters is chunked based on the `--secded-chunk-size` parameter.
 The chunk size determines how many data bits are protected by a single hamming code, this maps to the memory line width in hardware.
@@ -126,7 +128,11 @@ Any positive integer can be used for the chunk size but multiples of 8 perform b
 The double error detection results are ignored right now.
 
 <details>
+  
 <summary>Bit pattern based SECDED</summary>
+  
+Implementation: `faultforge.encoding.bit_pattern`
+
 Optionally a `--secded-bit-pattern` option can be specified to first partition the memory into protected and non-protected regions.
 The *protected* regions will be encoded using the method described above and the *unprotected* regions will be placed as is after the protected data.
 </details>
@@ -137,6 +143,8 @@ Most Significant Exponent bit Triplication.
 
 Relevant CLI options:
 - `--mset`
+
+Implementation: `faultforge.encoding.mset`
 
 This method takes the second highest bit of each DNN parameter (bit 30 or 14 depending on the data type) and copies it into two lower bits.
 A majority voting scheme will be used during decoding to determine the final value of the exponent bit.
@@ -154,6 +162,8 @@ Chunked Embedded Parity
 Relevant CLI options:
 - `--embedded-parity`
 - `--embedded-parity-scheme`
+
+Implementation: `faultforge.encoding.embedded_parity`
 
 This technique was built on the conclusions of MSET experiments.
 Additionally, the values of DNN parameters are usually fairly small, if a bit flips from 0 to 1 it will increase the value.
@@ -178,8 +188,78 @@ The other schemes should only be considered if the lower bits that would otherwi
 
 ## Supported Models
 
-TODO
+These are the models with built-in support.
+If usage with another model is desired see the [System](#system) section in Library Architecture, consider contributing the additions with a pull request.
+
+### ImageNet
+
+A combination of torchvision and hugging face models is used
+
+- deit_tiny_patch16_224
+- deit_base_patch16_224
+- swin_tiny_patch4_window7_224
+- vit_base_patch16_224
+- vit_tiny_patch16_224
+- inception_v3
+- mobilenet_v2
+- resnet152
+
+### CIFAR
+
+All the models from https://github.com/chenyaofo/pytorch-cifar-models.
+If a new model is added there and is missing here please open an issue.
 
 ## Library Architecture
 
-TODO
+### System
+
+The fundamental building block of the library is the `System` base class in `faultforge.system`.
+A `System` represents a neural network model and its associated data.
+A `System` is also a complete test bench of sorts, being able to run itself to get an accuracy metric.
+
+> [!NOTE]
+> Anything that has the following properties can be used as a system:
+> - Have core **data** that can be represented as or converted to a list of PyTorch tensors.
+> - Be able to generate an accuracy metric from an instance of that **data**.
+> - Perform fault injection on that data
+
+An example of a **system** is a class which stores a pytorch DNN model and a dataset.
+The **data** in this case is the root **module** (`nn.Module`) of the model.
+The **module** is the appropriate value for **data** because it is the part that should be affected by fault injection.
+Given a (possibly faulty) instance of the root module, the **system** can evaluate it using the stored dataset to give an accuracy metric.
+This is how `faultforge.cifar.system.System` and `faultforge.imagenet.system.System` are implemented.
+
+> [!TIP]
+> If system uses tensors for storing the parameters inside **data** (like is the case for `nn.Module`), then the default implementation of fault injection is likely sufficient.
+> 
+
+For details about implementing a new **system** see the docstrings of the base class and it's methods in `faultforge.system`.
+
+#### `EncodedSystem`
+
+`EncodedSystem`, defined in `faultforge.encoding.system` is an subclass `System` which wraps an existing **system** and encodes its **data** using one of many encoders (see the [Encoding API](#encoding-api) section).
+It can be used in all the places where other **systems** are used. The **data** of `EncodedSystem` is the encoded **data** of the child system.
+Fault injection will be performed on the encoded **data** and methods like `system_data_tensors` and `system_accuracy` will first decode the **data** and delegate to the corresponding methods of the child **system**.
+
+### Encoding API
+
+A new encoding is added by creating two complimentary classes - an **encoder** and an **encoding**.
+These classes need to subclass the corresponding base classes defined in `faultforge.encoding`.
+- The **encoder** is responsible for encoding a list of tensors and returns an instance of the matching **encoding**.
+- The **encoding** needs to be able to decode into the same shape as the original tensors. The **encoding** is also responsible for fault injection into its *encoded* data.
+
+See the [Encoding Formats](#encoding-formats) section for available **encoders**.
+
+#### `TensorEncoding` and `Sequence`
+
+In a lot of cases the **encoding** might also use tensors as the storage type.
+In this case it's recommended to subclass `TensorEncoding` and `TensorEncoder` instead (defined in `faultforge.encoding.sequence`).
+Doing so enables the sequential application of such **encoders** using `SequenceEncoder` (the final link of a sequence can still be a regular encoder).
+
+### Utilities
+
+The library exposes some tensor related utility functions such as fault injection in `faultforge.tensor_ops`.
+
+### Rust
+
+A lot of the heavy computation parts of the library are written in rust. Designed for flexibility but keeping performance in mind, using multithreading where appropriate. The rust API is not meant to be consumed directly and is not versioned. The internal python bindings are defined in [crates/faultforge-bindings](crates/faultforge-bindings) whereas the core implementation can be found in [crates/faultforge](crates/faultforge).
