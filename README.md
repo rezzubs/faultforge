@@ -233,11 +233,11 @@ This is how `faultforge.cifar.system.System` and `faultforge.imagenet.system.Sys
 > If system uses tensors for storing the parameters inside **data** (like is the case for `nn.Module`), then the default implementation of fault injection is likely sufficient.
 > 
 
-For details about implementing a new **system** see the docstrings of the base class and it's methods in `faultforge.system`.
+For details about implementing a new **system** see the docstrings of the base class and its methods in `faultforge.system`.
 
 #### `EncodedSystem`
 
-`EncodedSystem`, defined in `faultforge.encoding.system` is an subclass `System` which wraps an existing **system** and encodes its **data** using one of many encoders (see the [Encoding API](#encoding-api) section).
+`EncodedSystem`, defined in `faultforge.encoding.system`, is a subclass of `System` which wraps an existing **system** and encodes its **data** using one of many encoders (see the [Encoding API](#encoding-api) section).
 It can be used in all the places where other **systems** are used. The **data** of `EncodedSystem` is the encoded **data** of the child system.
 Fault injection will be performed on the encoded **data** and methods like `system_data_tensors` and `system_accuracy` will first decode the **data** and delegate to the corresponding methods of the child **system**.
 
