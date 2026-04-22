@@ -6,8 +6,9 @@ wheels
 *.so
 *.pyd
 
-# Hypothesis
+# Python tests
 .hypothesis/
+.pytest_cache
 
 # Common Rust
 target
