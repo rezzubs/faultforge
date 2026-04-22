@@ -7,12 +7,11 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 import torch
+from faultforge import _rust
+from faultforge._internal.dtype import DnnDtype
+from faultforge._internal.encoding.encoding import Encoder, Encoding
+from faultforge._internal.tensor_ops import tensor_list_dtype
 from typing_extensions import override
-
-import faultforge._core
-from faultforge.dtype import DnnDtype
-from faultforge.encoding.encoding import Encoder, Encoding
-from faultforge.tensor_ops import tensor_list_dtype
 
 _logger = logging.getLogger(__name__)
 
@@ -165,7 +164,7 @@ class BitPatternEncoder(Encoder):
             case DnnDtype.Float32:
                 with torch.no_grad():
                     rust_input = [t.numpy(force=True) for t in flattened]
-                    data = faultforge._core.encode_bit_pattern_f32(
+                    data = _rust.encode_bit_pattern_f32(
                         rust_input,
                         self.pattern.bits,
                         self.pattern_length,
@@ -176,7 +175,7 @@ class BitPatternEncoder(Encoder):
                     rust_input = [
                         t.view(torch.uint16).numpy(force=True) for t in flattened
                     ]
-                    data = faultforge._core.encode_bit_pattern_u16(
+                    data = _rust.encode_bit_pattern_u16(
                         rust_input,
                         self.pattern.bits,
                         self.pattern_length,
@@ -203,7 +202,7 @@ class BitPatternEncoding(Encoding):
     See also: :mod:`faultforge.encoding.secded`.
     """
 
-    _encoded_data: faultforge._core.BitPatternEncoding
+    _encoded_data: _rust.BitPatternEncoding
     _decoded_tensors: list[torch.Tensor]
     _dtype: torch.dtype
     _needs_recompute: bool = False

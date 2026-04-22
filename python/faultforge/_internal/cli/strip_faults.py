@@ -4,8 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-
-from faultforge.experiment import Experiment
+from faultforge._internal.experiment import Experiment
 
 _logger = logging.getLogger(__name__)
 

@@ -3,10 +3,9 @@ import logging
 from typing import override
 
 import torch
+from faultforge._internal.encoding.encoding import Encoder, Encoding
+from faultforge._internal.system import System
 from torch import Tensor
-
-from faultforge.encoding.encoding import Encoder, Encoding
-from faultforge.system import System
 
 logger = logging.getLogger(__name__)
 

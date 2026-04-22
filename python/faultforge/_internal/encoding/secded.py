@@ -7,11 +7,10 @@ from dataclasses import dataclass
 from typing import override
 
 import torch
-
-import faultforge._core
-from faultforge.dtype import DnnDtype
-from faultforge.encoding.encoding import Encoder, Encoding
-from faultforge.tensor_ops import tensor_list_dtype
+from faultforge import _rust
+from faultforge._internal.dtype import DnnDtype
+from faultforge._internal.encoding.encoding import Encoder, Encoding
+from faultforge._internal.tensor_ops import tensor_list_dtype
 
 _logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class SecdedEncoder(Encoder):
             case DnnDtype.Float32:
                 with torch.no_grad():
                     rust_input = [t.flatten().numpy(force=True) for t in ts]
-                    encoded_data = faultforge._core.encode_full_f32(
+                    encoded_data = _rust.encode_full_f32(
                         rust_input, self.bits_per_chunk
                     )
             case DnnDtype.Float16:
@@ -49,7 +48,7 @@ class SecdedEncoder(Encoder):
                     rust_input = [
                         t.flatten().view(torch.uint16).numpy(force=True) for t in ts
                     ]
-                    encoded_data = faultforge._core.encode_full_u16(
+                    encoded_data = _rust.encode_full_u16(
                         rust_input, self.bits_per_chunk
                     )
 
@@ -73,7 +72,7 @@ class SecdedEncoding(Encoding):
     results are not currently used.
     """
 
-    _encoded_data: faultforge._core.FullEncoding
+    _encoded_data: _rust.FullEncoding
     _decoded_tensors: list[torch.Tensor]
     _dtype: torch.dtype
     _needs_recompute: bool = False

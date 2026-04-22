@@ -22,9 +22,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
-[project.scripts]
-faultforge = "faultforge.cli.main:main"
-
 [dependency-groups]
 dev = [
     "basedpyright>=1.32.1",
@@ -43,12 +40,14 @@ reportMissingTypeStubs = false
 reportPrivateUsage = false
 
 [build-system]
-requires = ["maturin>=1.8,<2.0"]
+requires = ["maturin>=1.12,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
-# See https://www.maturin.rs/config.html for more options.
+# See https://www.maturin.rs/config.html for more options
 features = ["pyo3/extension-module"]
 # https://www.maturin.rs/project_layout.html#import-rust-as-a-submodule-of-your-project
-module-name = "faultforge._core"
+module-name = "faultforge._rust"
 manifest-path = "crates/faultforge-bindings/Cargo.toml"
+# The source directory for top level Python packages
+python-source = "python"

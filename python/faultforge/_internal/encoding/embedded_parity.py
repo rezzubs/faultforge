@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from typing import override
 
 import torch
+from faultforge import _rust
+from faultforge._internal.encoding._tensor import (
+    TensorEncoderHelper,
+    TensorEncodingHelper,
+)
+from faultforge._internal.encoding.sequence import TensorEncoding
 from torch import Tensor
-
-from faultforge import _core
-from faultforge.encoding._tensor import TensorEncoderHelper, TensorEncodingHelper
-from faultforge.encoding.sequence import TensorEncoding
 
 _logger = logging.getLogger(__name__)
 
@@ -26,14 +28,14 @@ class EpScheme(enum.Enum):
     D7P1 = "d7p1"
     D15P1 = "d15p1"
 
-    def _core(self) -> _core.EpScheme:
+    def _to_rust(self) -> _rust.EpScheme:
         match self:
             case EpScheme.D3P1:
-                return _core.EpScheme.D3P1
+                return _rust.EpScheme.D3P1
             case EpScheme.D7P1:
-                return _core.EpScheme.D7P1
+                return _rust.EpScheme.D7P1
             case EpScheme.D15P1:
-                return _core.EpScheme.D15P1
+                return _rust.EpScheme.D15P1
 
     @staticmethod
     def default() -> EpScheme:
@@ -51,14 +53,14 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
     def encode_float32(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.numpy(force=True)
-        _core.embedded_parity_encode_f32(t_np, self.scheme._core())
+        _rust.embedded_parity_encode_f32(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np)  # pyright: ignore[reportUnknownMemberType]
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.view(torch.uint16).numpy(force=True)
-        _core.embedded_parity_encode_u16(t_np, self.scheme._core())
+        _rust.embedded_parity_encode_u16(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
 
     @override
@@ -112,11 +114,11 @@ class EmbeddedParityEncoding(TensorEncodingHelper):
     @override
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
-        _core.embedded_parity_decode_u16(encoded_np, self._scheme._core())
+        _rust.embedded_parity_decode_u16(encoded_np, self._scheme._to_rust())
         return torch.from_numpy(encoded_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
 
     @override
     def decode_float32(self, t: Tensor) -> Tensor:
         encoded_np = t.numpy(force=True).copy()
-        _core.embedded_parity_decode_f32(encoded_np, self._scheme._core())
+        _rust.embedded_parity_decode_f32(encoded_np, self._scheme._to_rust())
         return torch.from_numpy(encoded_np)  # pyright: ignore[reportUnknownMemberType]

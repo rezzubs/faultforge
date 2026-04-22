@@ -9,7 +9,7 @@ mod single_bit_encoding;
 use pyo3::pymodule;
 
 #[pymodule]
-mod _core {
+mod _rust {
     #[pymodule_export]
     use crate::generic_fault_injection::f32_array_list_fi;
     #[pymodule_export]

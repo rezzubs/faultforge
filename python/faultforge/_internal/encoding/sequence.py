@@ -5,9 +5,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
+from faultforge._internal.encoding.encoding import Encoder, Encoding
 from torch import Tensor
-
-from faultforge.encoding.encoding import Encoder, Encoding
 
 
 class TensorEncoder(Encoder, abc.ABC):

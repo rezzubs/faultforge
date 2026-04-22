@@ -7,11 +7,10 @@ from typing import Annotated
 import matplotlib.pyplot as plt
 import numpy as np
 import typer
+from faultforge._internal.cli.record import DEFAULT_STABILITY_THRESHOLD
+from faultforge._internal.experiment import Experiment
 from matplotlib import patches
 from matplotlib.colors import LogNorm
-
-from faultforge.cli.record import DEFAULT_STABILITY_THRESHOLD
-from faultforge.experiment import Experiment
 
 logger = logging.getLogger(__name__)
 

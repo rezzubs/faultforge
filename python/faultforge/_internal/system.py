@@ -6,8 +6,7 @@ import abc
 import copy
 
 import torch
-
-from .tensor_ops import (
+from faultforge._internal.tensor_ops import (
     tensor_list_bits_count,
     tensor_list_fault_injection,
 )

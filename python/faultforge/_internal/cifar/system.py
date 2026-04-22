@@ -3,14 +3,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
+from faultforge._internal.cifar.dataset import Cifar
+from faultforge._internal.cifar.model import CifarModel
+from faultforge._internal.dtype import DnnDtype
+from faultforge._internal.system import System
+from faultforge._internal.utils import build_map_layer, map_layer_recursive
 from torch import nn
 from typing_extensions import override
-
-from faultforge._utils import build_map_layer, map_layer_recursive
-from faultforge.cifar.dataset import Cifar
-from faultforge.cifar.model import CifarModel
-from faultforge.dtype import DnnDtype
-from faultforge.system import System
 
 _map_layer = build_map_layer("weight", "bias", "running_mean", "running_var")
 

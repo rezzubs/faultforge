@@ -3,9 +3,8 @@
 import logging
 
 import torch
-
-import faultforge._core
-from faultforge._utils import dtype_bits_count
+from faultforge import _rust
+from faultforge._internal.utils import dtype_bits_count
 
 from .dtype import DnnDtype, FiDtype
 
@@ -71,7 +70,7 @@ def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
         case FiDtype.Float32:
             with torch.no_grad():
                 rust_input = [t.numpy(force=True) for t in flattened]
-                result = faultforge._core.f32_array_list_fi(rust_input, faults_count)
+                result = _rust.f32_array_list_fi(rust_input, faults_count)
                 torch_result = [
                     # HACK: There's nothing we can do about this warning without an upstream fix.
                     torch.from_numpy(t)  # pyright: ignore[reportUnknownMemberType]
@@ -82,7 +81,7 @@ def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
             with torch.no_grad():
                 rust_input = [t.cpu().view(torch.uint16).numpy() for t in flattened]
 
-                result = faultforge._core.u16_array_list_fi(rust_input, faults_count)
+                result = _rust.u16_array_list_fi(rust_input, faults_count)
                 torch_result = [
                     # HACK: There's nothing we can do about this warning without an upstream fix.
                     torch.from_numpy(t).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
@@ -95,7 +94,7 @@ def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
             with torch.no_grad():
                 rust_input = [t.numpy(force=True) for t in flattened]
 
-                result = faultforge._core.u8_array_list_fi(rust_input, faults_count)
+                result = _rust.u8_array_list_fi(rust_input, faults_count)
                 torch_result = [
                     # HACK: There's nothing we can do about this warning without an upstream fix.
                     torch.from_numpy(t)  # pyright: ignore[reportUnknownMemberType]
@@ -128,9 +127,7 @@ def tensor_list_compare_bitwise(
         case DnnDtype.Float32:
             left_numpy = [t.flatten().numpy(force=True) for t in left]
             right_numpy = [t.flatten().numpy(force=True) for t in right]
-            return faultforge._core.compare_array_list_bitwise_f32(
-                left_numpy, right_numpy
-            )
+            return _rust.compare_array_list_bitwise_f32(left_numpy, right_numpy)
         case DnnDtype.Float16:
             #  A view is like a bitwise transmute. This is
             # necessary because rust's `f16` isn't yet stable. See:
@@ -141,6 +138,4 @@ def tensor_list_compare_bitwise(
             right_numpy = [
                 t.view(torch.uint16).flatten().numpy(force=True) for t in right
             ]
-            return faultforge._core.compare_array_list_bitwise_u16(
-                left_numpy, right_numpy
-            )
+            return _rust.compare_array_list_bitwise_u16(left_numpy, right_numpy)

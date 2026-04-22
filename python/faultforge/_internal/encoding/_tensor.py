@@ -4,11 +4,13 @@ from dataclasses import dataclass
 from typing import override
 
 import torch
+from faultforge._internal.encoding.sequence import TensorEncoder, TensorEncoding
+from faultforge._internal.tensor_ops import (
+    tensor_list_dtype,
+    tensor_list_fault_injection,
+)
+from faultforge._internal.utils import dtype_bits_count
 from torch import Tensor
-
-from faultforge._utils import dtype_bits_count
-from faultforge.encoding.sequence import TensorEncoder, TensorEncoding
-from faultforge.tensor_ops import tensor_list_dtype, tensor_list_fault_injection
 
 _logger = logging.getLogger(__name__)
 

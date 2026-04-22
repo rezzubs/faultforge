@@ -7,11 +7,13 @@ from dataclasses import dataclass
 from typing import override
 
 import torch
+from faultforge import _rust
+from faultforge._internal.encoding._tensor import (
+    TensorEncoderHelper,
+    TensorEncodingHelper,
+)
+from faultforge._internal.encoding.sequence import TensorEncoding
 from torch import Tensor
-
-import faultforge._core
-from faultforge.encoding._tensor import TensorEncoderHelper, TensorEncodingHelper
-from faultforge.encoding.sequence import TensorEncoding
 
 _logger = logging.getLogger(__name__)
 
@@ -23,14 +25,14 @@ class MsetEncoder(TensorEncoderHelper):
     def encode_float32(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.numpy(force=True)
-        faultforge._core.bit30_encode_f32(t_np)
+        _rust.bit30_encode_f32(t_np)
         return torch.from_numpy(t_np)  # pyright: ignore[reportUnknownMemberType]
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.view(torch.uint16).numpy(force=True)
-        faultforge._core.bit14_encode_u16(t_np)
+        _rust.bit14_encode_u16(t_np)
         return torch.from_numpy(t_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
 
     @override
@@ -61,13 +63,13 @@ class MsetEncoding(TensorEncodingHelper):
     @override
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
-        faultforge._core.bit14_decode_u16(encoded_np)
+        _rust.bit14_decode_u16(encoded_np)
         return torch.from_numpy(encoded_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
 
     @override
     def decode_float32(self, t: Tensor) -> Tensor:
         encoded_np = t.numpy(force=True).copy()
-        faultforge._core.bit30_decode_f32(encoded_np)
+        _rust.bit30_decode_f32(encoded_np)
         return torch.from_numpy(encoded_np)  # pyright: ignore[reportUnknownMemberType]
 
     @override

@@ -7,10 +7,9 @@ from typing import cast
 
 import timm
 import torchvision
+from faultforge._internal.imagenet.dataset import Transform
 from torch import nn
 from torchvision import transforms
-
-from faultforge.imagenet.dataset import Transform
 
 _logger = logging.getLogger(__name__)
 

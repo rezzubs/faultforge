@@ -9,13 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from pydantic import BaseModel, Field
-from typing_extensions import override
-
-from .system import System
-from .tensor_ops import (
+from faultforge._internal.system import System
+from faultforge._internal.tensor_ops import (
     tensor_list_compare_bitwise,
 )
+from pydantic import BaseModel, Field
+from typing_extensions import override
 
 _logger = logging.getLogger(__name__)
 

@@ -5,9 +5,8 @@ import enum
 import logging
 
 import torch
+from faultforge._internal.cifar.dataset import Cifar
 from torch import nn
-
-from faultforge.cifar.dataset import Cifar
 
 logger = logging.getLogger(__name__)
 

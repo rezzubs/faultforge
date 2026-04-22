@@ -112,31 +112,14 @@ name = "faultforge"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "matplotlib" },
     { name = "numpy" },
+    { name = "pillow" },
     { name = "pydantic" },
+    { name = "timm" },
     { name = "torch" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "matplotlib" },
-    { name = "pillow" },
-    { name = "timm" },
     { name = "torchvision" },
     { name = "typer" },
-]
-cifar = [
-    { name = "torchvision" },
-]
-cli = [
-    { name = "matplotlib" },
-    { name = "torchvision" },
-    { name = "typer" },
-]
-imagenet = [
-    { name = "pillow" },
-    { name = "timm" },
-    { name = "torchvision" },
 ]
 
 [package.dev-dependencies]
@@ -149,23 +132,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "matplotlib", marker = "extra == 'all'", specifier = ">=3.10.5" },
-    { name = "matplotlib", marker = "extra == 'cli'", specifier = ">=3.10.5" },
+    { name = "matplotlib", specifier = ">=3.10.5" },
     { name = "numpy", specifier = ">=2.3.1" },
-    { name = "pillow", marker = "extra == 'all'", specifier = ">=11.3.0" },
-    { name = "pillow", marker = "extra == 'imagenet'", specifier = ">=11.3.0" },
+    { name = "pillow", specifier = ">=11.3.0" },
     { name = "pydantic", specifier = ">=2.12.3" },
-    { name = "timm", marker = "extra == 'all'", specifier = ">=1.0.22" },
-    { name = "timm", marker = "extra == 'imagenet'", specifier = ">=1.0.22" },
+    { name = "timm", specifier = ">=1.0.22" },
     { name = "torch", specifier = ">=2.7.1" },
-    { name = "torchvision", marker = "extra == 'all'", specifier = ">=0.22.1" },
-    { name = "torchvision", marker = "extra == 'cifar'", specifier = ">=0.22.1" },
-    { name = "torchvision", marker = "extra == 'cli'", specifier = ">=0.22.1" },
-    { name = "torchvision", marker = "extra == 'imagenet'", specifier = ">=0.22.1" },
-    { name = "typer", marker = "extra == 'all'", specifier = ">=0.20.0" },
-    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.20.0" },
+    { name = "torchvision", specifier = ">=0.22.1" },
+    { name = "typer", specifier = ">=0.20.0" },
 ]
-provides-extras = ["all", "cifar", "cli", "imagenet"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -10,26 +10,28 @@ from typing import (
 
 import torch
 import typer
-
-from faultforge.cifar.dataset import Cifar
-from faultforge.cifar.model import CifarModel as CifarModel
-from faultforge.cifar.system import CifarSystem as CifarSystem
-from faultforge.cli.utils import setup_logging
-from faultforge.dtype import DnnDtype
-from faultforge.encoding.bit_pattern import BitPattern, BitPatternEncoder
-from faultforge.encoding.embedded_parity import EmbeddedParityEncoder, EpScheme
-from faultforge.encoding.mset import MsetEncoder
-from faultforge.encoding.secded import SecdedEncoder
-from faultforge.encoding.sequence import EncoderSequence, TensorEncoder
-from faultforge.encoding.system import EncodedSystem
-from faultforge.experiment import (
+from faultforge._internal.cifar.dataset import Cifar
+from faultforge._internal.cifar.model import CifarModel as CifarModel
+from faultforge._internal.cifar.system import CifarSystem as CifarSystem
+from faultforge._internal.cli.utils import setup_logging
+from faultforge._internal.dtype import DnnDtype
+from faultforge._internal.encoding.bit_pattern import BitPattern, BitPatternEncoder
+from faultforge._internal.encoding.embedded_parity import (
+    EmbeddedParityEncoder,
+    EpScheme,
+)
+from faultforge._internal.encoding.mset import MsetEncoder
+from faultforge._internal.encoding.secded import SecdedEncoder
+from faultforge._internal.encoding.sequence import EncoderSequence, TensorEncoder
+from faultforge._internal.encoding.system import EncodedSystem
+from faultforge._internal.experiment import (
     Autosave,
     Experiment,
 )
-from faultforge.imagenet.dataset import ImageNet
-from faultforge.imagenet.model import Model as ImagenetModel
-from faultforge.imagenet.system import ImagenetSystem as ImagenetSystem
-from faultforge.system import System
+from faultforge._internal.imagenet.dataset import ImageNet
+from faultforge._internal.imagenet.model import Model as ImagenetModel
+from faultforge._internal.imagenet.system import ImagenetSystem as ImagenetSystem
+from faultforge._internal.system import System
 
 logger = logging.getLogger(__name__)
 

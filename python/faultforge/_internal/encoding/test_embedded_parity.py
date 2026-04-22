@@ -1,10 +1,12 @@
 import numpy as np
 import torch
+from faultforge._internal.encoding.embedded_parity import (
+    EmbeddedParityEncoder,
+    EpScheme,
+)
 from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.extra import numpy as st_np
-
-from faultforge.encoding.embedded_parity import EmbeddedParityEncoder, EpScheme
 
 
 def input_arrays(dtype: type[np.float32] | type[np.float16]):

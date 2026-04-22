@@ -6,7 +6,7 @@ version.workspace = true
 [lib]
 crate-type = ["cdylib"]
 # This name will be used for the .so file that is used by Python.
-name = "_core"
+name = "_rust"
 
 [dependencies]
 faultforge = { path = "../faultforge" }
