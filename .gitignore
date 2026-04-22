@@ -5,6 +5,7 @@ __pycache__
 wheels
 *.so
 *.pyd
+.ruff_cache
 
 # Python tests
 .hypothesis/
