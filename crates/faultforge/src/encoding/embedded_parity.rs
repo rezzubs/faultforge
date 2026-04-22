@@ -79,7 +79,7 @@ where
         }
     }
 
-    if ones % 2 == 0 {
+    if ones.is_multiple_of(2) {
         buffer.set_0(destination_bit);
     } else {
         buffer.set_1(destination_bit);
@@ -115,7 +115,7 @@ where
 
     buffer.set_0(destination_bit);
 
-    if ones % 2 == 0 {
+    if ones.is_multiple_of(2) {
         return Ok(());
     }
 

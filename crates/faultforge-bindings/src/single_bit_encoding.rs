@@ -1,4 +1,4 @@
-use std::cell::LazyCell;
+use std::sync::LazyLock;
 
 use faultforge::encoding::msb::{Scheme, msb_decode, msb_encode};
 use numpy::PyReadwriteArrayDyn;
@@ -7,8 +7,8 @@ use pyo3::prelude::*;
 
 use rayon::prelude::*;
 
-const F32_SCHEME: LazyCell<Scheme> =
-    LazyCell::new(|| Scheme::for_buffer(&0f32, 30, &[0, 1]).expect("known to be correct for f32"));
+static F32_SCHEME: LazyLock<Scheme> =
+    LazyLock::new(|| Scheme::for_buffer(&0f32, 30, &[0, 1]).expect("known to be correct for f32"));
 
 #[pyfunction]
 pub fn bit30_encode_f32(mut arr: PyReadwriteArrayDyn<f32>) -> PyResult<()> {
@@ -30,8 +30,8 @@ pub fn bit30_decode_f32(mut arr: PyReadwriteArrayDyn<f32>) -> PyResult<()> {
     Ok(())
 }
 
-const F16_SCHEME: LazyCell<Scheme> =
-    LazyCell::new(|| Scheme::for_buffer(&0u16, 14, &[0, 1]).expect("known to be correct for f16"));
+static F16_SCHEME: LazyLock<Scheme> =
+    LazyLock::new(|| Scheme::for_buffer(&0u16, 14, &[0, 1]).expect("known to be correct for f16"));
 
 #[pyfunction]
 pub fn bit14_encode_u16(mut arr: PyReadwriteArrayDyn<u16>) -> PyResult<()> {

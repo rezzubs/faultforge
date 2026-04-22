@@ -89,10 +89,14 @@ where
     B: BitBuffer + numpy::Element,
     F: std::marker::Sync + Fn(&mut B),
 {
-    arr.as_slice_mut()
-        .map_err(|_| PyValueError::new_err("`arr` is not contiguous."))?
-        .par_iter_mut()
-        .for_each(|item| f(item));
+    let slice = arr
+        .as_slice_mut()
+        .map_err(|_| PyValueError::new_err("`arr` is not contiguous."))?;
+    // Clippy false positive: closure is not redundant — capturing f by ref
+    // makes the closure Send when F: Sync; passing f directly would require F:
+    // Send.
+    #[allow(clippy::redundant_closure)]
+    slice.par_iter_mut().for_each(|item| f(item));
 
     Ok(())
 }
