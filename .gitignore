@@ -17,3 +17,6 @@ mutants.out
 
 # Pytorch cifar-models dataset cache
 dataset-cache
+
+# Editor specific
+.zed
