@@ -221,10 +221,7 @@ class BitPatternEncoding(Encoding):
                     element_counts
                 )
                 # HACK: There's nothing we can do about this warning without an upstream fix.
-                torch_decoded = [
-                    torch.from_numpy(t)  # pyright: ignore[reportUnknownMemberType]
-                    for t in decoded
-                ]
+                torch_decoded = [torch.from_numpy(t) for t in decoded]
 
             case DnnDtype.Float16:
                 decoded, ded_results = self._encoded_data.decode_bit_pattern_u16(
@@ -232,8 +229,7 @@ class BitPatternEncoding(Encoding):
                 )
                 # HACK: There's nothing we can do about this warning without an upstream fix.
                 torch_decoded = [
-                    torch.from_numpy(t).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
-                    for t in decoded
+                    torch.from_numpy(t).view(torch.float16) for t in decoded
                 ]
 
         # Update cached decoded tensors in-place

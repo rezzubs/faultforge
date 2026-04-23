@@ -182,7 +182,7 @@ number of data bits per parity bits (P). The default is most likely optimal.
             rich_help_panel="Encoding settings",
         ),
     ] = EpScheme.D3P1,
-    device: Annotated[  # pyright: ignore[reportRedeclaration]
+    device: Annotated[
         str,
         typer.Option(
             help="A pytorch device string, for example `cuda:0`.",
@@ -304,7 +304,8 @@ This also greatly reduces the output file size for configurations with large num
         case (_, None):
             system = CifarSystem(
                 dataset=Cifar(cifar_kind, cifar_cache),
-                model=cifar_model,
+                # TODO: https://github.com/astral-sh/ty/issues/1889?issue=astral-sh%7Cty%7C561
+                model=cifar_model,  # ty:ignore[invalid-argument-type]
                 dtype=dtype,
                 device=device,
                 batch_size=batch_size,
@@ -319,10 +320,11 @@ This also greatly reduces the output file size for configurations with large num
                 batch_size=batch_size,
                 device=device,
                 dtype=dtype,
-                model=imagenet_model,
+                # TODO: https://github.com/astral-sh/ty/issues/1889?issue=astral-sh%7Cty%7C561
+                model=imagenet_model,  # ty:ignore[invalid-argument-type]
                 dataset=ImageNet(
                     imagenet_path.expanduser(),
-                    transform=imagenet_model.get_transform(),
+                    transform=imagenet_model.get_transform(),  # ty:ignore[unresolved-attribute]
                     limit=imagenet_limit,
                 ),
             )
@@ -336,7 +338,8 @@ This also greatly reduces the output file size for configurations with large num
         case (_, BitPattern()):
             logger.debug("Using BitPatternEncoder")
             encoder = BitPatternEncoder(
-                pattern=bit_pattern,
+                # TODO: https://github.com/astral-sh/ty/issues/1889?issue=astral-sh%7Cty%7C561
+                pattern=bit_pattern,  # ty:ignore[invalid-argument-type]
                 pattern_length=dtype.bits_count(),
                 bits_per_chunk=bits_per_chunk,
             )
@@ -413,7 +416,8 @@ This also greatly reduces the output file size for configurations with large num
 
             experiment.record_entries(
                 cast(System[Any], system),
-                runs,
+                # TODO: https://github.com/astral-sh/ty/issues/1889?issue=astral-sh%7Cty%7C561
+                runs,  # ty:ignore[invalid-argument-type]
                 summary=summary,
                 skip_comparison=skip_comparison,
                 autosave=save_config,
@@ -427,7 +431,8 @@ This also greatly reduces the output file size for configurations with large num
             _ = experiment.record_until_stable(
                 cast(System[Any], system),
                 threshold=stability_threshold,
-                stable_within=until_stable,
+                # TODO: https://github.com/astral-sh/ty/issues/1889?issue=astral-sh%7Cty%7C561
+                stable_within=until_stable,  # ty:ignore[invalid-argument-type]
                 min_runs=runs,
                 skip_comparison=skip_comparison,
                 autosave=save_config,

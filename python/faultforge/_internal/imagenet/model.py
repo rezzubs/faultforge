@@ -18,18 +18,18 @@ _root_module_cache: dict[Model, nn.Module] = dict()
 
 def _get_tim_transform(model: nn.Module) -> Transform:
     from timm.data.config import (
-        resolve_data_config,  # pyright: ignore[reportUnknownVariableType]
+        resolve_data_config,
     )
     from timm.data.transforms_factory import create_transform
 
     pretrained_cfg = model.pretrained_cfg
-    config = resolve_data_config(pretrained_cfg=pretrained_cfg)  # pyright: ignore[reportUnknownVariableType]
+    config = resolve_data_config(pretrained_cfg=pretrained_cfg)
     assert isinstance(config, object)
 
     if not isinstance(config, dict):
         raise TypeError(f"Expected config to be a dict, got {type(config)}")
 
-    transform = create_transform(**config)  # pyright: ignore[reportUnknownArgumentType]
+    transform = create_transform(**config)
 
     if not isinstance(transform, transforms.Compose):
         raise TypeError(f"Expected transform to be a Compose, got {type(transform)}")
@@ -112,7 +112,7 @@ class Model(enum.Enum):
             case Model.Resnet152:
                 weights = torchvision.models.ResNet152_Weights.IMAGENET1K_V2
 
-        return weights.transforms()  # pyright: ignore[reportAny]
+        return weights.transforms()
 
     @staticmethod
     def clear_cache():

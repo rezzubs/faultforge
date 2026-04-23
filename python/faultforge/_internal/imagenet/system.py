@@ -41,7 +41,7 @@ class ImagenetSystem(System[nn.Module]):
         ):
             inputs, labels = batch
 
-            logits = model(inputs)  # pyright: ignore[reportAny]
+            logits = model(inputs)
             assert isinstance(logits, Tensor)
 
             predictions = logits.data.argmax(dim=1)

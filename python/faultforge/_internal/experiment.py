@@ -94,7 +94,7 @@ class Experiment(BaseModel):
         accuracy: float
         faulty_parameters: list[int] | None = Field(
             default=None,
-            exclude_if=lambda x: x is None,  # pyright: ignore[reportAny]
+            exclude_if=lambda x: x is None,
         )
 
         @dataclass
@@ -203,7 +203,6 @@ Accuracy: {self.accuracy:.2f}%
                 out.n_bit_error_counts = None
 
             else:
-                # Assigned just above but pyright doesn't get it.
                 assert out.n_bit_error_counts is not None
 
                 for faulty in self.faulty_parameters:

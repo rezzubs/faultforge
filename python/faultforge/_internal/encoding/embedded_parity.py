@@ -54,14 +54,14 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
         with torch.no_grad():
             t_np = t.numpy(force=True)
         _rust.embedded_parity_encode_f32(t_np, self.scheme._to_rust())
-        return torch.from_numpy(t_np)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(t_np)
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.view(torch.uint16).numpy(force=True)
         _rust.embedded_parity_encode_u16(t_np, self.scheme._to_rust())
-        return torch.from_numpy(t_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(t_np).view(torch.float16)
 
     @override
     def create_encoding(
@@ -115,10 +115,10 @@ class EmbeddedParityEncoding(TensorEncodingHelper):
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
         _rust.embedded_parity_decode_u16(encoded_np, self._scheme._to_rust())
-        return torch.from_numpy(encoded_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(encoded_np).view(torch.float16)
 
     @override
     def decode_float32(self, t: Tensor) -> Tensor:
         encoded_np = t.numpy(force=True).copy()
         _rust.embedded_parity_decode_f32(encoded_np, self._scheme._to_rust())
-        return torch.from_numpy(encoded_np)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(encoded_np)

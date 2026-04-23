@@ -21,12 +21,12 @@ def _load_name_to_id(dataset_root: Path) -> dict[str, int]:
     """Loads the name-to-id mapping from the dataset root directory."""
 
     with open(dataset_root.joinpath("name_to_id.json")) as f:
-        name_to_id = json.load(f)  # pyright: ignore[reportAny]
+        name_to_id = json.load(f)
         if not isinstance(name_to_id, dict):
             raise ValueError("name_to_id.json is not a dictionary.")
         if not all(
             isinstance(key, str) and isinstance(value, int)
-            for key, value in name_to_id.items()  # pyright: ignore[reportUnknownVariableType]
+            for key, value in name_to_id.items()
         ):
             raise ValueError("name_to_id.json contains invalid key-value pairs.")
 

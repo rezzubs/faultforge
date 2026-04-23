@@ -19,7 +19,7 @@ def _test_embedded_parity_no_faults(
     mask: int,
     view_type: torch.dtype,
 ) -> None:
-    ts = [torch.from_numpy(t) for t in arrs]  # pyright: ignore[reportUnknownMemberType]
+    ts = [torch.from_numpy(t) for t in arrs]
 
     encoder = EmbeddedParityEncoder(scheme)
 

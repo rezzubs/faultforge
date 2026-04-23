@@ -73,7 +73,7 @@ def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
                 result = _rust.f32_array_list_fi(rust_input, faults_count)
                 torch_result = [
                     # HACK: There's nothing we can do about this warning without an upstream fix.
-                    torch.from_numpy(t)  # pyright: ignore[reportUnknownMemberType]
+                    torch.from_numpy(t)
                     for t in result
                 ]
 
@@ -84,7 +84,7 @@ def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
                 result = _rust.u16_array_list_fi(rust_input, faults_count)
                 torch_result = [
                     # HACK: There's nothing we can do about this warning without an upstream fix.
-                    torch.from_numpy(t).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
+                    torch.from_numpy(t).view(torch.float16)
                     for t in result
                 ]
 
@@ -97,7 +97,7 @@ def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
                 result = _rust.u8_array_list_fi(rust_input, faults_count)
                 torch_result = [
                     # HACK: There's nothing we can do about this warning without an upstream fix.
-                    torch.from_numpy(t)  # pyright: ignore[reportUnknownMemberType]
+                    torch.from_numpy(t)
                     for t in result
                 ]
 

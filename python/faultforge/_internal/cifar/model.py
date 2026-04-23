@@ -39,7 +39,7 @@ class CifarModel(enum.Enum):
         model = _ROOT_MODULE_CACHE.get(self)
 
         if model is None:
-            model = torch.hub.load(  # pyright: ignore[reportUnknownMemberType]
+            model = torch.hub.load(
                 "chenyaofo/pytorch-cifar-models",
                 f"{dataset.kind.value}_{self.value}",
                 pretrained=True,

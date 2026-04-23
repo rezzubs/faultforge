@@ -32,7 +32,7 @@ def _append_parameter(module: nn.Module, tensors: list[torch.Tensor], name: str)
         return
 
     if not isinstance(param, torch.Tensor):
-        _logger.warning(f"Skipping parameter `{name}` because ({type(param)}!=Tensor)")  # pyright: ignore[reportAny]
+        _logger.warning(f"Skipping parameter `{name}` because ({type(param)}!=Tensor)")
         return
 
     tensors.append(param)

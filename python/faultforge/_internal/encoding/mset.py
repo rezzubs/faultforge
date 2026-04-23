@@ -26,14 +26,14 @@ class MsetEncoder(TensorEncoderHelper):
         with torch.no_grad():
             t_np = t.numpy(force=True)
         _rust.bit30_encode_f32(t_np)
-        return torch.from_numpy(t_np)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(t_np)
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.view(torch.uint16).numpy(force=True)
         _rust.bit14_encode_u16(t_np)
-        return torch.from_numpy(t_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(t_np).view(torch.float16)
 
     @override
     def create_encoding(
@@ -64,13 +64,13 @@ class MsetEncoding(TensorEncodingHelper):
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
         _rust.bit14_decode_u16(encoded_np)
-        return torch.from_numpy(encoded_np).view(torch.float16)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(encoded_np).view(torch.float16)
 
     @override
     def decode_float32(self, t: Tensor) -> Tensor:
         encoded_np = t.numpy(force=True).copy()
         _rust.bit30_decode_f32(encoded_np)
-        return torch.from_numpy(encoded_np)  # pyright: ignore[reportUnknownMemberType]
+        return torch.from_numpy(encoded_np)
 
     @override
     def encoding_clone(self) -> MsetEncoding:
