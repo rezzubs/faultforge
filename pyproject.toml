@@ -46,3 +46,6 @@ module-name = "faultforge._rust"
 manifest-path = "crates/faultforge-bindings/Cargo.toml"
 # The source directory for top level Python packages
 python-source = "python"
+
+[tool.ty.rules]
+missing-override-decorator = "warn"

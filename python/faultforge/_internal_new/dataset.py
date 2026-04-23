@@ -3,7 +3,7 @@
 import abc
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Self, override
+from typing import Any, Self, final, override
 
 import torch
 from torch import Tensor
@@ -78,14 +78,15 @@ class BatchedDataset(abc.ABC):
             batch_size,
         )
 
-    def precompute(self) -> CachedDataset:
+    def precompute(self, limit: int | None = None) -> CachedDataset:
         """Precompute all batches.
 
         See `CachedDataset` for details.
         """
-        return CachedDataset(self)
+        return CachedDataset(self, limit)
 
 
+@final
 @dataclass(slots=True)
 class _BatchedDataset(BatchedDataset):
     _loader: DataLoader[Any]
@@ -126,8 +127,9 @@ class _BatchedDataset(BatchedDataset):
         return self._batch_size
 
 
+@final
 @dataclass(slots=True)
-class CachedDataset(Dataset[DataBatch]):
+class CachedDataset(BatchedDataset):
     """A dataset that precomputes all batches and keeps them in memory.
 
     This is useful when the dataset needs to be used multiple times and the
@@ -136,27 +138,37 @@ class CachedDataset(Dataset[DataBatch]):
     feasible to store the full data in memory.
     """
 
+    cursor: int
     _items: list[DataBatch]
     _batch_size: int
 
-    def __init__(self, dataset: BatchedDataset) -> None:
+    def __init__(self, dataset: BatchedDataset, limit: int | None = None) -> None:
         self._batch_size = dataset.batch_size()
-        self._items = list(dataset)
+        self._items = []
+        for i, batch in enumerate(dataset):
+            if limit is not None and i >= limit:
+                break
+            self._items.append(batch)
+        self.cursor = 0
 
-    @classmethod
-    def from_dataset(
-        cls,
-        dataset: Dataset[Any],
-        batch_size: int = DEFAULT_BATCH_SIZE,
-        device: DeviceLike = DEFAULT_DEVICE,
-    ) -> CachedDataset:
-        """Create a new batched dataset from an existing dataset.
-
-        The dataset is expected to contain an iterable which yields two tensors.
-        This is checked at runtime.
-        """
-        return cls(BatchedDataset.from_dataset(dataset, batch_size, device))
+    def reset(self) -> None:
+        """Enables iteration from the beginning"""
+        self.cursor = 0
 
     @override
-    def __getitem__(self, index: int) -> DataBatch:
-        return self._items[index]
+    def batch_size(self) -> int:
+        return self._batch_size
+
+    @override
+    def to(self, device: DeviceLike) -> Self:
+        for item in self._items:
+            item.to(device)
+        return self
+
+    @override
+    def __next__(self) -> DataBatch:
+        if self.cursor >= len(self._items):
+            raise StopIteration
+        batch = self._items[self.cursor]
+        self.cursor += 1
+        return batch
