@@ -1,0 +1,91 @@
+"""Most Significant Exponent bit Triplication (MSET)."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import final, override
+
+import torch
+from torch import Tensor
+
+from faultforge import _rust
+from faultforge._internal_new.dtype import EncodingDtype
+from faultforge._internal_new.encoding.abc import (
+    InPlaceEncoder,
+    InPlaceEncoding,
+    TensorEncoding,
+)
+
+_logger = logging.getLogger(__name__)
+
+
+@final
+class MsetEncoder(InPlaceEncoder):
+    """An encoder for `MsetEncoding`."""
+
+    @override
+    def encode_float32(self, t: Tensor) -> Tensor:
+        with torch.no_grad():
+            t_np = t.numpy(force=True)
+        _rust.bit30_encode_f32(t_np)
+        return torch.from_numpy(t_np)
+
+    @override
+    def encode_float16(self, t: Tensor) -> Tensor:
+        with torch.no_grad():
+            t_np = t.view(torch.uint16).numpy(force=True)
+        _rust.bit14_encode_u16(t_np)
+        return torch.from_numpy(t_np).view(torch.float16)
+
+    @override
+    def create_encoding(
+        self,
+        data: list[Tensor],
+        bits_count: int,
+        dtype: EncodingDtype,
+    ) -> TensorEncoding:
+        return MsetEncoding(
+            _encoded_data=data,
+            _bits_count=bits_count,
+            _decoded_tensors=None,
+            _dtype=dtype,
+        )
+
+
+@final
+@dataclass
+class MsetEncoding(InPlaceEncoding):
+    """MSET based encoding.
+
+    MSET stands for Most Significant Exponent bit Triplication. The second
+    highest bit will be copied to the two lowest bits. A majority voting scheme
+    will be used to determine the final value of the exponent bit.
+    """
+
+    @override
+    def decode_float16(self, t: Tensor) -> Tensor:
+        encoded_np = t.view(torch.uint16).numpy(force=True).copy()
+        _rust.bit14_decode_u16(encoded_np)
+        return torch.from_numpy(encoded_np).view(torch.float16)
+
+    @override
+    def decode_float32(self, t: Tensor) -> Tensor:
+        encoded_np = t.numpy(force=True).copy()
+        _rust.bit30_decode_f32(encoded_np)
+        return torch.from_numpy(encoded_np)
+
+    @override
+    def clone(self) -> MsetEncoding:
+        copied_data = [t.clone() for t in self._encoded_data]
+        if self._decoded_tensors is not None:
+            copied_decoded = [t.clone() for t in self._decoded_tensors]
+        else:
+            copied_decoded = None
+
+        return MsetEncoding(
+            copied_data,
+            self._bits_count,
+            copied_decoded,
+            self._dtype,
+        )
