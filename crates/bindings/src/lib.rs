@@ -1,3 +1,5 @@
+//! Python bindings for the various faultforge crates
+
 mod common;
 mod comparison;
 mod embedded_parity;
@@ -13,9 +15,9 @@ mod _rust {
     #[pymodule_export]
     use crate::generic_fault_injection::f32_array_list_fi;
     #[pymodule_export]
-    use crate::generic_fault_injection::u8_array_list_fi;
-    #[pymodule_export]
     use crate::generic_fault_injection::u16_array_list_fi;
+    #[pymodule_export]
+    use crate::generic_fault_injection::u8_array_list_fi;
 
     #[pymodule_export]
     use crate::comparison::compare_array_list_bitwise_f32;
@@ -23,18 +25,18 @@ mod _rust {
     use crate::comparison::compare_array_list_bitwise_u16;
 
     #[pymodule_export]
-    use crate::encoding_full::PyFullEncoding;
-    #[pymodule_export]
     use crate::encoding_full::encode_full_f32;
     #[pymodule_export]
     use crate::encoding_full::encode_full_u16;
-
     #[pymodule_export]
-    use crate::encoding_bit_pattern::PyBitPatternEncoding;
+    use crate::encoding_full::PyFullEncoding;
+
     #[pymodule_export]
     use crate::encoding_bit_pattern::encode_bit_pattern_f32;
     #[pymodule_export]
     use crate::encoding_bit_pattern::encode_bit_pattern_u16;
+    #[pymodule_export]
+    use crate::encoding_bit_pattern::PyBitPatternEncoding;
 
     #[pymodule_export]
     use crate::single_bit_encoding::bit14_decode_u16;
@@ -46,8 +48,6 @@ mod _rust {
     use crate::single_bit_encoding::bit30_encode_f32;
 
     #[pymodule_export]
-    use crate::embedded_parity::EpScheme;
-    #[pymodule_export]
     use crate::embedded_parity::embedded_parity_decode_f32;
     #[pymodule_export]
     use crate::embedded_parity::embedded_parity_decode_u16;
@@ -55,4 +55,6 @@ mod _rust {
     use crate::embedded_parity::embedded_parity_encode_f32;
     #[pymodule_export]
     use crate::embedded_parity::embedded_parity_encode_u16;
+    #[pymodule_export]
+    use crate::embedded_parity::EpScheme;
 }

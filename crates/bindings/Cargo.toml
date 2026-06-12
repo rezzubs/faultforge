@@ -1,5 +1,5 @@
 [package]
-name = "faultforge-bindings"
+name = "bindings"
 edition.workspace = true
 version.workspace = true
 
