@@ -1,0 +1,54 @@
+from dataclasses import dataclass
+from typing import override
+
+from torch import Tensor
+
+from faultforge._internal_new.dtype import EncodingDtype
+from faultforge._internal_new.encoding.abc import TensorEncoder, TensorEncoding
+from faultforge._internal_new.tensor import (
+    tensor_list_dtype,
+    tensor_list_fault_injection,
+)
+
+
+class IdentityEncoder(TensorEncoder):
+    @override
+    def encode(self, ts: list[Tensor]) -> IdentityEncoding:
+        dtype = tensor_list_dtype(ts)
+        if dtype is None:
+            raise ValueError("Cannot encode an empty list")
+        dtype = EncodingDtype.from_torch(dtype)
+        bits_count = sum(t.numel() for t in ts) * dtype.bit_count()
+        return IdentityEncoding(_tensors=list(ts), _bits_count=bits_count)
+
+
+@dataclass
+class IdentityEncoding(TensorEncoding):
+    _tensors: list[Tensor]
+    _bits_count: int
+
+    @override
+    def encoded_tensors(self) -> list[Tensor]:
+        return self._tensors
+
+    @override
+    def trigger_recompute(self) -> None:
+        pass
+
+    @override
+    def decode(self) -> list[Tensor]:
+        return self._tensors
+
+    @override
+    def clone(self) -> IdentityEncoding:
+        return IdentityEncoding(
+            _tensors=[t.clone() for t in self._tensors], _bits_count=self._bits_count
+        )
+
+    @override
+    def flip_bits(self, n: int) -> None:
+        tensor_list_fault_injection(self._tensors, n)
+
+    @override
+    def bit_count(self) -> int:
+        return self._bits_count
