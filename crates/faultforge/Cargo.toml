@@ -4,13 +4,14 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-rand = "0.9.2"
-rayon.workspace =true
-thiserror = "2.0.17"
+rayon.workspace = true
+picker = { path = "../picker" }
+thiserror.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
 criterion = { version = "0.8.1", features = ["html_reports"] }
-proptest = "1.9.0"
+proptest.workspace = true
 
 [[bench]]
 name = "chunking"

@@ -1,12 +1,11 @@
 pub mod bits;
 mod byte_chunked;
 pub mod chunks;
-mod random_picker;
 
 pub use bits::Bits;
 pub use byte_chunked::ByteChunkedBitBuffer;
 use chunks::DynChunks;
-use random_picker::RandomPicker;
+use picker::Picker;
 
 use crate::{
     bit_buffer::chunks::InvalidChunks,
@@ -127,7 +126,7 @@ pub trait BitBuffer {
             return Err(OutOfBounds);
         }
 
-        let mut possible_faults = RandomPicker::new(bits_count, rand::rng());
+        let mut possible_faults = Picker::new(bits_count, rand::rng());
 
         for _ in 0..n {
             let fault_target = possible_faults.next().expect(
