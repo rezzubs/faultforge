@@ -9,12 +9,13 @@ import tempfile
 import time
 import types
 from dataclasses import dataclass
-from os import PathLike
 from pathlib import Path
 from typing import IO, Self
 
 import scipy.stats
 from pydantic import BaseModel
+
+from faultforge._internal_new.common import AnyPath
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class StabilityConfig:
 
 @dataclass(slots=True)
 class SaveConfig:
-    path: str | PathLike[str]
+    path: AnyPath
     interval_seconds: float | None
     """How many seconds between saves. None means save only at the end."""
 
@@ -172,7 +173,7 @@ class Experiment[P, R = float, C = None](abc.ABC):
             self.save(self.save_config.path)
 
     @classmethod
-    def load(cls, path: str | PathLike[str], parameters: P) -> Self:
+    def load(cls, path: AnyPath, parameters: P) -> Self:
         """Load the experiment data from disk.
 
         See `load_file` for a version that uses a file-like object.
@@ -192,7 +193,7 @@ class Experiment[P, R = float, C = None](abc.ABC):
         self.load_into_file(file)
         return self
 
-    def load_into(self, path: str | PathLike[str]) -> None:
+    def load_into(self, path: AnyPath) -> None:
         """Overwrite current data from a file.
 
         See `load_into_file` for a version that uses a file-like object.
@@ -214,7 +215,7 @@ class Experiment[P, R = float, C = None](abc.ABC):
             )
         self.data = data
 
-    def save(self, path: str | PathLike[str]) -> None:
+    def save(self, path: AnyPath) -> None:
         """Save the experiment data to disk."""
         with open(path, "w") as f:
             self._save_file_helper(f, None)
@@ -223,7 +224,7 @@ class Experiment[P, R = float, C = None](abc.ABC):
         """Save the experiment data to disk using an IO object."""
         self._save_file_helper(file, None)
 
-    def save_atomic(self, path: str | PathLike[str]) -> None:
+    def save_atomic(self, path: AnyPath) -> None:
         """Save the experiment data to disk atomically.
 
         Will not corrupt existing data if the write fails partway.
