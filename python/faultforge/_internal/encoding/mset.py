@@ -42,12 +42,12 @@ class MsetEncoder(InPlaceEncoder):
     def create_encoding(
         self,
         data: list[Tensor],
-        bits_count: int,
+        bit_count: int,
         dtype: EncodingDtype,
     ) -> TensorEncoding:
         return MsetEncoding(
             _encoded_data=data,
-            _bits_count=bits_count,
+            _bit_count=bit_count,
             _decoded_tensors=None,
             _dtype=dtype,
         )
@@ -85,7 +85,7 @@ class MsetEncoding(InPlaceEncoding):
 
         return MsetEncoding(
             copied_data,
-            self._bits_count,
+            self._bit_count,
             copied_decoded,
             self._dtype,
         )

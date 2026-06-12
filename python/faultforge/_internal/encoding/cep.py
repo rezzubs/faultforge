@@ -69,12 +69,12 @@ class CepEncoder(InPlaceEncoder):
     def create_encoding(
         self,
         data: list[Tensor],
-        bits_count: int,
+        bit_count: int,
         dtype: EncodingDtype,
     ) -> TensorEncoding:
         return CepEncoding(
             _encoded_data=data,
-            _bits_count=bits_count,
+            _bit_count=bit_count,
             _decoded_tensors=None,
             _dtype=dtype,
             _scheme=self.scheme,
@@ -103,7 +103,7 @@ class CepEncoding(InPlaceEncoding):
 
         return CepEncoding(
             _encoded_data=cloned_data,
-            _bits_count=self._bits_count,
+            _bit_count=self._bit_count,
             _decoded_tensors=cloned_decoded,
             _dtype=self._dtype,
             _scheme=self._scheme,

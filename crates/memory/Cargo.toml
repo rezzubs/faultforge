@@ -1,0 +1,23 @@
+[package]
+name = "memory"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+rayon.workspace = true
+picker = { path = "../picker" }
+thiserror.workspace = true
+rand.workspace = true
+numpy = { workspace = true, optional = true }
+pyo3 = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.8.2", features = ["html_reports"] }
+proptest.workspace = true
+
+[features]
+numpy = ["dep:numpy", "dep:pyo3"]
+
+[[bench]]
+name = "chunking"
+harness = false

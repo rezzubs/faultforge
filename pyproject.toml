@@ -26,6 +26,7 @@ classifiers = [
 [dependency-groups]
 dev = [
     "hypothesis>=6.148.7",
+    "maturin>=1.14.0",
     "pytest>=9.0.2",
     "ruff>=0.12.4",
     "ty>=0.0.49",

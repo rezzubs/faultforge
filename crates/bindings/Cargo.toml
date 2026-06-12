@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 name = "_rust"
 
 [dependencies]
-faultforge = { path = "../faultforge" }
-numpy = "0.25.0"
-pyo3 = "0.25.0"
+memory = { path = "../memory", features = ["numpy"] }
+numpy.workspace = true
+pyo3.workspace = true
 rayon.workspace = true

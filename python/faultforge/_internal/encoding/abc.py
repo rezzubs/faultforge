@@ -106,7 +106,7 @@ class InPlaceEncoder(TensorEncoder):
     def create_encoding(
         self,
         data: list[Tensor],
-        bits_count: int,
+        bit_count: int,
         dtype: EncodingDtype,
     ) -> TensorEncoding:
         """Create the concrete encoding instance."""
@@ -120,7 +120,7 @@ class InPlaceEncoder(TensorEncoder):
 
         dtype = EncodingDtype.from_torch(dtype)
 
-        bits_count = 0
+        bit_count = 0
         data: list[Tensor] = []
         element_bit_count = dtype.bit_count()
 
@@ -131,10 +131,10 @@ class InPlaceEncoder(TensorEncoder):
                 encode = self.encode_float16
 
         for t in ts:
-            bits_count += t.numel() * element_bit_count
+            bit_count += t.numel() * element_bit_count
             data.append(encode(t))
 
-        return self.create_encoding(data, bits_count, dtype)
+        return self.create_encoding(data, bit_count, dtype)
 
 
 @dataclass
@@ -142,7 +142,7 @@ class InPlaceEncoding(TensorEncoding):
     """A helper base class for implementing TensorEncoding"""
 
     _encoded_data: list[Tensor]
-    _bits_count: int
+    _bit_count: int
     _decoded_tensors: list[Tensor] | None
     _dtype: EncodingDtype
 
@@ -188,4 +188,4 @@ class InPlaceEncoding(TensorEncoding):
 
     @override
     def bit_count(self) -> int:
-        return self._bits_count
+        return self._bit_count

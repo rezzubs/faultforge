@@ -1,60 +1,67 @@
 //! Python bindings for the various faultforge crates
 
+mod cep;
 mod common;
 mod comparison;
-mod embedded_parity;
-mod encoding_bit_pattern;
-mod encoding_full;
-mod generic_fault_injection;
-mod single_bit_encoding;
+mod fault;
+mod fault_injection;
+mod mset;
+mod secded;
 
 use pyo3::pymodule;
 
 #[pymodule]
 mod _rust {
+    use super::*;
+
+    #[pymodule]
+    mod secded {
+        #[pymodule_export]
+        use crate::secded::PySecdedEncoding;
+        #[pymodule_export]
+        use crate::secded::encode_f32;
+        #[pymodule_export]
+        use crate::secded::encode_u16;
+    }
+
+    #[pymodule]
+    mod mset {
+        #[pymodule_export]
+        use crate::mset::decode_f32;
+        #[pymodule_export]
+        use crate::mset::decode_u16;
+        #[pymodule_export]
+        use crate::mset::encode_f32;
+        #[pymodule_export]
+        use crate::mset::encode_u16;
+    }
+
+    #[pymodule]
+    mod cep {
+        #[pymodule_export]
+        use crate::cep::EpScheme;
+        #[pymodule_export]
+        use crate::cep::decode_f32;
+        #[pymodule_export]
+        use crate::cep::decode_u16;
+        #[pymodule_export]
+        use crate::cep::encode_f32;
+        #[pymodule_export]
+        use crate::cep::encode_u16;
+    }
+
     #[pymodule_export]
-    use crate::generic_fault_injection::f32_array_list_fi;
+    use crate::fault::PyFault;
+
     #[pymodule_export]
-    use crate::generic_fault_injection::u16_array_list_fi;
+    use crate::fault_injection::list_of_array_fault_f32;
     #[pymodule_export]
-    use crate::generic_fault_injection::u8_array_list_fi;
+    use crate::fault_injection::list_of_array_fault_u8;
+    #[pymodule_export]
+    use crate::fault_injection::list_of_array_fault_u16;
 
     #[pymodule_export]
     use crate::comparison::compare_array_list_bitwise_f32;
     #[pymodule_export]
     use crate::comparison::compare_array_list_bitwise_u16;
-
-    #[pymodule_export]
-    use crate::encoding_full::encode_full_f32;
-    #[pymodule_export]
-    use crate::encoding_full::encode_full_u16;
-    #[pymodule_export]
-    use crate::encoding_full::PyFullEncoding;
-
-    #[pymodule_export]
-    use crate::encoding_bit_pattern::encode_bit_pattern_f32;
-    #[pymodule_export]
-    use crate::encoding_bit_pattern::encode_bit_pattern_u16;
-    #[pymodule_export]
-    use crate::encoding_bit_pattern::PyBitPatternEncoding;
-
-    #[pymodule_export]
-    use crate::single_bit_encoding::bit14_decode_u16;
-    #[pymodule_export]
-    use crate::single_bit_encoding::bit14_encode_u16;
-    #[pymodule_export]
-    use crate::single_bit_encoding::bit30_decode_f32;
-    #[pymodule_export]
-    use crate::single_bit_encoding::bit30_encode_f32;
-
-    #[pymodule_export]
-    use crate::embedded_parity::embedded_parity_decode_f32;
-    #[pymodule_export]
-    use crate::embedded_parity::embedded_parity_decode_u16;
-    #[pymodule_export]
-    use crate::embedded_parity::embedded_parity_encode_f32;
-    #[pymodule_export]
-    use crate::embedded_parity::embedded_parity_encode_u16;
-    #[pymodule_export]
-    use crate::embedded_parity::EpScheme;
 }

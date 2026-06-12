@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["./crates/*", "./fuzz"]
+members = ["./crates/*"]
 
 [workspace.package]
 version = "0.0.0"
@@ -8,7 +8,9 @@ edition = "2024"
 
 
 [workspace.dependencies]
-rayon = "1.11.0"
-thiserror = "2.0.17"
+numpy = "0.29.0"
+proptest = "1.11.0"
+pyo3 = "0.29.0"
 rand = "0.10.1"
-proptest = "1.9.0"
+rayon = "1.12.0"
+thiserror = "2.0.18"

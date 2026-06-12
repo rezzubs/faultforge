@@ -122,4 +122,4 @@ class SecdedEncoding(Encoding):
 
     @override
     def bit_count(self) -> int:
-        return self._encoded_data.bits_count()
+        return self._encoded_data.bit_count()

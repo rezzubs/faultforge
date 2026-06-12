@@ -18,14 +18,14 @@ class IdentityEncoder(TensorEncoder):
         if dtype is None:
             raise ValueError("Cannot encode an empty list")
         dtype = EncodingDtype.from_torch(dtype)
-        bits_count = sum(t.numel() for t in ts) * dtype.bit_count()
-        return IdentityEncoding(_tensors=list(ts), _bits_count=bits_count)
+        bit_count = sum(t.numel() for t in ts) * dtype.bit_count()
+        return IdentityEncoding(_tensors=list(ts), _bit_count=bit_count)
 
 
 @dataclass
 class IdentityEncoding(TensorEncoding):
     _tensors: list[Tensor]
-    _bits_count: int
+    _bit_count: int
 
     @override
     def encoded_tensors(self) -> list[Tensor]:
@@ -42,7 +42,7 @@ class IdentityEncoding(TensorEncoding):
     @override
     def clone(self) -> IdentityEncoding:
         return IdentityEncoding(
-            _tensors=[t.clone() for t in self._tensors], _bits_count=self._bits_count
+            _tensors=[t.clone() for t in self._tensors], _bit_count=self._bit_count
         )
 
     @override
@@ -51,4 +51,4 @@ class IdentityEncoding(TensorEncoding):
 
     @override
     def bit_count(self) -> int:
-        return self._bits_count
+        return self._bit_count
