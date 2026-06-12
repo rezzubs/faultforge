@@ -1,4 +1,4 @@
-from faultforge._internal_new.experiment import (
+from faultforge._internal.experiment import (
     Data,
     Experiment,
     SaveConfig,

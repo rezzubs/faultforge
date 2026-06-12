@@ -9,7 +9,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
-from faultforge._internal_new.common import (
+from faultforge._internal.common import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
     DeviceLike,

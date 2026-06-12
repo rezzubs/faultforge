@@ -1,6 +1,6 @@
 """Types related to datasets."""
 
-from faultforge._internal_new.dataset import (
+from faultforge._internal.dataset import (
     BatchedDataset,
     CachedDataset,
     DataBatch,

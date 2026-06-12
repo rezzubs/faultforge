@@ -6,13 +6,15 @@ from dataclasses import dataclass
 from typing import override
 
 import torch
-from faultforge import _rust
-from faultforge._internal.encoding._tensor import (
-    TensorEncoderHelper,
-    TensorEncodingHelper,
-)
-from faultforge._internal.encoding.sequence import TensorEncoding
 from torch import Tensor
+
+from faultforge import _rust
+from faultforge._internal.dtype import EncodingDtype
+from faultforge._internal.encoding.abc import (
+    InPlaceEncoder,
+    InPlaceEncoding,
+    TensorEncoding,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -44,8 +46,8 @@ class EpScheme(enum.Enum):
 
 
 @dataclass
-class EmbeddedParityEncoder(TensorEncoderHelper):
-    """An encoder for :class:`EmbeddedParityEncoding`."""
+class CepEncoder(InPlaceEncoder):
+    """An encoder for `CepEncoding`."""
 
     scheme: EpScheme = EpScheme.D3P1
 
@@ -68,26 +70,19 @@ class EmbeddedParityEncoder(TensorEncoderHelper):
         self,
         data: list[Tensor],
         bits_count: int,
-        decoded_tensors: list[Tensor],
-        dtype: torch.dtype,
+        dtype: EncodingDtype,
     ) -> TensorEncoding:
-        return EmbeddedParityEncoding(
-            data,
-            bits_count,
-            decoded_tensors,
-            dtype,
-            True,
+        return CepEncoding(
+            _encoded_data=data,
+            _bits_count=bits_count,
+            _decoded_tensors=None,
+            _dtype=dtype,
             _scheme=self.scheme,
         )
 
-    @override
-    def encoder_add_metadata(self, metadata: dict[str, str]) -> None:
-        metadata["embedded_parity"] = "true"
-        metadata["embedded_parity_scheme"] = self.scheme.value
-
 
 @dataclass
-class EmbeddedParityEncoding(TensorEncodingHelper):
+class CepEncoding(InPlaceEncoding):
     """An encoding that embeds parity bits into the data.
 
     The higher bits of the data are chunked based on the provided scheme and
@@ -99,16 +94,19 @@ class EmbeddedParityEncoding(TensorEncodingHelper):
     _scheme: EpScheme
 
     @override
-    def encoding_clone(self) -> EmbeddedParityEncoding:
-        data_tensors = [t.clone() for t in self._encoded_data]
-        decoded_tensors = [t.clone() for t in self._decoded_tensors]
-        return EmbeddedParityEncoding(
-            data_tensors,
-            self._bits_count,
-            decoded_tensors,
-            self._dtype,
-            self._needs_recompute,
-            self._scheme,
+    def clone(self) -> CepEncoding:
+        cloned_data = [t.clone() for t in self._encoded_data]
+        if self._decoded_tensors is not None:
+            cloned_decoded = [t.clone() for t in self._decoded_tensors]
+        else:
+            cloned_decoded = None
+
+        return CepEncoding(
+            _encoded_data=cloned_data,
+            _bits_count=self._bits_count,
+            _decoded_tensors=cloned_decoded,
+            _dtype=self._dtype,
+            _scheme=self._scheme,
         )
 
     @override

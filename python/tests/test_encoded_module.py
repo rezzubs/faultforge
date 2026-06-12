@@ -5,12 +5,14 @@ import copy
 import hypothesis.strategies as st
 import pytest
 import torch
-from faultforge._internal_new.encoding.abc import Encoder
-from faultforge._internal_new.encoding.cep import CepEncoder
-from faultforge._internal_new.encoding.identity import IdentityEncoder
-from faultforge._internal_new.encoding.mset import MsetEncoder
-from faultforge._internal_new.encoding.nn import EncodedModule
-from faultforge._internal_new.encoding.secded import SecdedEncoder
+from faultforge.encoding import (
+    CepEncoder,
+    EncodedModule,
+    Encoder,
+    IdentityEncoder,
+    MsetEncoder,
+    SecdedEncoder,
+)
 from hypothesis import given, settings
 from torch import nn
 

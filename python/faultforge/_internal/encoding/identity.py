@@ -3,9 +3,9 @@ from typing import override
 
 from torch import Tensor
 
-from faultforge._internal_new.dtype import EncodingDtype
-from faultforge._internal_new.encoding.abc import TensorEncoder, TensorEncoding
-from faultforge._internal_new.tensor import (
+from faultforge._internal.dtype import EncodingDtype
+from faultforge._internal.encoding.abc import TensorEncoder, TensorEncoding
+from faultforge._internal.tensor import (
     tensor_list_dtype,
     tensor_list_fault_injection,
 )

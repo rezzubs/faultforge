@@ -5,7 +5,7 @@ import logging
 import torch
 
 from faultforge import _rust
-from faultforge._internal_new.dtype import FiDtype
+from faultforge._internal.dtype import FiDtype
 
 logger = logging.getLogger(__name__)
 

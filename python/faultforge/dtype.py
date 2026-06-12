@@ -1,4 +1,4 @@
-from faultforge._internal_new.dtype import (
+from faultforge._internal.dtype import (
     EncodingDtype,
     FiDtype,
 )

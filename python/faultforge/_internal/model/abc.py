@@ -2,8 +2,8 @@ import abc
 
 from torch import nn
 
-from faultforge._internal_new.common import DeviceLike
-from faultforge._internal_new.dataset import BatchedDataset
+from faultforge._internal.common import DeviceLike
+from faultforge._internal.dataset import BatchedDataset
 
 
 class ModelBundle(abc.ABC):

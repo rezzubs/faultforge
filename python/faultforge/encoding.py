@@ -1,4 +1,4 @@
-from faultforge._internal_new.encoding.abc import (
+from faultforge._internal.encoding.abc import (
     Encoder,
     Encoding,
     InPlaceEncoder,
@@ -6,24 +6,24 @@ from faultforge._internal_new.encoding.abc import (
     TensorEncoder,
     TensorEncoding,
 )
-from faultforge._internal_new.encoding.cep import (
+from faultforge._internal.encoding.cep import (
     CepEncoder,
     CepEncoding,
 )
-from faultforge._internal_new.encoding.identity import (
+from faultforge._internal.encoding.identity import (
     IdentityEncoder,
     IdentityEncoding,
 )
-from faultforge._internal_new.encoding.mset import (
+from faultforge._internal.encoding.mset import (
     MsetEncoder,
     MsetEncoding,
 )
-from faultforge._internal_new.encoding.nn import EncodedModule
-from faultforge._internal_new.encoding.secded import (
+from faultforge._internal.encoding.nn import EncodedModule
+from faultforge._internal.encoding.secded import (
     SecdedEncoder,
     SecdedEncoding,
 )
-from faultforge._internal_new.encoding.sequence import (
+from faultforge._internal.encoding.sequence import (
     EncoderSequence,
     EncodingSequence,
 )

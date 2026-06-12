@@ -4,22 +4,25 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import override
+from typing import final, override
 
 import torch
-from faultforge import _rust
-from faultforge._internal.encoding._tensor import (
-    TensorEncoderHelper,
-    TensorEncodingHelper,
-)
-from faultforge._internal.encoding.sequence import TensorEncoding
 from torch import Tensor
+
+from faultforge import _rust
+from faultforge._internal.dtype import EncodingDtype
+from faultforge._internal.encoding.abc import (
+    InPlaceEncoder,
+    InPlaceEncoding,
+    TensorEncoding,
+)
 
 _logger = logging.getLogger(__name__)
 
 
-class MsetEncoder(TensorEncoderHelper):
-    """An encoder for :class:`MsetEncoding`."""
+@final
+class MsetEncoder(InPlaceEncoder):
+    """An encoder for `MsetEncoding`."""
 
     @override
     def encode_float32(self, t: Tensor) -> Tensor:
@@ -40,24 +43,24 @@ class MsetEncoder(TensorEncoderHelper):
         self,
         data: list[Tensor],
         bits_count: int,
-        decoded_tensors: list[Tensor],
-        dtype: torch.dtype,
+        dtype: EncodingDtype,
     ) -> TensorEncoding:
-        return MsetEncoding(data, bits_count, decoded_tensors, dtype, True)
+        return MsetEncoding(
+            _encoded_data=data,
+            _bits_count=bits_count,
+            _decoded_tensors=None,
+            _dtype=dtype,
+        )
 
-    @override
-    def encoder_add_metadata(self, metadata: dict[str, str]) -> None:
-        metadata["msb_duplicated"] = "true"
 
-
+@final
 @dataclass
-class MsetEncoding(TensorEncodingHelper):
+class MsetEncoding(InPlaceEncoding):
     """MSET based encoding.
 
-    MSET stands for Most Significant Exponent bit Triplication. Depending on the
-    data type, the second highest bit will be copied to the lowest bits. A
-    majority voting scheme will be used to determine the final value of the
-    exponent bit.
+    MSET stands for Most Significant Exponent bit Triplication. The second
+    highest bit will be copied to the two lowest bits. A majority voting scheme
+    will be used to determine the final value of the exponent bit.
     """
 
     @override
@@ -73,13 +76,16 @@ class MsetEncoding(TensorEncodingHelper):
         return torch.from_numpy(encoded_np)
 
     @override
-    def encoding_clone(self) -> MsetEncoding:
+    def clone(self) -> MsetEncoding:
         copied_data = [t.clone() for t in self._encoded_data]
-        copied_decoded = [t.clone() for t in self._decoded_tensors]
-        return self.__class__(
+        if self._decoded_tensors is not None:
+            copied_decoded = [t.clone() for t in self._decoded_tensors]
+        else:
+            copied_decoded = None
+
+        return MsetEncoding(
             copied_data,
             self._bits_count,
             copied_decoded,
             self._dtype,
-            self._needs_recompute,
         )

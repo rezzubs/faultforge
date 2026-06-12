@@ -1,5 +1,3 @@
-"""The supported data types for different functions grouped by use case."""
-
 from __future__ import annotations
 
 import enum
@@ -7,74 +5,74 @@ import enum
 import torch
 
 
-class DnnDtype(enum.Enum):
-    """Supported data types for DNN evaluation."""
+class EncodingDtype(enum.Enum):
+    """Data types that support encoding."""
 
-    Float32 = "float32"
-    Float16 = "float16"
-
-    def to_torch(self) -> torch.dtype:
-        """Convert to an equivalent pytorch data type."""
-
-        match self:
-            case DnnDtype.Float32:
-                return torch.float32
-            case DnnDtype.Float16:
-                return torch.float16
+    F32 = enum.auto()
+    F16 = enum.auto()
 
     @classmethod
-    def from_torch(cls, dtype: torch.dtype) -> DnnDtype:
-        """Get the equivalent of a pytorch data type.
+    def from_torch(cls, dtype: torch.dtype) -> EncodingDtype:
+        """Convert a torch dtype to an EncodableDtype.
 
-        :raises ValueError: For incompatible data types
+        Raises:
+            ValueError: If the dtype is not supported.
         """
-
         match dtype:
             case torch.float32:
-                return DnnDtype.Float32
+                return cls.F32
             case torch.float16:
-                return DnnDtype.Float16
-            case other:
-                raise ValueError(f"Unsupported pytorch data type {other}")
+                return cls.F16
+            case _:
+                raise ValueError(f"dtype {dtype} does not support encoding")
 
-    def bits_count(self) -> int:
+    def to_torch(self) -> torch.dtype:
+        """Convert an EncodableDtype to a torch dtype."""
         match self:
-            case DnnDtype.Float32:
+            case EncodingDtype.F32:
+                return torch.float32
+            case EncodingDtype.F16:
+                return torch.float16
+
+    def bit_count(self) -> int:
+        """Return the number of bits in the dtype."""
+        match self:
+            case EncodingDtype.F32:
                 return 32
-            case DnnDtype.Float16:
+            case EncodingDtype.F16:
                 return 16
 
 
 class FiDtype(enum.Enum):
-    """Suppored data types for fault injection."""
+    """Data types that support fault injection."""
 
-    Float32 = enum.auto()
-    Float16 = enum.auto()
-    Uint8 = enum.auto()
+    F32 = enum.auto()
+    F16 = enum.auto()
+    U8 = enum.auto()
+
+    @classmethod
+    def from_torch(cls, dtype: torch.dtype) -> FiDtype:
+        """Convert a torch dtype to a FiDtype.
+
+        Raises:
+            ValueError: If the dtype is not supported.
+        """
+        match dtype:
+            case torch.float32:
+                return cls.F32
+            case torch.float16:
+                return cls.F16
+            case torch.uint8:
+                return cls.U8
+            case _:
+                raise ValueError(f"dtype {dtype} does not support fault injection")
 
     def to_torch(self) -> torch.dtype:
         """Convert to an equivalent pytorch data type."""
         match self:
-            case FiDtype.Float32:
+            case FiDtype.F32:
                 return torch.float32
-            case FiDtype.Float16:
+            case FiDtype.F16:
                 return torch.float16
-            case FiDtype.Uint8:
+            case FiDtype.U8:
                 return torch.uint8
-
-    @classmethod
-    def from_torch(cls, dtype: torch.dtype) -> FiDtype:
-        """Get the equivalent of a pytorch data type.
-
-        :raises ValueError: For incompatible data types
-        """
-
-        match dtype:
-            case torch.float32:
-                return FiDtype.Float32
-            case torch.float16:
-                return FiDtype.Float16
-            case torch.uint8:
-                return FiDtype.Uint8
-            case other:
-                raise ValueError(f"Unsupported pytorch data type {other}")

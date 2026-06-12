@@ -6,7 +6,7 @@ from typing import override
 import torch
 from torch import Tensor, nn
 
-from faultforge._internal_new.encoding.abc import (
+from faultforge._internal.encoding.abc import (
     Encoder,
     Encoding,
 )
