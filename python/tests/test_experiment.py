@@ -27,10 +27,19 @@ class _TestResult:
     value: float
 
 
-@dataclass
 class _TestExperiment(Experiment[_TestResult, None]):
     _max_runs: int | None = None
     _latest: int | None = None
+
+    def __init__(
+        self,
+        data: Data[_TestResult, None] | None = None,
+    ) -> None:
+        super().__init__(
+            data or Data(fingerprint=_fingerprint(), context=None, results={})
+        )
+        self._max_runs = None
+        self._latest = None
 
     def set_max_runs(self, max_runs: int | None) -> None:
         self._max_runs = max_runs

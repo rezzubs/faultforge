@@ -1,6 +1,5 @@
 """PyTorch Modules with encoded parameters"""
 
-from dataclasses import dataclass
 from typing import override
 
 import torch
@@ -13,7 +12,6 @@ from faultforge._internal.encoding.abc import (
 from faultforge._internal.fault import Fault
 
 
-@dataclass(slots=True)
 class EncodedModule(nn.Module):
     """A wrapper for a PyTorch module where parameters are stored in simulated encoded memory.
 
@@ -24,7 +22,7 @@ class EncodedModule(nn.Module):
     _memory: Encoding
     _device: torch.device | None
     """The decoded module will be sent to this device."""
-    _dirty: bool = True
+    _dirty: bool
     """Whether the decoded data needs to be refreshed."""
 
     def __init__(
@@ -44,6 +42,7 @@ class EncodedModule(nn.Module):
             self._device = parameters[0].device
 
         self._memory = encoder.encode(parameters)
+        self._dirty = True
 
     @classmethod
     def _from_parts(
@@ -57,6 +56,7 @@ class EncodedModule(nn.Module):
         instance._module = module
         instance._memory = data
         instance._device = device
+        instance._dirty = True
         return instance
 
     def force_decode(self) -> nn.Module:

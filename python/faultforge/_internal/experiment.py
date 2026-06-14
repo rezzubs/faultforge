@@ -1,7 +1,6 @@
 """Classes for running experiments."""
 
 import abc
-import dataclasses
 import logging
 import os
 import signal
@@ -64,7 +63,6 @@ class DisplayConfig:
     """The format string used for printing result scores."""
 
 
-@dataclass
 class Experiment[R = float, C = None](abc.ABC):
     """Recoding a series of experiments until a statistically significant result is reached.
 
@@ -85,12 +83,24 @@ class Experiment[R = float, C = None](abc.ABC):
 
     data: Data[R, C]
     """The data that is saved to disk."""
-    display: DisplayConfig = dataclasses.field(default_factory=lambda: DisplayConfig())
+    display: DisplayConfig
     """Configuration for displaying experiment results."""
-    stability_config: StabilityConfig | None = None
+    stability_config: StabilityConfig | None
     """Configuration for stability checking."""
-    save_config: SaveConfig | None = None
+    save_config: SaveConfig | None
     """Configuration for saving experiment results."""
+
+    def __init__(
+        self,
+        data: Data[R, C],
+        display: DisplayConfig | None = None,
+        stability_config: StabilityConfig | None = None,
+        save_config: SaveConfig | None = None,
+    ) -> None:
+        self.data = data
+        self.display = display or DisplayConfig()
+        self.stability_config = stability_config
+        self.save_config = save_config
 
     def result_score(self, result: R) -> float:
         """Convert a result to a float score.
@@ -294,11 +304,15 @@ class Experiment[R = float, C = None](abc.ABC):
 
         latest_key = self.latest_result()
         if latest_key is None:
-            return
+            return None
 
         last = self.result_score(self.data.results[latest_key])
         parts.append(f"{last:{self.display.score_fmt}}")
-        parts.append("-")
+
+        if self.display.score_unit is not None:
+            parts.append(self.display.score_unit)
+
+        parts.append("|")
 
         mean = (
             sum(self.result_score(r) for r in self.data.results.values())
