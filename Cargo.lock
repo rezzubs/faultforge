@@ -50,7 +50,9 @@ version = "0.0.0"
 dependencies = [
  "memory",
  "numpy",
+ "picker",
  "pyo3",
+ "rand 0.10.1",
  "rayon",
 ]
 

@@ -6,6 +6,7 @@ mod comparison;
 mod fault;
 mod fault_injection;
 mod mset;
+mod picker;
 mod secded;
 
 use pyo3::pymodule;
@@ -52,6 +53,9 @@ mod _rust {
 
     #[pymodule_export]
     use crate::fault::PyFault;
+
+    #[pymodule_export]
+    use crate::picker::PyPicker;
 
     #[pymodule_export]
     use crate::fault_injection::list_of_array_fault_f32;

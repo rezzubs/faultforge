@@ -8,13 +8,16 @@ pub struct FromReturnedError {
     size: usize,
 }
 
-/// An iterator which returns numbers from 0..n in a random order until all values are consumed.
+/// An iterator which returns numbers from 0..n in a random order until all
+/// values are consumed.
 ///
 /// Every returned value is unique.
 ///
 /// This is based on the [Fisher-Yates
-/// shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle) but instead of shuffling
-/// the whole sequence we just return the target index for the swap.
+/// shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle) but
+/// instead of shuffling the whole sequence we just return the target index for
+/// the swap.
+#[derive(Debug, Clone)]
 pub struct Picker<R> {
     /// Keeps track of the initial size, used in [`Self::reset`].
     initial_size: usize,
