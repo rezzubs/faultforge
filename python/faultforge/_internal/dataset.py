@@ -3,7 +3,7 @@
 import abc
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Self, final, override
+from typing import Any, Iterator, Self, final, override
 
 import torch
 from torch import Tensor
@@ -59,6 +59,10 @@ class BatchedDataset(abc.ABC):
     def to(self, device: DeviceLike) -> Self:
         """Maps all future batches to the specified device."""
 
+    @abc.abstractmethod
+    def reset(self) -> None:
+        """Start iteration from the beginning."""
+
     def __iter__(self) -> Self:
         return self
 
@@ -69,11 +73,7 @@ class BatchedDataset(abc.ABC):
         device: DeviceLike = DEFAULT_DEVICE,
     ) -> BatchedDataset:
         return _BatchedDataset(
-            DataLoader(
-                dataset,
-                batch_size=batch_size,
-                shuffle=False,
-            ),
+            dataset,
             torch.device(device),
             batch_size,
         )
@@ -89,13 +89,32 @@ class BatchedDataset(abc.ABC):
 @final
 @dataclass(slots=True)
 class _BatchedDataset(BatchedDataset):
-    _loader: DataLoader[Any]
+    _dataset: Dataset[Any]
+    _loader: Iterator[Any]
     _device: torch.device
     _batch_size: int
 
+    def __init__(
+        self, dataset: Dataset[Any], device: torch.device, batch_size: int
+    ) -> None:
+        self._dataset = dataset
+        self._device = device
+        self._batch_size = batch_size
+        self._loader = self._get_loader()
+        self.reset()
+
+    def _get_loader(self) -> Iterator[Any]:
+        return iter(
+            DataLoader(
+                self._dataset,
+                batch_size=self._batch_size,
+                shuffle=False,
+            )
+        )
+
     @override
     def __next__(self) -> DataBatch:
-        batch = next(iter(self._loader))
+        batch = next(self._loader)
 
         if not isinstance(batch, Iterable):
             raise TypeError(
@@ -126,6 +145,10 @@ class _BatchedDataset(BatchedDataset):
     def batch_size(self) -> int:
         return self._batch_size
 
+    @override
+    def reset(self) -> None:
+        self._loader = self._get_loader()
+
 
 @final
 @dataclass(slots=True)
@@ -151,6 +174,7 @@ class CachedDataset(BatchedDataset):
             self._items.append(batch)
         self.cursor = 0
 
+    @override
     def reset(self) -> None:
         """Enables iteration from the beginning"""
         self.cursor = 0
