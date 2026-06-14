@@ -15,7 +15,7 @@ from faultforge._internal.common import (
 )
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.model.abc import ModelBundle
+from faultforge._internal.loading.abc import ModelBundle
 
 logger = logging.getLogger(__name__)
 
