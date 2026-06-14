@@ -94,6 +94,8 @@ class CifarDataset(enum.Enum):
                     transform=transform,
                 )
 
+        logger.debug("Done loading dataset")
+
         return BatchedDataset.from_dataset(dataset, batch_size, device)
 
 
@@ -132,6 +134,7 @@ class Cifar(ModelBundle):
             raise TypeError(
                 f"torch.hub.load returned {type(model)}, expected nn.Module"
             )
+        logger.debug("Done loading model.")
         return model.to(device)
 
     @override

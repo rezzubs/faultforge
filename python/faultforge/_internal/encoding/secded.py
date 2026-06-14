@@ -127,7 +127,8 @@ class SecdedEncoding(Encoding):
 
     @override
     def apply_fault(self, fault: Fault, target_bit: int) -> None:
-        logger.debug("Invalidating decoded tensor cache due to fault injection.")
+        if not self._needs_recompute:
+            logger.debug("Invalidating decoded tensor cache due to fault injection.")
         self._needs_recompute = True
         self._encoded_data.apply_fault(fault_to_rust(fault), target_bit)
 

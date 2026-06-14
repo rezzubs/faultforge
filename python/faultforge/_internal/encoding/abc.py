@@ -193,7 +193,8 @@ class InPlaceEncoding(TensorEncoding):
 
     @override
     def apply_fault(self, fault: Fault, target_bit: int) -> None:
-        logger.debug("Invalidating decoded tensors due to fault injection")
+        if self._decoded_tensors is not None:
+            logger.debug("Invalidating decoded tensors due to fault injection")
         self._decoded_tensors = None
         tensor_list_fault(self._encoded_data, fault, target_bit)
 

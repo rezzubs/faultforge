@@ -148,8 +148,10 @@ class ImageNet(ModelBundle):
 
     @override
     def load_dataset(self, batch_size: int, device: DeviceLike) -> BatchedDataset:
+        logger.info("Loading ImageNet.")
         dataset = datasets.ImageNet(
             Path(self._root), split="val", transform=self.get_transform()
         )
         assert isinstance(dataset, Dataset)
+        logger.debug("Done loading ImageNet")
         return BatchedDataset.from_dataset(dataset, batch_size, device)

@@ -1,6 +1,7 @@
 """Types related to datasets."""
 
 import abc
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Iterator, Self, final, override
@@ -14,6 +15,8 @@ from faultforge._internal.common import (
     DEFAULT_DEVICE,
     DeviceLike,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -166,6 +169,10 @@ class CachedDataset(BatchedDataset):
     _batch_size: int
 
     def __init__(self, dataset: BatchedDataset, limit: int | None = None) -> None:
+        logger.debug(
+            "Precomputing dataset batches"
+            + (f" (limit={limit})" if limit is not None else "")
+        )
         self._batch_size = dataset.batch_size()
         self._items = []
         for i, batch in enumerate(dataset):
@@ -173,6 +180,7 @@ class CachedDataset(BatchedDataset):
                 break
             self._items.append(batch)
         self.cursor = 0
+        logger.debug("Batches computed")
 
     @override
     def reset(self) -> None:
