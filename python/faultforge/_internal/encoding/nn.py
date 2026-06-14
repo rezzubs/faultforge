@@ -22,20 +22,39 @@ class EncodedModule(nn.Module):
 
     _module: nn.Module
     _memory: Encoding
+    _device: torch.device | None
+    """The decoded module will be sent to this device."""
 
-    def __init__(self, module: nn.Module, encoder: Encoder):
+    def __init__(
+        self,
+        module: nn.Module,
+        encoder: Encoder,
+        *,
+        inherit_device: bool = True,
+    ):
         nn.Module.__init__(self)
         self._module = module
         parameters: list[Tensor] = [p.clone() for p in module.parameters()]
 
+        if not inherit_device or len(parameters) == 0:
+            self._device = None
+        elif len(parameters) > 0:
+            self._device = parameters[0].device
+
         self._memory = encoder.encode(parameters)
 
     @classmethod
-    def _from_parts(cls, module: nn.Module, data: Encoding) -> EncodedModule:
+    def _from_parts(
+        cls,
+        module: nn.Module,
+        data: Encoding,
+        device: torch.device | None,
+    ) -> EncodedModule:
         instance = cls.__new__(cls)
         nn.Module.__init__(instance)
         instance._module = module
         instance._memory = data
+        instance._device = device
         return instance
 
     def decode(self) -> nn.Module:
@@ -46,10 +65,15 @@ class EncodedModule(nn.Module):
 
             with torch.no_grad():
                 param.copy_(decoded_param)
-        return self._module
+        if self._device is not None:
+            return self._module.to(self._device)
+        else:
+            return self._module
 
     def clone(self) -> "EncodedModule":
-        return EncodedModule._from_parts(self._module, self._memory.clone())
+        return EncodedModule._from_parts(
+            self._module, self._memory.clone(), self._device
+        )
 
     def apply_fault(self, fault: Fault, target_bit: int) -> None:
         """Apply a fault at the given bit index.
@@ -71,4 +95,32 @@ class EncodedModule(nn.Module):
 
     @override
     def to(self, *args, **kwargs) -> EncodedModule:
-        raise RuntimeError("to() is not supported on EncodedModule")
+        """Move the module to the specified device.
+
+        Updating the data type after initialization is not supported unlike
+        other nn.Module variants.
+        """
+        device = None
+        dtype = None
+
+        if (
+            len(args) >= 2
+            and isinstance(args[0], (torch.device, str, int))
+            and isinstance(args[1], torch.dtype)
+        ):
+            device = torch.device(torch.device(args[0]))
+            dtype = args[1]
+        elif len(args) == 1 and isinstance(args[0], torch.dtype):
+            dtype = args[0]
+        elif len(args) == 1 and isinstance(args[0], (torch.device, str, int)):
+            device = torch.device(torch.device(args[0]))
+        else:
+            raise ValueError("EncodedModule.to only supports a device as an agrument")
+
+        if device is not None:
+            self._device = device
+
+        if dtype is not None:
+            raise ValueError("Updating the dtype of an EncodedModule is not supported")
+
+        return self
