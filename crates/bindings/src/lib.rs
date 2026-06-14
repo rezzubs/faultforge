@@ -17,7 +17,7 @@ mod _rust {
     #[pymodule]
     mod secded {
         #[pymodule_export]
-        use crate::secded::PySecdedEncoding;
+        use crate::secded::PyEncoding;
         #[pymodule_export]
         use crate::secded::encode_f32;
         #[pymodule_export]
@@ -39,7 +39,7 @@ mod _rust {
     #[pymodule]
     mod cep {
         #[pymodule_export]
-        use crate::cep::EpScheme;
+        use crate::cep::PyScheme;
         #[pymodule_export]
         use crate::cep::decode_f32;
         #[pymodule_export]

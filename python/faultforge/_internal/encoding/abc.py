@@ -7,9 +7,10 @@ import torch
 from torch import Tensor
 
 from faultforge._internal.dtype import EncodingDtype
+from faultforge._internal.fault import Fault
 from faultforge._internal.tensor import (
     tensor_list_dtype,
-    tensor_list_fault_injection,
+    tensor_list_fault,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,8 @@ class Encoding:
         ...
 
     @abc.abstractmethod
-    def flip_bits(self, n: int) -> None:
-        """Flip the first `n` bits of the encoded data."""
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+        """Apply a fault to the encoded data at the given bit index."""
         ...
 
     @abc.abstractmethod
@@ -181,10 +182,10 @@ class InPlaceEncoding(TensorEncoding):
         return decoded
 
     @override
-    def flip_bits(self, n: int) -> None:
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
         logger.debug("Invalidating decoded tensors due to fault injection")
         self._decoded_tensors = None
-        tensor_list_fault_injection(self._encoded_data, n)
+        tensor_list_fault(self._encoded_data, fault, target_bit)
 
     @override
     def bit_count(self) -> int:

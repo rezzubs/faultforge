@@ -8,18 +8,18 @@ from typing import override
 import torch
 from torch import Tensor
 
-from faultforge import _rust
 from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.encoding.abc import (
     InPlaceEncoder,
     InPlaceEncoding,
     TensorEncoding,
 )
+from faultforge._rust import cep
 
 _logger = logging.getLogger(__name__)
 
 
-class EpScheme(enum.Enum):
+class CepScheme(enum.Enum):
     """How many data bits to use per parity bit.
 
     D3P1 should result in the best accuracy in most cases because it results in
@@ -30,39 +30,39 @@ class EpScheme(enum.Enum):
     D7P1 = "d7p1"
     D15P1 = "d15p1"
 
-    def _to_rust(self) -> _rust.EpScheme:
+    def _to_rust(self) -> cep.Scheme:
         match self:
-            case EpScheme.D3P1:
-                return _rust.EpScheme.D3P1
-            case EpScheme.D7P1:
-                return _rust.EpScheme.D7P1
-            case EpScheme.D15P1:
-                return _rust.EpScheme.D15P1
+            case CepScheme.D3P1:
+                return cep.Scheme.D3P1
+            case CepScheme.D7P1:
+                return cep.Scheme.D7P1
+            case CepScheme.D15P1:
+                return cep.Scheme.D15P1
 
     @staticmethod
-    def default() -> EpScheme:
+    def default() -> CepScheme:
         """Return the default scheme."""
-        return EpScheme.D3P1
+        return CepScheme.D3P1
 
 
 @dataclass
 class CepEncoder(InPlaceEncoder):
     """An encoder for `CepEncoding`."""
 
-    scheme: EpScheme = EpScheme.D3P1
+    scheme: CepScheme = CepScheme.D3P1
 
     @override
     def encode_float32(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.numpy(force=True)
-        _rust.embedded_parity_encode_f32(t_np, self.scheme._to_rust())
+        cep.encode_f32(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np)
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.view(torch.uint16).numpy(force=True)
-        _rust.embedded_parity_encode_u16(t_np, self.scheme._to_rust())
+        cep.encode_u16(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np).view(torch.float16)
 
     @override
@@ -91,7 +91,7 @@ class CepEncoding(InPlaceEncoding):
     chunk will be set to zero.
     """
 
-    _scheme: EpScheme
+    _scheme: CepScheme
 
     @override
     def clone(self) -> CepEncoding:
@@ -112,11 +112,11 @@ class CepEncoding(InPlaceEncoding):
     @override
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
-        _rust.embedded_parity_decode_u16(encoded_np, self._scheme._to_rust())
+        cep.decode_u16(encoded_np, self._scheme._to_rust())
         return torch.from_numpy(encoded_np).view(torch.float16)
 
     @override
     def decode_float32(self, t: Tensor) -> Tensor:
         encoded_np = t.numpy(force=True).copy()
-        _rust.embedded_parity_decode_f32(encoded_np, self._scheme._to_rust())
+        cep.decode_f32(encoded_np, self._scheme._to_rust())
         return torch.from_numpy(encoded_np)

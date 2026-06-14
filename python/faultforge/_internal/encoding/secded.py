@@ -8,10 +8,14 @@ from typing import override
 
 import torch
 
-from faultforge import _rust
 from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.encoding.abc import Encoder, Encoding
+from faultforge._internal.fault import (
+    Fault,
+    fault_to_rust,
+)
 from faultforge._internal.tensor import tensor_list_dtype
+from faultforge._rust import secded
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +48,13 @@ class SecdedEncoder(Encoder):
             case EncodingDtype.F32:
                 with torch.no_grad():
                     rust_input = [t.flatten().numpy(force=True) for t in ts]
-                encoded_data = _rust.encode_full_f32(rust_input, self.bits_per_chunk)
+                encoded_data = secded.encode_f32(rust_input, self.bits_per_chunk)
             case EncodingDtype.F16:
                 with torch.no_grad():
                     rust_input = [
                         t.flatten().view(torch.uint16).numpy(force=True) for t in ts
                     ]
-                encoded_data = _rust.encode_full_u16(rust_input, self.bits_per_chunk)
+                encoded_data = secded.encode_u16(rust_input, self.bits_per_chunk)
 
         return SecdedEncoding(
             encoded_data,
@@ -68,7 +72,7 @@ class SecdedEncoding(Encoding):
     results are not currently used.
     """
 
-    _encoded_data: _rust.FullEncoding
+    _encoded_data: secded.Encoding
     """The blob that stores raw encoded data."""
     _decoded_tensors: list[torch.Tensor]
     """These are updated in-place during decoding."""
@@ -84,11 +88,11 @@ class SecdedEncoding(Encoding):
 
         match self._dtype:
             case EncodingDtype.F32:
-                decoded, ded_results = self._encoded_data.decode_full_f32()
+                decoded, ded_results = self._encoded_data.decode_f32()
                 torch_decoded = [torch.from_numpy(t) for t in decoded]
 
             case EncodingDtype.F16:
-                decoded, ded_results = self._encoded_data.decode_full_u16()
+                decoded, ded_results = self._encoded_data.decode_u16()
                 torch_decoded = [
                     torch.from_numpy(t).view(torch.float16) for t in decoded
                 ]
@@ -115,10 +119,10 @@ class SecdedEncoding(Encoding):
         )
 
     @override
-    def flip_bits(self, n: int) -> None:
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
         logger.debug("Invalidating decoded tensor cache due to fault injection.")
         self._needs_recompute = True
-        self._encoded_data.flip_n_bits(n)
+        self._encoded_data.apply_fault(fault_to_rust(fault), target_bit)
 
     @override
     def bit_count(self) -> int:

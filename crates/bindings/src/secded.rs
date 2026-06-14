@@ -1,19 +1,19 @@
-use crate::common::*;
+use crate::{common::*, fault::PyFault};
 use memory::{
-    BitBuffer, ByteBuffer, Fault, Limited, SizedBitBuffer,
+    BitBuffer, ByteBuffer, Limited, SizedBitBuffer,
     chunks::{Chunks, ChunksCreationError, DecodeError, DynChunks},
     encoding::secded::encoded_bit_count,
     sequence::NonUniformSequence,
 };
 use numpy::PyArray1;
 use pyo3::{
-    exceptions::PyValueError,
+    exceptions::{PyIndexError, PyValueError},
     prelude::*,
     types::{PyBytes, PyList},
 };
 
-#[pyclass(name = "SecdedEncoding")]
-pub struct PySecdedEncoding {
+#[pyclass(name = "Encoding")]
+pub struct PyEncoding {
     /// A list of the encoded chunks. Guaranteed to store [`PyBytes`] elements.
     encoded_chunks: Py<PyList>,
     /// The number of data bits per chunk, used for bounds in `Limited`.
@@ -23,8 +23,8 @@ pub struct PySecdedEncoding {
     item_counts: Vec<usize>,
 }
 
-impl PySecdedEncoding {
-    pub fn decode_full_generic<'py, T>(
+impl PyEncoding {
+    pub fn decode_generic<'py, T>(
         &self,
         py: Python<'py>,
         mut output_buffer: NonUniformSequence<Vec<Vec<T>>>,
@@ -74,14 +74,18 @@ impl PySecdedEncoding {
         item_counts: Vec<usize>,
     ) -> PyResult<Self> {
         let bytes = encoded_chunks.into_raw().into_iter().map(|chunk| {
-            debug_assert_eq!(chunk.bit_count(), data_bit_count);
+            assert_eq!(
+                chunk.bit_count(),
+                encoded_bit_count(data_bit_count)
+                    .expect("chunk creation will fail before this for empty buffers.")
+            );
             let chunk_bytes = chunk.into_inner();
             PyBytes::new(py, &chunk_bytes).unbind()
         });
 
         let encoded_chunks = PyList::new(py, bytes)?.unbind();
 
-        Ok(PySecdedEncoding {
+        Ok(PyEncoding {
             encoded_chunks,
             data_bit_count,
             item_counts,
@@ -121,9 +125,9 @@ impl PySecdedEncoding {
 }
 
 #[pymethods]
-impl PySecdedEncoding {
+impl PyEncoding {
     /// Decode a list of float32 values.
-    pub fn decode_full_f32<'py>(
+    pub fn decode_f32<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<(Vec<OutputArr<'py, f32>>, Vec<bool>)> {
@@ -134,10 +138,10 @@ impl PySecdedEncoding {
                 .collect::<Vec<_>>(),
         );
 
-        self.decode_full_generic(py, output_buffer)
+        self.decode_generic(py, output_buffer)
     }
 
-    pub fn decode_full_u16<'py>(
+    pub fn decode_u16<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<(Vec<OutputArr<'py, u16>>, Vec<bool>)> {
@@ -148,58 +152,32 @@ impl PySecdedEncoding {
                 .collect::<Vec<_>>(),
         );
 
-        self.decode_full_generic(py, output_buffer)
+        self.decode_generic(py, output_buffer)
     }
 
-    pub fn flip_bit<'py>(&mut self, py: Python<'py>, index: usize) -> PyResult<()> {
-        if index >= self.bit_count(py) {
-            return Err(PyValueError::new_err(format!(
-                "bit index {} is out of bounds",
-                index
+    pub fn apply_fault<'py>(
+        &mut self,
+        py: Python<'py>,
+        fault: PyFault,
+        target_bit: usize,
+    ) -> PyResult<()> {
+        if target_bit >= self.bit_count(py) {
+            return Err(PyIndexError::new_err(format!(
+                "target_bit {} is out of bounds",
+                target_bit
             )));
         }
 
         let mut encoding = self.to_rust(py)?;
-        encoding.flip_bit(index);
+        encoding.apply_fault(fault.0, target_bit);
 
-        *self = PySecdedEncoding::from_rust(
-            py,
-            encoding,
-            self.data_bit_count,
-            self.item_counts.clone(),
-        )?;
-
-        Ok(())
-    }
-
-    pub fn flip_bits<'py>(&mut self, py: Python<'py>, indices: Vec<usize>) -> PyResult<()> {
-        for bit in &indices {
-            if *bit >= self.bit_count(py) {
-                return Err(PyValueError::new_err(format!(
-                    "bit index {} is out of bounds",
-                    bit
-                )));
-            }
-        }
-        let mut encoding = self.to_rust(py)?;
-
-        encoding.apply_faults(indices.into_iter().map(|index| (Fault::Flip, index)));
-
-        // PERF: The `item_counts` clone could be avoided if the conversion of
-        // `encoding` is extracted from the `from_rust` method. Then we would
-        // just need to reassign `bits_per_chunk` instead of the whole struct.
-        *self = PySecdedEncoding::from_rust(
-            py,
-            encoding,
-            self.data_bit_count,
-            self.item_counts.clone(),
-        )?;
+        *self = PyEncoding::from_rust(py, encoding, self.data_bit_count, self.item_counts.clone())?;
 
         Ok(())
     }
 
     /// Return a new instance with cloned data.
-    pub fn clone<'py>(&self, py: Python<'py>) -> PyResult<PySecdedEncoding> {
+    pub fn clone<'py>(&self, py: Python<'py>) -> PyResult<PyEncoding> {
         let encoding_clone = self.encoded_chunks.bind(py).iter().map(|chunk| {
             let bytes = chunk
                 .cast_into::<PyBytes>()
@@ -210,7 +188,7 @@ impl PySecdedEncoding {
             PyBytes::new(py, &cloned).unbind()
         });
 
-        Ok(PySecdedEncoding {
+        Ok(PyEncoding {
             encoded_chunks: PyList::new(py, encoding_clone)?.unbind(),
             data_bit_count: self.data_bit_count,
             item_counts: self.item_counts.clone(),
@@ -224,11 +202,11 @@ impl PySecdedEncoding {
     }
 }
 
-fn encode_full_generic<'py, T>(
+fn encode_generic<'py, T>(
     py: Python<'py>,
     buffer: NonUniformSequence<Vec<Vec<T>>>,
     bits_per_chunk: usize,
-) -> PyResult<PySecdedEncoding>
+) -> PyResult<PyEncoding>
 where
     T: ByteBuffer + SizedBitBuffer,
 {
@@ -243,7 +221,7 @@ where
         })?
         .encode_chunks();
 
-    PySecdedEncoding::from_rust(py, encoded_chunks, bits_per_chunk, item_counts)
+    PyEncoding::from_rust(py, encoded_chunks, bits_per_chunk, item_counts)
 }
 
 /// Encode a all bits of a buffer of 32 bit floats.
@@ -258,10 +236,10 @@ pub fn encode_f32<'py>(
     py: Python<'py>,
     input: Vec<InputArr<f32>>,
     bits_per_chunk: usize,
-) -> PyResult<PySecdedEncoding> {
+) -> PyResult<PyEncoding> {
     let buffer = prep_input_array_list(input);
 
-    encode_full_generic(py, buffer, bits_per_chunk)
+    encode_generic(py, buffer, bits_per_chunk)
 }
 
 /// Encode a all bits of a buffer of 16 bit unsigned integers.
@@ -276,8 +254,8 @@ pub fn encode_u16<'py>(
     py: Python<'py>,
     input: Vec<InputArr<u16>>,
     bits_per_chunk: usize,
-) -> PyResult<PySecdedEncoding> {
+) -> PyResult<PyEncoding> {
     let buffer = prep_input_array_list(input);
 
-    encode_full_generic(py, buffer, bits_per_chunk)
+    encode_generic(py, buffer, bits_per_chunk)
 }

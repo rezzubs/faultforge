@@ -1,13 +1,14 @@
 """Operations on tensors."""
 
-import logging
-
+import numpy as np
 import torch
 
 from faultforge import _rust
 from faultforge._internal.dtype import FiDtype
-
-logger = logging.getLogger(__name__)
+from faultforge._internal.fault import (
+    Fault,
+    fault_to_rust,
+)
 
 
 def tensor_list_dtype(ts: list[torch.Tensor]) -> torch.dtype | None:
@@ -33,60 +34,44 @@ def tensor_list_dtype(ts: list[torch.Tensor]) -> torch.dtype | None:
     return dtype
 
 
-def tensor_list_fault_injection(ts: list[torch.Tensor], faults_count: int):
-    """Flip `faults_count` random unique bits in `ts`.
+def tensor_list_fault(ts: list[torch.Tensor], fault: Fault, target_bit: int):
+    """Apply a fault at specific bit position.
 
     Raises:
         ValueError:
             - If values in `ts` don't all have the same data type.
-            - If faults_count is greater than the number of bits `ts`.
             - If the data type is unsupported. See `FiDtype`.
     """
 
     dtype = tensor_list_dtype(ts)
 
     if dtype is None:
-        logger.warning("Skipping fault injection because the input buffer is empty")
-        return
+        raise ValueError("`ts` is empty")
 
-    flattened = [t.flatten() for t in ts]
+    fault: _rust.Fault = fault_to_rust(fault)
 
     # NOTE: the length checks are handled in rust.
     match FiDtype.from_torch(dtype):
         case FiDtype.F32:
             with torch.no_grad():
-                rust_input = [t.numpy(force=True) for t in flattened]
-                result = _rust.f32_array_list_fi(rust_input, faults_count)
-                torch_result = [
-                    # HACK: There's nothing we can do about this warning without an upstream fix.
-                    torch.from_numpy(t)
-                    for t in result
-                ]
+                np_array = [t.numpy(force=True) for t in ts]
+                _rust.list_of_array_fault_f32(np_array, fault, target_bit)
 
         case FiDtype.F16:
             with torch.no_grad():
-                rust_input = [t.cpu().view(torch.uint16).numpy() for t in flattened]
-
-                result = _rust.u16_array_list_fi(rust_input, faults_count)
-                torch_result = [
-                    # HACK: There's nothing we can do about this warning without an upstream fix.
-                    torch.from_numpy(t).view(torch.float16)
-                    for t in result
-                ]
-
-                for original, updated in zip(flattened, torch_result, strict=True):
-                    _ = original.copy_(updated)
+                np_array = [t.numpy(force=True).view(np.uint16) for t in ts]
+                _rust.list_of_array_fault_u16(np_array, fault, target_bit)
+                np_array = [t.view(np.float16) for t in np_array]
         case FiDtype.U8:
             with torch.no_grad():
-                rust_input = [t.numpy(force=True) for t in flattened]
+                np_array = [t.numpy(force=True) for t in ts]
+                _rust.list_of_array_fault_u8(np_array, fault, target_bit)
 
-                result = _rust.u8_array_list_fi(rust_input, faults_count)
-                torch_result = [
-                    # HACK: There's nothing we can do about this warning without an upstream fix.
-                    torch.from_numpy(t)
-                    for t in result
-                ]
+    for original, updated in zip(ts, np_array, strict=True):
+        # We have to assert because Tensor.numpy returns `Unknown`.
+        assert isinstance(updated, np.ndarray)
+        updated = torch.from_numpy(updated)
+        assert updated.shape == original.shape
 
-    for original, updated in zip(flattened, torch_result, strict=True):
         with torch.no_grad():
             _ = original.copy_(updated)

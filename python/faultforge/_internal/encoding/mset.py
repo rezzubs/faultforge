@@ -9,13 +9,13 @@ from typing import final, override
 import torch
 from torch import Tensor
 
-from faultforge import _rust
 from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.encoding.abc import (
     InPlaceEncoder,
     InPlaceEncoding,
     TensorEncoding,
 )
+from faultforge._rust import mset
 
 _logger = logging.getLogger(__name__)
 
@@ -28,14 +28,14 @@ class MsetEncoder(InPlaceEncoder):
     def encode_float32(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.numpy(force=True)
-        _rust.bit30_encode_f32(t_np)
+        mset.encode_f32(t_np)
         return torch.from_numpy(t_np)
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
         with torch.no_grad():
             t_np = t.view(torch.uint16).numpy(force=True)
-        _rust.bit14_encode_u16(t_np)
+        mset.encode_u16(t_np)
         return torch.from_numpy(t_np).view(torch.float16)
 
     @override
@@ -66,13 +66,13 @@ class MsetEncoding(InPlaceEncoding):
     @override
     def decode_float16(self, t: Tensor) -> Tensor:
         encoded_np = t.view(torch.uint16).numpy(force=True).copy()
-        _rust.bit14_decode_u16(encoded_np)
+        mset.decode_u16(encoded_np)
         return torch.from_numpy(encoded_np).view(torch.float16)
 
     @override
     def decode_float32(self, t: Tensor) -> Tensor:
         encoded_np = t.numpy(force=True).copy()
-        _rust.bit30_decode_f32(encoded_np)
+        mset.decode_f32(encoded_np)
         return torch.from_numpy(encoded_np)
 
     @override

@@ -12,6 +12,7 @@ from faultforge._internal.encoding.abc import (
     TensorEncoder,
     TensorEncoding,
 )
+from faultforge._internal.fault import Fault
 
 
 @dataclass(slots=True)
@@ -60,8 +61,8 @@ class EncodingSequence(Encoding):
         return ts
 
     @override
-    def flip_bits(self, n: int) -> None:
-        self._tail.flip_bits(n)
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+        self._tail.apply_fault(fault, target_bit)
 
     @override
     def bit_count(self) -> int:

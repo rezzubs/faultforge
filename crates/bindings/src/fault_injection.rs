@@ -1,7 +1,7 @@
 use crate::fault::PyFault;
 use memory::{BitBuffer, SizedBitBuffer, sequence::NonUniformSequence};
 use numpy::PyArrayDyn;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{exceptions::PyIndexError, prelude::*};
 
 type InputArr<'py, T> = Bound<'py, PyArrayDyn<T>>;
 
@@ -18,7 +18,7 @@ where
 
     let bit_count = buffer.bit_count();
     if target_bit >= bit_count {
-        return Err(PyValueError::new_err("target_bit is out of bounds"));
+        return Err(PyIndexError::new_err("target_bit is out of bounds"));
     }
 
     buffer.apply_fault(fault.0, target_bit);

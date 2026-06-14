@@ -10,6 +10,7 @@ from faultforge._internal.encoding.abc import (
     Encoder,
     Encoding,
 )
+from faultforge._internal.fault import Fault
 
 
 @dataclass(slots=True)
@@ -50,8 +51,16 @@ class EncodedModule(nn.Module):
     def clone(self) -> "EncodedModule":
         return EncodedModule._from_parts(self._module, self._memory.clone())
 
-    def flip_bits(self, n: int) -> None:
-        self._memory.flip_bits(n)
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+        """Apply a fault at the given bit index.
+
+        The fault is expected to be in the range `[0, bit_count)`.
+        """
+        self._memory.apply_fault(fault, target_bit)
+
+    def bit_count(self) -> int:
+        """Return the number of bits in the encoded data."""
+        return self._memory.bit_count()
 
     @override
     def forward(self, t: Tensor) -> Tensor:

@@ -5,9 +5,10 @@ from torch import Tensor
 
 from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.encoding.abc import TensorEncoder, TensorEncoding
+from faultforge._internal.fault import Fault
 from faultforge._internal.tensor import (
     tensor_list_dtype,
-    tensor_list_fault_injection,
+    tensor_list_fault,
 )
 
 
@@ -46,8 +47,8 @@ class IdentityEncoding(TensorEncoding):
         )
 
     @override
-    def flip_bits(self, n: int) -> None:
-        tensor_list_fault_injection(self._tensors, n)
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+        tensor_list_fault(self._tensors, fault, target_bit)
 
     @override
     def bit_count(self) -> int:

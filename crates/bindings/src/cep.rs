@@ -103,54 +103,54 @@ where
     Ok(())
 }
 
-#[pyclass(eq, skip_from_py_object)]
+#[pyclass(eq, skip_from_py_object, name = "Scheme")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EpScheme {
+pub enum PyScheme {
     D3P1,
     D7P1,
     D15P1,
 }
 
 #[pyfunction]
-pub fn encode_f32(arr: PyReadwriteArrayDyn<f32>, scheme: &EpScheme) -> PyResult<()> {
+pub fn encode_f32(arr: PyReadwriteArrayDyn<f32>, scheme: &PyScheme) -> PyResult<()> {
     par_map_array(
         arr,
         match scheme {
-            EpScheme::D3P1 => |item: &mut f32| B32D3P1.encode(item),
-            EpScheme::D7P1 => |item: &mut f32| B32D7P1.encode(item),
-            EpScheme::D15P1 => |item: &mut f32| B32D15P1.encode(item),
+            PyScheme::D3P1 => |item: &mut f32| B32D3P1.encode(item),
+            PyScheme::D7P1 => |item: &mut f32| B32D7P1.encode(item),
+            PyScheme::D15P1 => |item: &mut f32| B32D15P1.encode(item),
         },
     )
 }
 
 #[pyfunction]
-pub fn decode_f32(arr: PyReadwriteArrayDyn<f32>, scheme: &EpScheme) -> PyResult<()> {
+pub fn decode_f32(arr: PyReadwriteArrayDyn<f32>, scheme: &PyScheme) -> PyResult<()> {
     let f = match scheme {
-        EpScheme::D3P1 => |item: &mut f32| B32D3P1.decode(item),
-        EpScheme::D7P1 => |item: &mut f32| B32D7P1.decode(item),
-        EpScheme::D15P1 => |item: &mut f32| B32D15P1.decode(item),
+        PyScheme::D3P1 => |item: &mut f32| B32D3P1.decode(item),
+        PyScheme::D7P1 => |item: &mut f32| B32D7P1.decode(item),
+        PyScheme::D15P1 => |item: &mut f32| B32D15P1.decode(item),
     };
     par_map_array(arr, f)
 }
 
 #[pyfunction]
-pub fn encode_u16(arr: PyReadwriteArrayDyn<u16>, scheme: &EpScheme) -> PyResult<()> {
+pub fn encode_u16(arr: PyReadwriteArrayDyn<u16>, scheme: &PyScheme) -> PyResult<()> {
     par_map_array(
         arr,
         match scheme {
-            EpScheme::D3P1 => |item: &mut u16| B16D3P1.encode(item),
-            EpScheme::D7P1 => |item: &mut u16| B16D7P1.encode(item),
-            EpScheme::D15P1 => |item: &mut u16| B16D15P1.encode(item),
+            PyScheme::D3P1 => |item: &mut u16| B16D3P1.encode(item),
+            PyScheme::D7P1 => |item: &mut u16| B16D7P1.encode(item),
+            PyScheme::D15P1 => |item: &mut u16| B16D15P1.encode(item),
         },
     )
 }
 
 #[pyfunction]
-pub fn decode_u16(arr: PyReadwriteArrayDyn<u16>, scheme: &EpScheme) -> PyResult<()> {
+pub fn decode_u16(arr: PyReadwriteArrayDyn<u16>, scheme: &PyScheme) -> PyResult<()> {
     let f = match scheme {
-        EpScheme::D3P1 => |item: &mut u16| B16D3P1.decode(item),
-        EpScheme::D7P1 => |item: &mut u16| B16D7P1.decode(item),
-        EpScheme::D15P1 => |item: &mut u16| B16D15P1.decode(item),
+        PyScheme::D3P1 => |item: &mut u16| B16D3P1.decode(item),
+        PyScheme::D7P1 => |item: &mut u16| B16D7P1.decode(item),
+        PyScheme::D15P1 => |item: &mut u16| B16D15P1.decode(item),
     };
     par_map_array(arr, f)
 }
