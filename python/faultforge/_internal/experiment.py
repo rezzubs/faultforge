@@ -95,11 +95,11 @@ class Experiment[R = float, C = None](abc.ABC):
     def result_score(self, result: R) -> float:
         """Convert a result to a float score.
 
-        A default implementation is provided for `float` results. For other
-        result types this should be overridden.
+        A default implementation is provided for `float` and `int` results. For
+        other result types this should be overridden.
         """
-        if isinstance(result, float):
-            return result
+        if isinstance(result, (float, int)):
+            return float(result)
         raise NotImplementedError(
             f"{type(self)} did not override `score` but has a custom result type {type(result)}"
         )
