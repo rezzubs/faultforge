@@ -24,6 +24,8 @@ class EncodedModule(nn.Module):
     _memory: Encoding
     _device: torch.device | None
     """The decoded module will be sent to this device."""
+    _dirty: bool = True
+    """Whether the decoded data needs to be refreshed."""
 
     def __init__(
         self,
@@ -57,7 +59,8 @@ class EncodedModule(nn.Module):
         instance._device = device
         return instance
 
-    def decode(self) -> nn.Module:
+    def force_decode(self) -> nn.Module:
+        """Force a decode of the memory."""
         decoded = self._memory.decode()
         for param, decoded_param in zip(self._module.parameters(), decoded):
             assert param.shape == decoded_param.shape
@@ -65,10 +68,19 @@ class EncodedModule(nn.Module):
 
             with torch.no_grad():
                 param.copy_(decoded_param)
+
+        self._dirty = False
+
         if self._device is not None:
             return self._module.to(self._device)
         else:
             return self._module
+
+    def decode(self) -> nn.Module:
+        """Decode the memory, reusing the previous decode result if the memory hasn't been tampered with."""
+        if self._dirty:
+            self.force_decode()
+        return self._module
 
     def clone(self) -> "EncodedModule":
         return EncodedModule._from_parts(
@@ -80,6 +92,7 @@ class EncodedModule(nn.Module):
 
         The fault is expected to be in the range `[0, bit_count)`.
         """
+        self._dirty = True
         self._memory.apply_fault(fault, target_bit)
 
     def bit_count(self) -> int:
