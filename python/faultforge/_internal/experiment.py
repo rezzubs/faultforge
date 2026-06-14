@@ -28,7 +28,7 @@ class Data[P, R = float, C = None](BaseModel):
 
     parameters: P
     context: C
-    results: list[R]
+    results: dict[int, R]
 
 
 @dataclass(slots=True)
@@ -72,8 +72,6 @@ class Experiment[P, R = float, C = None](abc.ABC):
 
     data: Data[P, R, C]
     """The data that is saved to disk."""
-    max_runs: int | None = None
-    """The number of possible different runs."""
     display: DisplayConfig = dataclasses.field(default_factory=lambda: DisplayConfig())
     """Configuration for displaying experiment results."""
     stability_config: StabilityConfig | None = None
@@ -97,10 +95,19 @@ class Experiment[P, R = float, C = None](abc.ABC):
     def run(self) -> None:
         """Run a single iteration of the experiment."""
 
+    @abc.abstractmethod
+    def latest_result(self) -> int | None:
+        """Return the id of the latest result."""
+        ...
+
     @classmethod
     @abc.abstractmethod
     def from_parameters(cls, parameters: P) -> Self:
         """Create a new experiment instance from the given parameters."""
+
+    def max_runs(self) -> int | None:
+        """The number of possible different runs."""
+        return None
 
     def run_loop(
         self,
@@ -128,7 +135,8 @@ class Experiment[P, R = float, C = None](abc.ABC):
 
         try:
             while not stop_requested:
-                if self.max_runs is not None and self.run_count() >= self.max_runs:
+                max_runs = self.max_runs()
+                if max_runs is not None and self.run_count() >= max_runs:
                     logger.info("Exhausted all possible cases.")
                     break
 
@@ -252,7 +260,7 @@ class Experiment[P, R = float, C = None](abc.ABC):
 
         None if there are less than 2 results.
         """
-        scores = [self.result_score(r) for r in self.data.results]
+        scores = [self.result_score(r) for r in self.data.results.values()]
         n = len(scores)
         if n < 2:
             return None
@@ -273,10 +281,13 @@ class Experiment[P, R = float, C = None](abc.ABC):
 
         parts: list[str] = []
 
-        if self.max_runs is not None:
-            width = len(str(self.max_runs))
-            completion_percentage = (run_count / self.max_runs) * 100
-            progress = f"[{run_count:>{width}} / {self.max_runs} | {completion_percentage:6.2f}%]:"
+        max_runs = self.max_runs()
+        if max_runs is not None:
+            width = len(str(max_runs))
+            completion_percentage = (run_count / max_runs) * 100
+            progress = (
+                f"[{run_count:>{width}} / {max_runs} | {completion_percentage:6.2f}%]:"
+            )
         else:
             progress = f"[Run {run_count}]:"
 
@@ -286,11 +297,18 @@ class Experiment[P, R = float, C = None](abc.ABC):
             parts.append(self.display.score_name)
             parts.append("=")
 
-        last = self.result_score(self.data.results[-1])
+        latest_key = self.latest_result()
+        if latest_key is None:
+            return
+
+        last = self.result_score(self.data.results[latest_key])
         parts.append(f"{last:{self.display.score_fmt}}")
         parts.append("-")
 
-        mean = sum(self.result_score(r) for r in self.data.results) / self.run_count()
+        mean = (
+            sum(self.result_score(r) for r in self.data.results.values())
+            / self.run_count()
+        )
         parts.append(f"mean {mean:{self.display.score_fmt}}")
 
         if ci is not None:

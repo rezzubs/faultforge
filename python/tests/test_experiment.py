@@ -27,7 +27,22 @@ class _TestResult:
     value: float
 
 
+@dataclass
 class _TestExperiment(Experiment[_TestParams, _TestResult, None]):
+    _max_runs: int | None = None
+    _latest: int | None = None
+
+    def set_max_runs(self, max_runs: int | None) -> None:
+        self._max_runs = max_runs
+
+    @override
+    def latest_result(self) -> int | None:
+        return self._latest
+
+    @override
+    def max_runs(self) -> int | None:
+        return self._max_runs
+
     @override
     def result_score(self, result: _TestResult) -> float:
         return result.value
@@ -37,14 +52,15 @@ class _TestExperiment(Experiment[_TestParams, _TestResult, None]):
     def from_parameters(cls, parameters: _TestParams) -> Self:
         return cls(
             data=Data[_TestParams, _TestResult, None](
-                parameters=parameters, context=None, results=[]
+                parameters=parameters, context=None, results=dict()
             )
         )
 
     @override
     def run(self) -> None:
-        n = len(self.data.results)
-        self.data.results.append(_TestResult(value=float(n + 1)))
+        key = len(self.data.results)
+        self.data.results[key] = _TestResult(value=float(key + 1))
+        self._latest = key
 
 
 def make(values: list[float] | None = None) -> _TestExperiment:
@@ -52,7 +68,7 @@ def make(values: list[float] | None = None) -> _TestExperiment:
     data = Data[_TestParams, _TestResult, None](
         parameters=_TestParams(),
         context=None,
-        results=[_TestResult(value=v) for v in values or []],
+        results={k: _TestResult(value=v) for k, v in enumerate(values or [])},
     )
     return _TestExperiment(data=data)
 
@@ -77,7 +93,7 @@ def test_ci_half_width_identical_values():
 
 def test_run_loop_stops_at_max_runs():
     exp = make()
-    exp.max_runs = 5
+    exp.set_max_runs(5)
     exp.run_loop()
     assert exp.run_count() == 5
 
@@ -96,7 +112,7 @@ def test_run_loop_stops_when_stable():
 def test_run_loop_does_not_stop_before_min_samples():
     # Even with low CI, stability is skipped until min_samples is reached.
     exp = make([1.0] * 3)
-    exp.max_runs = 6
+    exp.set_max_runs(6)
     exp.stability_config = StabilityConfig(min_samples=10, threshold=999.0)
     exp.run_loop()
     assert exp.run_count() == 6
@@ -105,7 +121,7 @@ def test_run_loop_does_not_stop_before_min_samples():
 def test_run_loop_continues_while_unstable():
     # Incrementing values → CI never reaches 0 → runs to max_runs.
     exp = make()
-    exp.max_runs = 20
+    exp.set_max_runs(20)
     exp.stability_config = StabilityConfig(min_samples=2, threshold=0.0)
     exp.run_loop()
     assert exp.run_count() == 20
@@ -141,8 +157,12 @@ def test_load_preserves_results(tmp_path: Path):
     exp.save(path)
     loaded = _TestExperiment.load(path, _TestParams())
     assert loaded.run_count() == exp.run_count()
-    assert all(isinstance(r, _TestResult) for r in loaded.data.results)
-    assert [r.value for r in loaded.data.results] == [1.0, 2.0, 3.0]
+    assert all(isinstance(r, _TestResult) for r in loaded.data.results.values())
+    assert {k: r.value for k, r in loaded.data.results.items()} == {
+        0: 1.0,
+        1: 2.0,
+        2: 3.0,
+    }
 
 
 def test_save_atomic_uses_tempfile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -168,7 +188,7 @@ def test_save_atomic_uses_tempfile(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 def test_run_loop_saves_at_end(tmp_path: Path):
     exp = make()
-    exp.max_runs = 3
+    exp.set_max_runs(3)
     path = tmp_path / "experiment.json"
     exp.save_config = SaveConfig(path=path, interval_seconds=None)
     exp.run_loop()
