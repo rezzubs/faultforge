@@ -19,6 +19,7 @@ from torchvision import datasets, transforms
 
 from faultforge._internal.common import AnyPath, DeviceLike
 from faultforge._internal.dataset import BatchedDataset
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.model.abc import ModelBundle
 
 logger = logging.getLogger(__name__)
@@ -138,8 +139,14 @@ class ImageNet(ModelBundle):
         return weights.transforms()
 
     @override
-    def load_model(self) -> nn.Module:
-        return copy.deepcopy(self._cached_model())
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(
+            kind="imagenet", scalars={"model": self._kind.value}
+        )
+
+    @override
+    def load_model(self, device: DeviceLike) -> nn.Module:
+        return copy.deepcopy(self._cached_model()).to(device)
 
     @override
     def load_dataset(self, batch_size: int, device: DeviceLike) -> BatchedDataset:

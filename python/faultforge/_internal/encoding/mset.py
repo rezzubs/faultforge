@@ -15,6 +15,7 @@ from faultforge._internal.encoding.abc import (
     InPlaceEncoding,
     TensorEncoding,
 )
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._rust import mset
 
 _logger = logging.getLogger(__name__)
@@ -23,6 +24,10 @@ _logger = logging.getLogger(__name__)
 @final
 class MsetEncoder(InPlaceEncoder):
     """An encoder for `MsetEncoding`."""
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="mset")
 
     @override
     def encode_float32(self, t: Tensor) -> Tensor:

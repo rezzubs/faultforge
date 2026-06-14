@@ -8,6 +8,7 @@ from torch import Tensor
 
 from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.fault import Fault
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.tensor import (
     tensor_list_dtype,
     tensor_list_fault,
@@ -22,6 +23,15 @@ class Encoder(abc.ABC):
     @abc.abstractmethod
     def encode(self, ts: list[Tensor]) -> Encoding:
         """Encode a list of tensors."""
+        ...
+
+    @abc.abstractmethod
+    def fingerprint(self) -> Fingerprint:
+        """Return a structural identity for this encoder.
+
+        Two encoders that encode tensors identically should produce equal
+        fingerprints. Composite encoders nest the fingerprints of their parts.
+        """
         ...
 
 

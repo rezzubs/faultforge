@@ -10,25 +10,33 @@ import time
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO, Self
+from typing import IO
 
 import scipy.stats
 from pydantic import BaseModel
 
 from faultforge._internal.common import AnyPath
+from faultforge._internal.fingerprint import Fingerprint, format_differences
 
 logger = logging.getLogger(__name__)
 
 
-class Data[P, R = float, C = None](BaseModel):
+class Data[R = float, C = None](BaseModel):
     """The data collected during an experiment.
 
     This is the part of an experiment that gets saved to disk.
     """
 
-    parameters: P
+    fingerprint: Fingerprint
+    """A structural identity used to verify a loaded file against the current configuration."""
     context: C
+    """Additional context separate from results."""
     results: dict[int, R]
+    """The results computed thus far.
+
+    Each key should be a unique identifier for that run. For non-deterministic
+    experiments the key can be set to the run number.
+    """
 
 
 @dataclass(slots=True)
@@ -57,7 +65,7 @@ class DisplayConfig:
 
 
 @dataclass
-class Experiment[P, R = float, C = None](abc.ABC):
+class Experiment[R = float, C = None](abc.ABC):
     """Recoding a series of experiments until a statistically significant result is reached.
 
     Each run produces a result which is scored by `self.result_score`. The
@@ -67,10 +75,15 @@ class Experiment[P, R = float, C = None](abc.ABC):
     The experiment can also have arbitrary context (`C`) associated with it
     which is saved next to the results.
 
+    A concrete experiment is constructed directly from its live components
+    (models, encoders, ...). The identity of those components is captured as a
+    `Fingerprint` in `data.fingerprint` so that a previously saved file can be
+    verified against the current configuration when loaded.
+
     All fields of `data` need to be (de)serializable by pydantic.
     """
 
-    data: Data[P, R, C]
+    data: Data[R, C]
     """The data that is saved to disk."""
     display: DisplayConfig = dataclasses.field(default_factory=lambda: DisplayConfig())
     """Configuration for displaying experiment results."""
@@ -99,11 +112,6 @@ class Experiment[P, R = float, C = None](abc.ABC):
     def latest_result(self) -> int | None:
         """Return the id of the latest result."""
         ...
-
-    @classmethod
-    @abc.abstractmethod
-    def from_parameters(cls, parameters: P) -> Self:
-        """Create a new experiment instance from the given parameters."""
 
     def max_runs(self) -> int | None:
         """The number of possible different runs."""
@@ -180,29 +188,11 @@ class Experiment[P, R = float, C = None](abc.ABC):
         if dirty and self.save_config is not None:
             self.save(self.save_config.path)
 
-    @classmethod
-    def load(cls, path: AnyPath, parameters: P) -> Self:
-        """Load the experiment data from disk.
-
-        See `load_file` for a version that uses a file-like object.
-        """
-        self = cls.from_parameters(parameters)
-        self.load_into(path)
-
-        return self
-
-    @classmethod
-    def load_file(cls, file: IO[str], parameters: P) -> Self:
-        """Load the experiment data from an IO object.
-
-        See `load` for a version that uses a path-like object.
-        """
-        self = cls.from_parameters(parameters)
-        self.load_into_file(file)
-        return self
-
     def load_into(self, path: AnyPath) -> None:
         """Overwrite current data from a file.
+
+        The saved fingerprint is verified against the current configuration. A
+        mismatch raises `ValueError` describing exactly which parameters differ.
 
         See `load_into_file` for a version that uses a file-like object.
         """
@@ -213,13 +203,18 @@ class Experiment[P, R = float, C = None](abc.ABC):
     def load_into_file(self, file: IO[str]) -> None:
         """Overwrite current data from a file.
 
+        The saved fingerprint is verified against the current configuration. A
+        mismatch raises `ValueError` describing exactly which parameters differ.
+
         See `load_into` for a version that uses a path-like object.
         """
         json = file.read()
         data = type(self.data).model_validate_json(json)
-        if self.data.parameters != data.parameters:
+        differences = self.data.fingerprint.diff(data.fingerprint)
+        if differences:
             raise ValueError(
-                f"Parameters do not match: {self.data.parameters} != {data.parameters}"
+                "Saved experiment does not match the current configuration:\n"
+                + format_differences(differences)
             )
         self.data = data
 

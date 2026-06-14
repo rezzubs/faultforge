@@ -14,6 +14,7 @@ from faultforge._internal.encoding.abc import (
     InPlaceEncoding,
     TensorEncoding,
 )
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._rust import cep
 
 _logger = logging.getLogger(__name__)
@@ -50,6 +51,10 @@ class CepEncoder(InPlaceEncoder):
     """An encoder for `CepEncoding`."""
 
     scheme: CepScheme = CepScheme.D3P1
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="cep", scalars={"scheme": self.scheme.value})
 
     @override
     def encode_float32(self, t: Tensor) -> Tensor:

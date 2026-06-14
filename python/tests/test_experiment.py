@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Self, override
+from typing import override
 
 import pytest
 from faultforge.experiment import (
@@ -13,13 +13,13 @@ from faultforge.experiment import (
     SaveConfig,
     StabilityConfig,
 )
-from pydantic import BaseModel
+from faultforge.fingerprint import Fingerprint
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 
 
-class _TestParams(BaseModel):
-    name: str = "test"
+def _fingerprint(name: str = "test") -> Fingerprint:
+    return Fingerprint(kind="test", scalars={"name": name})
 
 
 @dataclass(slots=True)
@@ -28,7 +28,7 @@ class _TestResult:
 
 
 @dataclass
-class _TestExperiment(Experiment[_TestParams, _TestResult, None]):
+class _TestExperiment(Experiment[_TestResult, None]):
     _max_runs: int | None = None
     _latest: int | None = None
 
@@ -47,15 +47,6 @@ class _TestExperiment(Experiment[_TestParams, _TestResult, None]):
     def result_score(self, result: _TestResult) -> float:
         return result.value
 
-    @classmethod
-    @override
-    def from_parameters(cls, parameters: _TestParams) -> Self:
-        return cls(
-            data=Data[_TestParams, _TestResult, None](
-                parameters=parameters, context=None, results=dict()
-            )
-        )
-
     @override
     def run(self) -> None:
         key = len(self.data.results)
@@ -63,10 +54,10 @@ class _TestExperiment(Experiment[_TestParams, _TestResult, None]):
         self._latest = key
 
 
-def make(values: list[float] | None = None) -> _TestExperiment:
+def make(values: list[float] | None = None, name: str = "test") -> _TestExperiment:
     """Create a test experiment with existing results"""
-    data = Data[_TestParams, _TestResult, None](
-        parameters=_TestParams(),
+    data = Data[_TestResult, None](
+        fingerprint=_fingerprint(name),
         context=None,
         results={k: _TestResult(value=v) for k, v in enumerate(values or [])},
     )
@@ -155,7 +146,8 @@ def test_load_preserves_results(tmp_path: Path):
     exp = make([1.0, 2.0, 3.0])
     path = tmp_path / "experiment.json"
     exp.save(path)
-    loaded = _TestExperiment.load(path, _TestParams())
+    loaded = make()
+    loaded.load_into(path)
     assert loaded.run_count() == exp.run_count()
     assert all(isinstance(r, _TestResult) for r in loaded.data.results.values())
     assert {k: r.value for k, r in loaded.data.results.items()} == {
@@ -193,7 +185,8 @@ def test_run_loop_saves_at_end(tmp_path: Path):
     exp.save_config = SaveConfig(path=path, interval_seconds=None)
     exp.run_loop()
     assert path.exists()
-    loaded = _TestExperiment.load(path, _TestParams())
+    loaded = make()
+    loaded.load_into(path)
     assert loaded.run_count() == 3
 
 
@@ -209,5 +202,6 @@ def test_parameter_mismatch(tmp_path: Path):
     exp = make([1.0])
     path = tmp_path / "experiment.json"
     exp.save(path)
+    mismatched = make(name="mismatch")
     with pytest.raises(ValueError):
-        _TestExperiment.load(path, _TestParams(name="mismatch"))
+        mismatched.load_into(path)

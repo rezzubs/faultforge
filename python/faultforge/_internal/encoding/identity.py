@@ -6,6 +6,7 @@ from torch import Tensor
 from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.encoding.abc import TensorEncoder, TensorEncoding
 from faultforge._internal.fault import Fault
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.tensor import (
     tensor_list_dtype,
     tensor_list_fault,
@@ -13,6 +14,10 @@ from faultforge._internal.tensor import (
 
 
 class IdentityEncoder(TensorEncoder):
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="identity")
+
     @override
     def encode(self, ts: list[Tensor]) -> IdentityEncoding:
         dtype = tensor_list_dtype(ts)

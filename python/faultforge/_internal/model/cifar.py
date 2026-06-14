@@ -14,6 +14,7 @@ from faultforge._internal.common import (
     DeviceLike,
 )
 from faultforge._internal.dataset import BatchedDataset
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.model.abc import ModelBundle
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,14 @@ class Cifar(ModelBundle):
     dataset: CifarDataset
 
     @override
-    def load_model(self) -> nn.Module:
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(
+            kind="cifar",
+            scalars={"model": self.model.value, "dataset": self.dataset.value},
+        )
+
+    @override
+    def load_model(self, device: DeviceLike) -> nn.Module:
         """Load the model."""
 
         logger.info(
@@ -124,7 +132,7 @@ class Cifar(ModelBundle):
             raise TypeError(
                 f"torch.hub.load returned {type(model)}, expected nn.Module"
             )
-        return model
+        return model.to(device)
 
     @override
     def load_dataset(self, batch_size: int, device: DeviceLike) -> BatchedDataset:

@@ -13,6 +13,7 @@ from faultforge._internal.encoding.abc import (
     TensorEncoding,
 )
 from faultforge._internal.fault import Fault
+from faultforge._internal.fingerprint import Fingerprint
 
 
 @dataclass(slots=True)
@@ -25,6 +26,16 @@ class EncoderSequence(Encoder):
 
     head: Sequence[TensorEncoder]
     tail: Encoder
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(
+            kind="sequence",
+            children={
+                "head": [encoder.fingerprint() for encoder in self.head],
+                "tail": [self.tail.fingerprint()],
+            },
+        )
 
     @override
     def encode(self, ts: list[Tensor]) -> Encoding:

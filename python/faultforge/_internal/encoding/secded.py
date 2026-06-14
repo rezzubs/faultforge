@@ -14,6 +14,7 @@ from faultforge._internal.fault import (
     Fault,
     fault_to_rust,
 )
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.tensor import tensor_list_dtype
 from faultforge._rust import secded
 
@@ -33,6 +34,12 @@ class SecdedEncoder(Encoder):
     """
 
     bits_per_chunk: int
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(
+            kind="secded", scalars={"bits_per_chunk": self.bits_per_chunk}
+        )
 
     @override
     def encode(self, ts: list[torch.Tensor]) -> Encoding:
