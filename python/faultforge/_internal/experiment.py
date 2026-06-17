@@ -159,21 +159,29 @@ class Experiment[R = float, C = None](abc.ABC):
                     break
 
                 ci_half_width = None
+                mean = None
 
                 if (
                     self.stability_config is not None
                     and self.run_count() >= self.stability_config.min_samples
                 ):
+                    mean = self.mean_score()
                     ci_half_width = self.ci_half_width()
+
+                    if ci_half_width is not None and mean is not None:
+                        ci_percent_of_mean = ci_half_width / mean * 100
+
                     if (
-                        ci_half_width is not None
-                        and ci_half_width < self.stability_config.threshold
+                        ci_percent_of_mean is not None
+                        and ci_percent_of_mean <= self.stability_config.threshold
                     ):
-                        logger.info("Reached stability threshold, stopping.")
+                        logger.info(
+                            f"Reached stability threshold {self.stability_config.threshold:.2f}% ({ci_percent_of_mean:.2f}%), stopping."
+                        )
                         break
 
                 self.run()
-                print(self.format_status(ci_half_width))
+                print(self.format_status(mean, ci_half_width))
                 dirty = True
 
                 if (
@@ -272,7 +280,19 @@ class Experiment[R = float, C = None](abc.ABC):
         t = scipy.stats.t.ppf(0.975, df=n - 1)
         return float(t * scipy.stats.sem(scores))
 
-    def format_status(self, ci: float | None) -> str | None:
+    def mean_score(self) -> float | None:
+        """Return the mean score of the current set of result scores.
+
+        None if there are no results yet.
+        """
+        scores = [self.result_score(r) for r in self.data.results.values()]
+        if not scores:
+            return None
+        return float(sum(scores) / self.run_count())
+
+    def format_status(
+        self, mean: float | None, ci_half_width: float | None
+    ) -> str | None:
         """Formats the current status of the experiment as a str.
 
         None if there are no results yet.
@@ -281,8 +301,10 @@ class Experiment[R = float, C = None](abc.ABC):
         if run_count == 0:
             return None
 
-        if ci is None:
-            ci = self.ci_half_width()
+        if mean is None:
+            mean = self.mean_score()
+        if ci_half_width is None:
+            ci_half_width = self.ci_half_width()
 
         parts: list[str] = []
 
@@ -291,16 +313,16 @@ class Experiment[R = float, C = None](abc.ABC):
             width = len(str(max_runs))
             completion_percentage = (run_count / max_runs) * 100
             progress = (
-                f"[{run_count:>{width}} / {max_runs} | {completion_percentage:6.2f}%]:"
+                f"[{run_count:>{width}} / {max_runs} | {completion_percentage:6.2f}%]: "
             )
         else:
-            progress = f"[Run {run_count}]:"
+            progress = f"[Run {run_count}]: "
 
         parts.append(progress)
 
         if self.display.score_name is not None:
             parts.append(self.display.score_name)
-            parts.append("=")
+            parts.append(" = ")
 
         latest_key = self.latest_result()
         if latest_key is None:
@@ -312,21 +334,23 @@ class Experiment[R = float, C = None](abc.ABC):
         if self.display.score_unit is not None:
             parts.append(self.display.score_unit)
 
-        parts.append("|")
+        parts.append(" | ")
 
-        mean = (
-            sum(self.result_score(r) for r in self.data.results.values())
-            / self.run_count()
-        )
-        parts.append(f"mean {mean:{self.display.score_fmt}}")
+        mean = self.mean_score()
 
-        if ci is not None:
-            parts.append(f"±{ci:{self.display.score_fmt}}")
+        if mean is not None:
+            parts.append(f"mean {mean:{self.display.score_fmt}}")
 
-        if self.display.score_unit is not None:
-            parts.append(self.display.score_unit)
+            if self.display.score_unit is not None:
+                parts.append(self.display.score_unit)
 
-        return " ".join(parts)
+            if ci_half_width is not None:
+                parts.append(f" ±{ci_half_width:{self.display.score_fmt}}, 95% CI | ")
+
+                ci_within_mean = ci_half_width / mean * 100
+                parts.append(f"CI within {ci_within_mean:.2f}% of mean")
+
+        return "".join(parts)
 
     def _save_file_helper(self, to: IO[str], temp_name: str | None) -> None:
         """Save the experiment data to disk."""
