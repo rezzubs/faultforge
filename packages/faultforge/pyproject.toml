@@ -1,0 +1,38 @@
+[project]
+name = "faultforge"
+version = "0.1.0"
+description = "Fault mitigation simulations for PyTorch models"
+authors = [
+    { name = "Marten Roots", email = "marten.roots@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.10.5",
+    "numpy>=2.3.1",
+    "pillow>=11.3.0",
+    "pydantic>=2.12.3",
+    "scipy>=1.17.1",
+    "timm>=1.0.22",
+    "torch>=2.7.1",
+    "torchvision>=0.22.1",
+]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+
+[dependency-groups]
+dev = [
+    "maturin>=1.14.0",
+]
+
+[build-system]
+requires = ["maturin>=1.12,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "faultforge._rust"
+manifest-path = "../../crates/bindings/Cargo.toml"
+python-source = "src"

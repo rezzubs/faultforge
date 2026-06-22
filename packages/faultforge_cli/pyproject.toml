@@ -1,0 +1,22 @@
+[project]
+name = "faultforge-cli"
+version = "0.1.0"
+description = "CLI for FaultForge"
+authors = [
+    { name = "Marten Roots", email = "marten.roots@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "faultforge",
+    "typer>=0.20.0",
+]
+
+[project.scripts]
+faultforge = "faultforge_cli.main:app"
+
+[tool.uv.sources]
+faultforge = { workspace = true }
+
+[build-system]
+requires = ["uv-build>=0.1,<2"]
+build-backend = "uv_build"
