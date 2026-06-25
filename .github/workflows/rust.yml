@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
+  RUSTDOCFLAGS: "-D warnings"
 
 jobs:
   test:
@@ -26,3 +27,6 @@ jobs:
 
       - name: Test
         run: cargo nextest run --workspace
+
+      - name: Documentation
+        run: cargo doc --workspace --no-deps --document-private-items

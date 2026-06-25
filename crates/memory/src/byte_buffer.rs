@@ -18,7 +18,7 @@ pub trait ByteBuffer: BitBuffer {
     /// Set byte `n` to `value`.
     fn set_byte(&mut self, n: usize, value: u8);
 
-    /// [`ByteChunkedBitBuffer::copy_into_chunked`] with start offsets for `self` and `dest`.
+    /// [`ByteBuffer::copy_into_chunked`] with start offsets for `self` and `dest`.
     ///
     /// `self_offset` can be useful for copying into many sequential destinations.
     ///
@@ -58,7 +58,7 @@ pub trait ByteBuffer: BitBuffer {
 
     /// Copy all the bytes from `self` to `other`
     ///
-    /// See [`ByteChunkedBitBuffer::copy_into_chunked_offset`] for copying from/to multiple sequential buffers.
+    /// See [`ByteBuffer::copy_into_chunked_offset`] for copying from/to multiple sequential buffers.
     #[must_use]
     fn copy_into_chunked<D>(&self, dest: &mut D) -> CopyIntoResult
     where
@@ -84,8 +84,8 @@ pub trait ByteBuffer: BitBuffer {
     /// Convert to chunks of equal length.
     ///
     /// Choose the optimal format automatically. For manual selection see:
-    /// - [`ByteChunkedBitBuffer::to_byte_chunks`]
-    /// - [`BitBuffer::to_dyn_chunks`]
+    /// - [`ByteBuffer::to_byte_chunks`]
+    /// - [`ByteBuffer::to_dyn_chunks`]
     ///
     /// If the number of bits in the buffer isn't a multiple of the number of
     /// bits per chunk then it will result in a number of bits of (essentially

@@ -188,7 +188,7 @@ same unless they have been tampered with after creation. Got error {err}",
     /// The second `Vec` records double error detections.
     ///
     /// See also:
-    /// - [`DynChunks::decode_chunks_byte`]
+    /// - `DynChunks::decode_chunks_byte` (private, for byte-aligned output)
     /// - [`DynChunks::decode_chunks`]
     pub fn decode_chunks_dyn(
         self,
@@ -276,7 +276,7 @@ same unless they have been tampered with after creation. Got error {err}",
     ///
     /// Automatically determines the appropriate output format. For manual selection see:
     /// - [`DynChunks::decode_chunks_dyn`]
-    /// - [`DynChunks::decode_chunks_byte`]
+    /// - `DynChunks::decode_chunks_byte` (private, for byte-aligned output)
     ///
     /// The second `Vec` records double error detections.
     ///

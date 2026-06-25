@@ -4,7 +4,7 @@ use crate::{BitBuffer, ByteBuffer, OutOfBoundsError};
 /// satisfy [`SizedBitBuffer`](crate::SizedBitBuffer).
 ///
 /// If the number of bits is only runtime known but still expected to be the
-/// same for all elements then [`crate::wrapper::UniformSequence`] should be
+/// same for all elements then [`crate::sequence::UniformSequence`] should be
 /// used for better performance.
 ///
 /// If a sequence satisfies [`BitBuffer`] by itself then that implementation

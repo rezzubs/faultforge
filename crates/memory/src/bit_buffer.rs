@@ -27,7 +27,7 @@ pub trait SizedBitBuffer: BitBuffer {
 ///
 /// - If the number of bits for the type is known at compile time consider
 ///   additionally implementing [`SizedBitBuffer`].
-/// - There is a default implementation for [`flip_bit`] but many types should
+/// - There is a default implementation for [`BitBuffer::flip_bit`] but many types should
 ///   probably override it for improved performance.
 pub trait BitBuffer {
     /// Number of bits stored by this buffer.

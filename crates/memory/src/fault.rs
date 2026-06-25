@@ -1,6 +1,6 @@
 use crate::Bit;
 
-/// A bit-level fault that can be applied to a [`BitBuffer`].
+/// A bit-level fault that can be applied to a [`crate::BitBuffer`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Fault {
     /// The bit will be flipped.
