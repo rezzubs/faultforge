@@ -14,3 +14,6 @@ dev = [
 
 [tool.ty.rules]
 missing-override-decorator = "warn"
+
+[tool.ruff]
+target-version = "py314"
