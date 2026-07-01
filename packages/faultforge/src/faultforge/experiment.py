@@ -13,7 +13,7 @@ via `format_status`, and stops once a `StabilityConfig` threshold is met,
 `max_runs` is exhausted, or the user interrupts with Ctrl+C.
 
 `Data` is the part of an experiment that gets saved to disk: a
-`faultforge.fingerprint.Fingerprint` identifying the configuration that
+`faultforge.Fingerprint` identifying the configuration that
 produced it, the `context`, and the accumulated `results`. Saving is
 controlled by `SaveConfig` (periodic autosave during `run_loop`, or manual
 `Experiment.save`/`save_atomic`); loading a file back in verifies its

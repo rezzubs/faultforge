@@ -34,6 +34,7 @@ from faultforge._internal.encoding.abc import (
 from faultforge._internal.encoding.cep import (
     CepEncoder,
     CepEncoding,
+    CepScheme,
 )
 from faultforge._internal.encoding.identity import (
     IdentityEncoder,
@@ -56,6 +57,7 @@ from faultforge._internal.encoding.sequence import (
 __all__ = [
     "CepEncoder",
     "CepEncoding",
+    "CepScheme",
     "EncodedModule",
     "Encoder",
     "EncoderSequence",

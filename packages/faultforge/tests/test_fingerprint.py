@@ -1,8 +1,8 @@
 """Tests for the Fingerprint structural diff (faultforge.fingerprint)."""
 
+from faultforge import Fingerprint
 from faultforge.fingerprint import (
     ABSENT,
-    Fingerprint,
     format_differences,
 )
 

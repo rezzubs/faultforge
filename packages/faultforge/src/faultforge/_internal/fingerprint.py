@@ -1,7 +1,4 @@
-"""Structural fingerprints for identifying experiments and their components.
-
-See `faultforge.fingerprint` for a general overview.
-"""
+"""Structural fingerprints for identifying experiments and their components."""
 
 from dataclasses import dataclass
 from typing import override
@@ -14,6 +11,17 @@ type Scalar = str | int | float | bool | None
 
 class Fingerprint(BaseModel):
     """A structural, serializable identity for an experiment component.
+
+    It's a small, serializable description of the *semantics* of an
+    experiment component (an encoder, a model/dataset bundle, ...). It
+    captures only the parts that change what the component does.
+    Environmental knobs like the device, batch size or filesystem paths
+    should be deliberately left out.
+
+    Fingerprints are never turned back into live objects. They exist purely
+    so that a result file saved to disk can be matched against the
+    configuration that is about to be used, and so that a mismatch can be
+    reported in a way that points at exactly what changed.
 
     Each component produces a node describing itself. Nodes nest, so composite
     components (such as an encoder that sequences other encoders) are described

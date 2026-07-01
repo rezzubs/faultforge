@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import override
 
 import pytest
+from faultforge import Fingerprint
 from faultforge.experiment import (
     Data,
     Experiment,
     SaveConfig,
     StabilityConfig,
 )
-from faultforge.fingerprint import Fingerprint
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 

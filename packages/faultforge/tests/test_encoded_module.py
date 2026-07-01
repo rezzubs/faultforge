@@ -5,6 +5,7 @@ import copy
 import hypothesis.strategies as st
 import pytest
 import torch
+from faultforge import BitFlip
 from faultforge.encoding import (
     CepEncoder,
     EncodedModule,
@@ -13,7 +14,6 @@ from faultforge.encoding import (
     MsetEncoder,
     SecdedEncoder,
 )
-from faultforge.fault import BitFlip
 from hypothesis import given, settings
 from torch import nn
 
