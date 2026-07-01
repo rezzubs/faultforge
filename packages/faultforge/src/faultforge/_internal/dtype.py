@@ -1,3 +1,5 @@
+"""Data types for various operations."""
+
 from __future__ import annotations
 
 import enum

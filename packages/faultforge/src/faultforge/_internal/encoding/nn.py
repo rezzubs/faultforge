@@ -83,6 +83,7 @@ class EncodedModule(nn.Module):
         return self._module
 
     def clone(self) -> "EncodedModule":
+        """Clone this module, including its encoded memory."""
         return EncodedModule._from_parts(
             self._module, self._memory.clone(), self._device
         )

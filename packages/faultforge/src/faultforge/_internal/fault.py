@@ -1,3 +1,5 @@
+"""Bit-level faults that can be injected into tensors or encoded memory."""
+
 import enum
 
 from faultforge import _rust
@@ -15,6 +17,11 @@ class StuckAt(enum.Enum):
 
 
 type Fault = BitFlip | StuckAt
+"""A fault affecting a single, targeted bit.
+
+Passed together with a bit index to methods like `Encoding.apply_fault` or
+`EncodedModule.apply_fault`.
+"""
 
 
 def fault_to_rust(fault: Fault) -> _rust.Fault:

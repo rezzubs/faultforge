@@ -48,7 +48,13 @@ class CepScheme(enum.Enum):
 
 @dataclass
 class CepEncoder(InPlaceEncoder):
-    """An encoder for `CepEncoding`."""
+    """Encodes tensors with Chunked Embedded Parity (CEP).
+
+    The higher bits of each element are chunked based on `scheme` and each
+    chunk is given a matching parity bit embedded inside the lower bits. If a
+    parity bit doesn't match during decoding, the corresponding chunk is set
+    to zero.
+    """
 
     scheme: CepScheme = CepScheme.D3P1
 
@@ -88,13 +94,7 @@ class CepEncoder(InPlaceEncoder):
 
 @dataclass
 class CepEncoding(InPlaceEncoding):
-    """An encoding that embeds parity bits into the data.
-
-    The higher bits of the data are chunked based on the provided scheme and
-    each chunk will be given a matching parity bit which is embedded inside the
-    lower bits. If a parity bit doesn't match during decoding, the corresponding
-    chunk will be set to zero.
-    """
+    """The encoding produced by `CepEncoder`. See `CepEncoder` for details."""
 
     _scheme: CepScheme
 

@@ -1,3 +1,5 @@
+"""Loading CIFAR-10/CIFAR-100 models and datasets."""
+
 import enum
 import logging
 from dataclasses import dataclass
@@ -44,6 +46,8 @@ class CifarModel(enum.Enum):
 
 
 class CifarDataset(enum.Enum):
+    """A CIFAR dataset variant."""
+
     Cifar10 = "cifar10"
     Cifar100 = "cifar100"
 
@@ -58,7 +62,8 @@ class CifarDataset(enum.Enum):
         self,
         batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
-    ):
+    ) -> BatchedDataset:
+        """Download (if needed) and load the validation split."""
         logger.info(f"Loading dataset {self._name()}.")
 
         match self:

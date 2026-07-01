@@ -1,3 +1,5 @@
+"""Loading ImageNet models and the ImageNet validation dataset."""
+
 import copy
 import enum
 import logging
@@ -50,6 +52,8 @@ def _get_tim_transform(model: nn.Module) -> Transform:
 
 
 class ImageNetModel(enum.Enum):
+    """A pretrained image classifier evaluated on ImageNet."""
+
     # Hugging Face models
     DeitTiny = "deit_tiny_patch16_224"
     DeitBase = "deit_base_patch16_224"
@@ -80,6 +84,16 @@ class ImageNet(ModelBundle):
     """
 
     def __init__(self, kind: ImageNetModel, root: AnyPath):
+        """Describe an ImageNet model/dataset pair.
+
+        `root` should point at a local ImageNet directory that stores the files:
+
+        - ILSVRC2012_devkit_t12.tar.gz
+        - ILSVRC2012_img_val.tar
+
+        which can be downloaded from
+        https://image-net.org/challenges/LSVRC/2012/2012-downloads.php
+        """
         self._root = root
         self._kind = kind
         self._model = None

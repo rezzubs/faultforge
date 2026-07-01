@@ -1,3 +1,8 @@
+"""Abstract base classes for encoders and encodings.
+
+See `faultforge.encoding` for a general overview.
+"""
+
 import abc
 import logging
 from dataclasses import dataclass

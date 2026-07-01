@@ -1,1 +1,1 @@
-"""Various premade experiments"""
+"""Ready-made experiments built on `faultforge.experiment.Experiment`."""

@@ -23,17 +23,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SecdedEncoder(Encoder):
-    """The encoder for `SecdedEncoding`.
+    """Encodes tensors with Single Error Correction Double Error Detection (SECDED) hamming codes.
 
-    Parameters:
-        bits_per_chunk:
-            The number of data bits to protect with a single hamming code.
-            Equivalent to the memory line size in hardware. Can be any positive
-            integer but multiples of 8 bits have better encoding/decoding
-            performance.
+    Each chunk of `bits_per_chunk` data bits gets its own hamming code, which
+    allows single-bit errors within the chunk to be corrected and double-bit
+    errors to be detected during decoding. Double-error detection results are
+    not currently used.
     """
 
     bits_per_chunk: int
+    """The number of data bits protected by a single hamming code.
+
+    Equivalent to the memory line size in hardware. Can be any positive
+    integer but multiples of 8 bits have better encoding/decoding performance.
+    """
 
     @override
     def fingerprint(self) -> Fingerprint:
@@ -72,12 +75,7 @@ class SecdedEncoder(Encoder):
 
 @dataclass
 class SecdedEncoding(Encoding):
-    """A Single Error Correction Double Error Detection (SECDED) encoding based on hamming codes.
-
-    This encoding is used to detect and correct single-bit errors in a memory
-    line and detect double-bit errors. Note that the double error detection
-    results are not currently used.
-    """
+    """The encoding produced by `SecdedEncoder`. See `SecdedEncoder` for details."""
 
     _encoded_data: secded.Encoding
     """The blob that stores raw encoded data."""

@@ -23,7 +23,12 @@ _logger = logging.getLogger(__name__)
 
 @final
 class MsetEncoder(InPlaceEncoder):
-    """An encoder for `MsetEncoding`."""
+    """Encodes tensors with Most Significant Exponent bit Triplication (MSET).
+
+    The second highest bit of each element is copied to the two lowest bits.
+    A majority voting scheme determines the final value of the exponent bit
+    during decoding.
+    """
 
     @override
     def fingerprint(self) -> Fingerprint:
@@ -61,12 +66,7 @@ class MsetEncoder(InPlaceEncoder):
 @final
 @dataclass
 class MsetEncoding(InPlaceEncoding):
-    """MSET based encoding.
-
-    MSET stands for Most Significant Exponent bit Triplication. The second
-    highest bit will be copied to the two lowest bits. A majority voting scheme
-    will be used to determine the final value of the exponent bit.
-    """
+    """The encoding produced by `MsetEncoder`. See `MsetEncoder` for details."""
 
     @override
     def decode_float16(self, t: Tensor) -> Tensor:

@@ -1,3 +1,5 @@
+"""Abstract interface for loading a model together with its dataset."""
+
 import abc
 
 from torch import nn

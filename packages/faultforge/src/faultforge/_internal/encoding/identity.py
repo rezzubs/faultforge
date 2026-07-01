@@ -1,3 +1,5 @@
+"""An encoder that stores tensors unmodified, without any protection."""
+
 from dataclasses import dataclass
 from typing import override
 
@@ -14,6 +16,8 @@ from faultforge._internal.tensor import (
 
 
 class IdentityEncoder(TensorEncoder):
+    """An encoder for `IdentityEncoding`."""
+
     @override
     def fingerprint(self) -> Fingerprint:
         return Fingerprint(kind="identity")
@@ -30,6 +34,12 @@ class IdentityEncoder(TensorEncoder):
 
 @dataclass
 class IdentityEncoding(TensorEncoding):
+    """An encoding that stores tensors unmodified, without any protection.
+
+    This can be used in place of an actual encoder for functions which expect
+    it. Useful as a baseline to compare protected encodings against.
+    """
+
     _tensors: list[Tensor]
     _bit_count: int
 

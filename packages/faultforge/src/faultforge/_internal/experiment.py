@@ -1,4 +1,7 @@
-"""Classes for running experiments."""
+"""Classes for running experiments.
+
+See `faultforge.experiment` for a general overview.
+"""
 
 import abc
 import logging
@@ -40,21 +43,28 @@ class Data[R = float, C = None](BaseModel):
 
 @dataclass(slots=True)
 class StabilityConfig:
+    """When `Experiment.run_loop` should stop based on the stability of the mean score."""
+
     min_samples: int
     """Minimum number of runs before checking the stopping criterion."""
     threshold: float
-    """Stop when the 95% CI half-width falls below this value (percentage points, e.g. 1.0 = ±1%)."""
+    """Stop when the 95% CI half-width falls below this value (percentage of the mean, e.g. 1.0 = ±1%)."""
 
 
 @dataclass(slots=True)
 class SaveConfig:
+    """Where and how often `Experiment.run_loop` persists its data."""
+
     path: AnyPath
+    """Where to save the experiment data."""
     interval_seconds: float | None
     """How many seconds between saves. None means save only at the end."""
 
 
 @dataclass(slots=True)
 class DisplayConfig:
+    """Controls how `Experiment.format_status` renders progress."""
+
     score_name: str | None = None
     """The name that is given to the result score."""
     score_unit: str | None = None

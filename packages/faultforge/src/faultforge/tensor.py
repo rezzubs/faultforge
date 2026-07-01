@@ -1,3 +1,5 @@
+"""Operations on tensors."""
+
 from faultforge._internal.tensor import (
     tensor_list_dtype,
     tensor_list_fault,

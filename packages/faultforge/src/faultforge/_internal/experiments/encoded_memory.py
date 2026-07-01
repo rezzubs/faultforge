@@ -1,3 +1,8 @@
+"""An experiment for measuring model reliability under memory faults.
+
+See `faultforge.experiments.encoded_memory` for a general overview.
+"""
+
 import copy
 import enum
 import logging
