@@ -1,5 +1,6 @@
 """PyTorch Modules with encoded parameters"""
 
+import copy
 from typing import override
 
 import torch
@@ -83,9 +84,15 @@ class EncodedModule(nn.Module):
         return self._module
 
     def clone(self) -> EncodedModule:
-        """Clone this module, including its encoded memory."""
+        """Clone this module, including its encoded memory.
+
+        The underlying `nn.Module` is deep-copied too, not just the encoded
+        memory: `force_decode` writes decoded parameters into it in place, so
+        sharing it between clones would let one clone's fault corrupt the
+        other's decoded output.
+        """
         return EncodedModule._from_parts(
-            self._module, self._memory.clone(), self._device
+            copy.deepcopy(self._module), self._memory.clone(), self._device
         )
 
     def apply_fault(self, fault: Fault, target_bit: int) -> None:
