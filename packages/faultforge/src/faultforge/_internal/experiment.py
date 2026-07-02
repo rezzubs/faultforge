@@ -211,7 +211,7 @@ class Experiment[R = float, C = None](abc.ABC):
         if dirty and self.save_config is not None:
             self.save(self.save_config.path)
 
-    def load_into(self, path: AnyPath) -> None:
+    def load_from(self, path: AnyPath) -> None:
         """Overwrite current data from a file.
 
         The saved fingerprint is verified against the current configuration. A
@@ -221,9 +221,9 @@ class Experiment[R = float, C = None](abc.ABC):
         """
 
         with open(Path(path).expanduser(), "r") as f:
-            self.load_into_file(f)
+            self.load_from_file(f)
 
-    def load_into_file(self, file: IO[str]) -> None:
+    def load_from_file(self, file: IO[str]) -> None:
         """Overwrite current data from a file.
 
         The saved fingerprint is verified against the current configuration. A

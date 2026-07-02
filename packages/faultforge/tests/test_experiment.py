@@ -169,7 +169,7 @@ def test_load_preserves_results(tmp_path: Path):
     path = tmp_path / "experiment.json"
     exp.save(path)
     loaded = make()
-    loaded.load_into(path)
+    loaded.load_from(path)
     assert loaded.run_count() == exp.run_count()
     assert all(isinstance(r, _TestResult) for r in loaded.data.results.values())
     assert {k: r.value for k, r in loaded.data.results.items()} == {
@@ -208,7 +208,7 @@ def test_run_loop_saves_at_end(tmp_path: Path):
     exp.run_loop()
     assert path.exists()
     loaded = make()
-    loaded.load_into(path)
+    loaded.load_from(path)
     assert loaded.run_count() == 3
 
 
@@ -226,4 +226,4 @@ def test_parameter_mismatch(tmp_path: Path):
     exp.save(path)
     mismatched = make(name="mismatch")
     with pytest.raises(ValueError):
-        mismatched.load_into(path)
+        mismatched.load_from(path)
