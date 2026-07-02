@@ -147,7 +147,11 @@ class ProgressStage(StageHandle):
             return
 
         suffix = f" ({self.current}/{self.total})" if self.total is not None else ""
-        logger.info(f"{self.name}: done{suffix}, {elapsed:.1f}s elapsed")
+        message = f"{self.name}: done{suffix}, {elapsed:.1f}s elapsed"
+        if elapsed > self._min_log_interval:
+            logger.info(message)
+        else:
+            logger.debug(message)
 
 
 @final
