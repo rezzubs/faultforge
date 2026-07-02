@@ -206,12 +206,12 @@ class EncodedFaultInjection(Experiment[int, int | None]):
                 return golden_result
 
     def _populate_golden(self):
-        """Populate the golden results for SDC mode.
+        """Populate the golden results.
 
         Additionally sets context to the total number of predictions; this is
         used for computing SDC scores as well as the number of injected faults.
         """
-        logger.debug("Computing golden results")
+        logger.info("Computing golden results")
 
         total_items = 0
 
