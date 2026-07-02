@@ -48,7 +48,12 @@ root rather than in their own submodule:
 
 import sys
 
-from faultforge._internal.common import AnyPath, DeviceLike
+from faultforge._internal.common import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_DEVICE,
+    AnyPath,
+    DeviceLike,
+)
 from faultforge._internal.fault import BitFlip, Fault, StuckAt
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.tensor import tensor_list_dtype, tensor_list_fault
@@ -59,6 +64,8 @@ from . import _rust
 __all__ = [
     "AnyPath",
     "BitFlip",
+    "DEFAULT_BATCH_SIZE",
+    "DEFAULT_DEVICE",
     "DeviceLike",
     "Fault",
     "Fingerprint",
