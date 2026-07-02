@@ -29,6 +29,7 @@ from faultforge.loading import (
     ImageNetModel,
     ModelBundle,
 )
+from faultforge.progress import Progress
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
@@ -318,6 +319,7 @@ def record(
         dataset_batch_limit=batch_limit,
         batch_size=batch_size,
         device=device,
+        progress=Progress(),
     )
     if output is not None:
         output = Path(output).expanduser()

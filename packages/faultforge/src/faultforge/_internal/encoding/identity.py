@@ -9,6 +9,7 @@ from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.encoding.abc import TensorEncoder, TensorEncoding
 from faultforge._internal.fault import Fault
 from faultforge._internal.fingerprint import Fingerprint
+from faultforge._internal.progress import Progress
 from faultforge._internal.tensor import (
     tensor_list_dtype,
     tensor_list_fault,
@@ -23,7 +24,10 @@ class IdentityEncoder(TensorEncoder):
         return Fingerprint(kind="identity")
 
     @override
-    def encode(self, ts: list[Tensor]) -> IdentityEncoding:
+    def encode(
+        self, ts: list[Tensor], *, progress: Progress | None = None
+    ) -> IdentityEncoding:
+        _ = progress
         dtype = tensor_list_dtype(ts)
         if dtype is None:
             raise ValueError("Cannot encode an empty list")

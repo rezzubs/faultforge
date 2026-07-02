@@ -2,7 +2,8 @@
 
 import abc
 import logging
-from collections.abc import Iterable
+import math
+from collections.abc import Iterable, Sized
 from dataclasses import dataclass
 from typing import Any, Iterator, Self, final, override
 
@@ -15,6 +16,7 @@ from faultforge._internal.common import (
     DEFAULT_DEVICE,
     DeviceLike,
 )
+from faultforge._internal.progress import Progress, stage
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,10 @@ class BatchedDataset(abc.ABC):
     def reset(self) -> None:
         """Start iteration from the beginning."""
 
+    def batch_count(self) -> int | None:
+        """Return the total number of batches, or `None` if unknowable ahead of time."""
+        return None
+
     def __iter__(self) -> Self:
         return self
 
@@ -81,12 +87,14 @@ class BatchedDataset(abc.ABC):
             batch_size,
         )
 
-    def precompute(self, limit: int | None = None) -> CachedDataset:
+    def precompute(
+        self, limit: int | None = None, *, progress: Progress | None = None
+    ) -> CachedDataset:
         """Precompute all batches.
 
         See `CachedDataset` for details.
         """
-        return CachedDataset(self, limit)
+        return CachedDataset(self, limit, progress=progress)
 
 
 @final
@@ -152,6 +160,12 @@ class _BatchedDataset(BatchedDataset):
     def reset(self) -> None:
         self._loader = self._get_loader()
 
+    @override
+    def batch_count(self) -> int | None:
+        if not isinstance(self._dataset, Sized):
+            return None
+        return math.ceil(len(self._dataset) / self._batch_size)
+
 
 @final
 @dataclass(slots=True)
@@ -168,19 +182,28 @@ class CachedDataset(BatchedDataset):
     _items: list[DataBatch]
     _batch_size: int
 
-    def __init__(self, dataset: BatchedDataset, limit: int | None = None) -> None:
-        logger.debug(
-            "Precomputing dataset batches"
-            + (f" (limit={limit})" if limit is not None else "")
-        )
+    def __init__(
+        self,
+        dataset: BatchedDataset,
+        limit: int | None = None,
+        *,
+        progress: Progress | None = None,
+    ) -> None:
         self._batch_size = dataset.batch_size()
         self._items = []
-        for i, batch in enumerate(dataset):
-            if limit is not None and i >= limit:
-                break
-            self._items.append(batch)
+
+        total = dataset.batch_count()
+        if limit is not None:
+            total = limit if total is None else min(total, limit)
+
+        with stage(progress, "Precomputing dataset batches", total=total) as s:
+            for i, batch in enumerate(dataset):
+                if limit is not None and i >= limit:
+                    break
+                self._items.append(batch)
+                s.advance()
+
         self.cursor = 0
-        logger.debug("Batches computed")
 
     @override
     def reset(self) -> None:
@@ -190,6 +213,10 @@ class CachedDataset(BatchedDataset):
     @override
     def batch_size(self) -> int:
         return self._batch_size
+
+    @override
+    def batch_count(self) -> int | None:
+        return len(self._items)
 
     @override
     def to(self, device: DeviceLike) -> Self:

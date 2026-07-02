@@ -1,7 +1,6 @@
 """Loading CIFAR-10/CIFAR-100 models and datasets."""
 
 import enum
-import logging
 from dataclasses import dataclass
 from typing import override
 
@@ -18,8 +17,7 @@ from faultforge._internal.common import (
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.loading.abc import ModelBundle
-
-logger = logging.getLogger(__name__)
+from faultforge._internal.progress import Progress, stage
 
 
 class CifarModel(enum.StrEnum):
@@ -62,44 +60,43 @@ class CifarDataset(enum.StrEnum):
         self,
         batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
+        *,
+        progress: Progress | None = None,
     ) -> BatchedDataset:
         """Download (if needed) and load the validation split."""
-        logger.info(f"Loading dataset {self._name()}.")
+        with stage(progress, f"Loading dataset {self._name()}"):
+            match self:
+                case CifarDataset.Cifar10:
+                    mean = (0.4913997054, 0.4821583927, 0.4465309978)
+                    std = (0.2470322251, 0.2434851378, 0.2615878284)
+                    transform = torchvision.transforms.Compose(
+                        [
+                            torchvision.transforms.ToTensor(),
+                            torchvision.transforms.Normalize(mean, std),
+                        ]
+                    )
+                    dataset = torchvision.datasets.CIFAR10(
+                        root=CACHE_DIRECTORY,
+                        train=False,
+                        download=True,
+                        transform=transform,
+                    )
+                case CifarDataset.Cifar100:
+                    mean = (0.5070751905, 0.4865489602, 0.4409177899)
+                    std = (0.2673342824, 0.2564384639, 0.2761504650)
+                    transform = torchvision.transforms.Compose(
+                        [
+                            torchvision.transforms.ToTensor(),
+                            torchvision.transforms.Normalize(mean, std),
+                        ]
+                    )
 
-        match self:
-            case CifarDataset.Cifar10:
-                mean = (0.4913997054, 0.4821583927, 0.4465309978)
-                std = (0.2470322251, 0.2434851378, 0.2615878284)
-                transform = torchvision.transforms.Compose(
-                    [
-                        torchvision.transforms.ToTensor(),
-                        torchvision.transforms.Normalize(mean, std),
-                    ]
-                )
-                dataset = torchvision.datasets.CIFAR10(
-                    root=CACHE_DIRECTORY,
-                    train=False,
-                    download=True,
-                    transform=transform,
-                )
-            case CifarDataset.Cifar100:
-                mean = (0.5070751905, 0.4865489602, 0.4409177899)
-                std = (0.2673342824, 0.2564384639, 0.2761504650)
-                transform = torchvision.transforms.Compose(
-                    [
-                        torchvision.transforms.ToTensor(),
-                        torchvision.transforms.Normalize(mean, std),
-                    ]
-                )
-
-                dataset = torchvision.datasets.CIFAR100(
-                    root=CACHE_DIRECTORY,
-                    train=False,
-                    download=True,
-                    transform=transform,
-                )
-
-        logger.debug("Done loading dataset")
+                    dataset = torchvision.datasets.CIFAR100(
+                        root=CACHE_DIRECTORY,
+                        train=False,
+                        download=True,
+                        transform=transform,
+                    )
 
         return BatchedDataset.from_dataset(dataset, batch_size, device)
 
@@ -119,30 +116,29 @@ class Cifar(ModelBundle):
         )
 
     @override
-    def load_model(self, device: DeviceLike) -> nn.Module:
+    def load_model(
+        self, device: DeviceLike, *, progress: Progress | None = None
+    ) -> nn.Module:
         """Load the model."""
-
-        logger.info(
-            f"Loading model {self.model.name} for dataset {self.dataset._name()}."
-        )
 
         model_name = f"{self.dataset.value}_{self.model.value}"
         repository = "chenyaofo/pytorch-cifar-models"
 
-        logger.debug(f"loading {model_name} from {repository}.")
-        model = torch.hub.load(  # pyright: ignore[reportUnknownMemberType]
-            repository,
-            model_name,
-            pretrained=True,
-        )
+        with stage(progress, f"Loading model {self.model.name}"):
+            model = torch.hub.load(  # pyright: ignore[reportUnknownMemberType]
+                repository,
+                model_name,
+                pretrained=True,
+            )
         if not isinstance(model, nn.Module):
             raise TypeError(
                 f"torch.hub.load returned {type(model)}, expected nn.Module"
             )
-        logger.debug("Done loading model.")
         return model.to(device)
 
     @override
-    def load_dataset(self, batch_size: int, device: DeviceLike) -> BatchedDataset:
+    def load_dataset(
+        self, batch_size: int, device: DeviceLike, *, progress: Progress | None = None
+    ) -> BatchedDataset:
         """Load the dataset."""
-        return self.dataset.load(batch_size, device)
+        return self.dataset.load(batch_size, device, progress=progress)

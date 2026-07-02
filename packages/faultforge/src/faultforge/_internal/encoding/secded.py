@@ -15,6 +15,7 @@ from faultforge._internal.fault import (
     fault_to_rust,
 )
 from faultforge._internal.fingerprint import Fingerprint
+from faultforge._internal.progress import Progress, stage
 from faultforge._internal.tensor import tensor_list_dtype
 from faultforge._rust import secded
 
@@ -45,7 +46,9 @@ class SecdedEncoder(Encoder):
         )
 
     @override
-    def encode(self, ts: list[torch.Tensor]) -> Encoding:
+    def encode(
+        self, ts: list[torch.Tensor], *, progress: Progress | None = None
+    ) -> Encoding:
         dtype = tensor_list_dtype(ts)
         if dtype is None:
             raise ValueError("Cannot encode an empty buffer")
@@ -54,17 +57,18 @@ class SecdedEncoder(Encoder):
         # Store decoded tensor copies
         decoded_tensors = [t.clone() for t in ts]
 
-        match dtype:
-            case EncodingDtype.F32:
-                with torch.no_grad():
-                    rust_input = [t.flatten().numpy(force=True) for t in ts]
-                encoded_data = secded.encode_f32(rust_input, self.bits_per_chunk)
-            case EncodingDtype.F16:
-                with torch.no_grad():
-                    rust_input = [
-                        t.flatten().view(torch.uint16).numpy(force=True) for t in ts
-                    ]
-                encoded_data = secded.encode_u16(rust_input, self.bits_per_chunk)
+        with stage(progress, "Encoding (SECDED)"):
+            match dtype:
+                case EncodingDtype.F32:
+                    with torch.no_grad():
+                        rust_input = [t.flatten().numpy(force=True) for t in ts]
+                    encoded_data = secded.encode_f32(rust_input, self.bits_per_chunk)
+                case EncodingDtype.F16:
+                    with torch.no_grad():
+                        rust_input = [
+                            t.flatten().view(torch.uint16).numpy(force=True) for t in ts
+                        ]
+                    encoded_data = secded.encode_u16(rust_input, self.bits_per_chunk)
 
         return SecdedEncoding(
             encoded_data,

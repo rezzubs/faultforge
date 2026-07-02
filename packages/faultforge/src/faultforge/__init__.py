@@ -18,6 +18,8 @@ submodules for details.
   dataset in fixed-size batches.
 - `faultforge.loading`: Provides a `ModelBundle` for loading a model together
   with its evaluation dataset.
+- `faultforge.progress`: `Progress`, for reporting on long-running operations
+  (dataset loading, encoding, fault injection, ...) via periodic log messages.
 
 To add a new kind of experiment, subclass `Experiment` and reuse
 `faultforge.loading`/`faultforge.dataset` for model and data handling.

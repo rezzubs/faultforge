@@ -14,6 +14,7 @@ from faultforge._internal.encoding.abc import (
 )
 from faultforge._internal.fault import Fault
 from faultforge._internal.fingerprint import Fingerprint
+from faultforge._internal.progress import Progress
 
 
 @dataclass(slots=True)
@@ -38,15 +39,15 @@ class EncoderSequence(Encoder):
         )
 
     @override
-    def encode(self, ts: list[Tensor]) -> Encoding:
+    def encode(self, ts: list[Tensor], *, progress: Progress | None = None) -> Encoding:
         head_encodings: list[TensorEncoding] = []
 
         for encoder in self.head:
-            encoding = encoder.encode(ts)
+            encoding = encoder.encode(ts, progress=progress)
             head_encodings.append(encoding)
             ts = encoding.encoded_tensors()
 
-        tail_encoding = self.tail.encode(ts)
+        tail_encoding = self.tail.encode(ts, progress=progress)
 
         return EncodingSequence(head_encodings, tail_encoding)
 

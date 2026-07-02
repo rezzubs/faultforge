@@ -24,6 +24,7 @@ from faultforge._internal.experiment import (
 from faultforge._internal.fault import BitFlip
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.loading.abc import ModelBundle
+from faultforge._internal.progress import Progress, stage
 from faultforge._rust import Picker
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ class EncodedFaultInjection(Experiment[int, int | None]):
     _device: torch.device
     _reliability_metric: ReliabilityMetric
     _faulty_bit_count: int
+    _progress: Progress | None
 
     _unencoded_golden: nn.Module | None
 
@@ -117,25 +119,30 @@ class EncodedFaultInjection(Experiment[int, int | None]):
         dataset_batch_limit: int | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
+        progress: Progress | None = None,
     ) -> None:
-        model = bundle.load_model(device)
+        self._progress = progress
+
+        model = bundle.load_model(device, progress=progress)
         if golden_is_encoded:
             self._unencoded_golden = copy.deepcopy(model)
         else:
             self._unencoded_golden = None
 
-        self._model = EncodedModule(model, encoder)
+        self._model = EncodedModule(model, encoder, progress=progress)
         self._device = torch.device(device)
         self._reliability_metric = reliability_metric
 
-        self._dataset = bundle.load_dataset(batch_size, device)
+        self._dataset = bundle.load_dataset(batch_size, device, progress=progress)
         if dataset_batch_limit is not None and not preload_dataset:
             logger.warning(
                 "preload_dataset is set to False but dataset_limit forces a preload anyway"
             )
             preload_dataset = True
         if preload_dataset:
-            self._dataset = self._dataset.precompute(dataset_batch_limit)
+            self._dataset = self._dataset.precompute(
+                dataset_batch_limit, progress=progress
+            )
 
         fingerprint = Fingerprint(
             kind="encoded_memory_fault_injection",
@@ -211,18 +218,22 @@ class EncodedFaultInjection(Experiment[int, int | None]):
         Additionally sets context to the total number of predictions; this is
         used for computing SDC scores as well as the number of injected faults.
         """
-        logger.info("Computing golden results")
-
         total_items = 0
 
         golden: nn.Module = self._unencoded_golden or self._model
 
         try:
-            for batch in self._dataset:
-                logits = golden.forward(batch.inputs)
-                processed = self._process_golden(logits)
-                total_items += processed.numel()
-                self._golden_results.append(processed)
+            with stage(
+                self._progress,
+                "Computing golden results",
+                total=self._dataset.batch_count(),
+            ) as s:
+                for batch in self._dataset:
+                    logits = golden.forward(batch.inputs)
+                    processed = self._process_golden(logits)
+                    total_items += processed.numel()
+                    self._golden_results.append(processed)
+                    s.advance()
         finally:
             self._dataset.reset()
 
@@ -257,36 +268,44 @@ class EncodedFaultInjection(Experiment[int, int | None]):
 
         picker = Picker(self._model.bit_count())
         model = self._model.clone()
-        for _ in range(self._faulty_bit_count):
-            try:
-                fault_target = next(picker)
-            except StopIteration:
-                raise RuntimeError(
-                    "Expected fault targets to be within range but picker is exhausted"
-                )
+        with stage(
+            self._progress, "Fault Injection", total=self._faulty_bit_count
+        ) as s:
+            for _ in range(self._faulty_bit_count):
+                try:
+                    fault_target = next(picker)
+                except StopIteration:
+                    raise RuntimeError(
+                        "Expected fault targets to be within range but picker is exhausted"
+                    )
 
-            model.apply_fault(BitFlip(), fault_target)
+                model.apply_fault(BitFlip(), fault_target)
+                s.advance()
 
         result = BatchReliability(correct=0, total=0)
-        for batch_index, batch in enumerate(self._dataset):
-            # n_batches x n_classes
-            logits = model.forward(batch.inputs)
+        with stage(self._progress, "Inference", total=self._dataset.batch_count()) as s:
+            for batch_index, batch in enumerate(self._dataset):
+                # n_batches x n_classes
+                logits = model.forward(batch.inputs)
 
-            match self._reliability_metric:
-                case ReliabilityMetric.Accuracy:
-                    batch_result = _batch_accuracy(logits, batch.targets)
-                case ReliabilityMetric.AccuracyDegradation:
-                    batch_result = _batch_accuracy_degradation(
-                        logits, self._golden_results[batch_index], batch.targets
-                    )
-                case ReliabilityMetric.Sdc:
-                    batch_result = _batch_sdc(logits, self._golden_results[batch_index])
-                case ReliabilityMetric.Top1Sdc:
-                    batch_result = _batch_critical_sdc(
-                        logits, self._golden_results[batch_index]
-                    )
+                match self._reliability_metric:
+                    case ReliabilityMetric.Accuracy:
+                        batch_result = _batch_accuracy(logits, batch.targets)
+                    case ReliabilityMetric.AccuracyDegradation:
+                        batch_result = _batch_accuracy_degradation(
+                            logits, self._golden_results[batch_index], batch.targets
+                        )
+                    case ReliabilityMetric.Sdc:
+                        batch_result = _batch_sdc(
+                            logits, self._golden_results[batch_index]
+                        )
+                    case ReliabilityMetric.Top1Sdc:
+                        batch_result = _batch_critical_sdc(
+                            logits, self._golden_results[batch_index]
+                        )
 
-            result += batch_result
+                result += batch_result
+                s.advance()
 
         self._dataset.reset()
 

@@ -14,6 +14,7 @@ from torch import Tensor
 from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.fault import Fault
 from faultforge._internal.fingerprint import Fingerprint
+from faultforge._internal.progress import Progress, stage
 from faultforge._internal.tensor import (
     tensor_list_dtype,
     tensor_list_fault,
@@ -26,7 +27,7 @@ class Encoder(abc.ABC):
     """An encoder for lists of tensors."""
 
     @abc.abstractmethod
-    def encode(self, ts: list[Tensor]) -> Encoding:
+    def encode(self, ts: list[Tensor], *, progress: Progress | None = None) -> Encoding:
         """Encode a list of tensors."""
         ...
 
@@ -72,7 +73,9 @@ class TensorEncoder(Encoder):
 
     @override
     @abc.abstractmethod
-    def encode(self, ts: list[Tensor]) -> TensorEncoding: ...
+    def encode(
+        self, ts: list[Tensor], *, progress: Progress | None = None
+    ) -> TensorEncoding: ...
 
 
 class TensorEncoding(Encoding):
@@ -129,7 +132,9 @@ class InPlaceEncoder(TensorEncoder):
         ...
 
     @override
-    def encode(self, ts: list[Tensor]) -> TensorEncoding:
+    def encode(
+        self, ts: list[Tensor], *, progress: Progress | None = None
+    ) -> TensorEncoding:
         dtype = tensor_list_dtype(ts)
         if dtype is None:
             raise ValueError("Cannot encode an empty list")
@@ -146,9 +151,13 @@ class InPlaceEncoder(TensorEncoder):
             case EncodingDtype.F16:
                 encode = self.encode_float16
 
-        for t in ts:
-            bit_count += t.numel() * element_bit_count
-            data.append(encode(t))
+        with stage(
+            progress, f"Encoding ({self.fingerprint().kind})", total=len(ts)
+        ) as s:
+            for t in ts:
+                bit_count += t.numel() * element_bit_count
+                data.append(encode(t))
+                s.advance()
 
         return self.create_encoding(data, bit_count, dtype)
 

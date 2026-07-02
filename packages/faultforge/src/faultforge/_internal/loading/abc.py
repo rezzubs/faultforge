@@ -7,17 +7,22 @@ from torch import nn
 from faultforge._internal.common import DeviceLike
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.fingerprint import Fingerprint
+from faultforge._internal.progress import Progress
 
 
 class ModelBundle(abc.ABC):
     """A type which can load a model and its associated dataset"""
 
     @abc.abstractmethod
-    def load_model(self, device: DeviceLike) -> nn.Module:
+    def load_model(
+        self, device: DeviceLike, *, progress: Progress | None = None
+    ) -> nn.Module:
         """Load the model"""
 
     @abc.abstractmethod
-    def load_dataset(self, batch_size: int, device: DeviceLike) -> BatchedDataset:
+    def load_dataset(
+        self, batch_size: int, device: DeviceLike, *, progress: Progress | None = None
+    ) -> BatchedDataset:
         """Load the dataset."""
 
     @abc.abstractmethod

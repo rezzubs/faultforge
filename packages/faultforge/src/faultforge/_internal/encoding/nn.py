@@ -11,6 +11,7 @@ from faultforge._internal.encoding.abc import (
     Encoding,
 )
 from faultforge._internal.fault import Fault
+from faultforge._internal.progress import Progress
 
 
 class EncodedModule(nn.Module):
@@ -32,6 +33,7 @@ class EncodedModule(nn.Module):
         encoder: Encoder,
         *,
         inherit_device: bool = True,
+        progress: Progress | None = None,
     ):
         nn.Module.__init__(self)
         self._module = module
@@ -42,7 +44,7 @@ class EncodedModule(nn.Module):
         elif len(parameters) > 0:
             self._device = parameters[0].device
 
-        self._memory = encoder.encode(parameters)
+        self._memory = encoder.encode(parameters, progress=progress)
         self._dirty = True
 
     @classmethod
