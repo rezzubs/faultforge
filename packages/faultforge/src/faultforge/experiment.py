@@ -20,9 +20,9 @@ controlled by `SaveConfig` (periodic autosave during `run_loop`, or manual
 fingerprint against the current configuration and raises if they disagree, so
 a mismatched result file is caught rather than silently misused.
 
-`StabilityConfig` decides when `run_loop` should stop based on the confidence
-interval of the mean result score. `DisplayConfig` controls how that progress
-is printed.
+`StabilityConfig` decides when `run_loop` should stop based on the relative
+margin of error (the margin of error as a percentage of the mean) of the mean
+result score. `DisplayConfig` controls how that progress is printed.
 
 See `faultforge.experiments.encoded_memory` for a complete example experiment.
 """

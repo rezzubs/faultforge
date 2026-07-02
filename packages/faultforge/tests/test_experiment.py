@@ -73,19 +73,19 @@ def make(values: list[float] | None = None, name: str = "test") -> _TestExperime
     return _TestExperiment(data=data)
 
 
-# SECTION ci_half_width
+# SECTION margin_of_error
 
 
-def test_ci_half_width_no_results():
-    assert make().ci_half_width() is None
+def test_margin_of_error_no_results():
+    assert make().margin_of_error() is None
 
 
-def test_ci_half_width_one_result():
-    assert make([1.0]).ci_half_width() is None
+def test_margin_of_error_one_result():
+    assert make([1.0]).margin_of_error() is None
 
 
-def test_ci_half_width_identical_values():
-    assert make([3.0, 3.0]).ci_half_width() == 0.0
+def test_margin_of_error_identical_values():
+    assert make([3.0, 3.0]).margin_of_error() == 0.0
 
 
 # SECTION run_loop
@@ -99,8 +99,9 @@ def test_run_loop_stops_at_max_runs():
 
 
 def test_run_loop_stops_when_stable():
-    # Identical values -> CI = 0, below any positive threshold. The experiment
-    # already has min_samples+1 results so stability is checked immediately.
+    # Identical values -> margin of error = 0, below any positive threshold.
+    # The experiment already has min_samples+1 results so stability is
+    # checked immediately.
     min_samples = 5
     exp = make([1.0] * (min_samples + 1))
     exp.stability_config = StabilityConfig(min_samples=min_samples, threshold=0.01)
@@ -110,7 +111,8 @@ def test_run_loop_stops_when_stable():
 
 
 def test_run_loop_does_not_stop_before_min_samples():
-    # Even with low CI, stability is skipped until min_samples is reached.
+    # Even with a low margin of error, stability is skipped until min_samples
+    # is reached.
     exp = make([1.0] * 3)
     exp.set_max_runs(6)
     exp.stability_config = StabilityConfig(min_samples=10, threshold=999.0)
@@ -119,12 +121,23 @@ def test_run_loop_does_not_stop_before_min_samples():
 
 
 def test_run_loop_continues_while_unstable():
-    # Incrementing values → CI never reaches 0 → runs to max_runs.
+    # Incrementing values → margin of error never reaches 0 → runs to max_runs.
     exp = make()
     exp.set_max_runs(20)
     exp.stability_config = StabilityConfig(min_samples=2, threshold=0.0)
     exp.run_loop()
     assert exp.run_count() == 20
+
+
+def test_run_loop_stability_check_with_single_sample_does_not_crash():
+    # min_samples=1 means the stability check runs while margin_of_error()
+    # still returns None (fewer than 2 results), which used to raise
+    # UnboundLocalError instead of just continuing.
+    exp = make()
+    exp.set_max_runs(3)
+    exp.stability_config = StabilityConfig(min_samples=1, threshold=0.01)
+    exp.run_loop()
+    assert exp.run_count() == 3
 
 
 # SECTION save/load round-trip

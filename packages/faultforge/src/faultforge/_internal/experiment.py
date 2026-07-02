@@ -48,7 +48,7 @@ class StabilityConfig:
     min_samples: int
     """Minimum number of runs before checking the stopping criterion."""
     threshold: float
-    """Stop when the 95% CI half-width falls below this value (percentage of the mean, e.g. 1.0 = ±1%)."""
+    """Stop when the relative margin of error (the 95% margin of error as a percentage of the mean) falls below this value, e.g. 1.0 = 1%."""
 
 
 @dataclass(slots=True)
@@ -74,7 +74,7 @@ class DisplayConfig:
 
 
 class Experiment[R = float, C = None](abc.ABC):
-    """Recoding a series of experiments until a statistically significant result is reached.
+    """Record a series of experiments.
 
     Each run produces a result which is scored by `self.result_score`. The
     `data` attribute will be saved to disk. Other attributes are used for
@@ -168,30 +168,25 @@ class Experiment[R = float, C = None](abc.ABC):
                     logger.info("Exhausted all possible cases.")
                     break
 
-                ci_half_width = None
-                mean = None
+                mean, margin_of_error = self._stability_metrics()
+                relative_margin_of_error = (
+                    margin_of_error / mean * 100
+                    if mean is not None and margin_of_error is not None
+                    else None
+                )
 
                 if (
                     self.stability_config is not None
-                    and self.run_count() >= self.stability_config.min_samples
+                    and relative_margin_of_error is not None
+                    and relative_margin_of_error <= self.stability_config.threshold
                 ):
-                    mean = self.mean_score()
-                    ci_half_width = self.ci_half_width()
-
-                    if ci_half_width is not None and mean is not None:
-                        ci_percent_of_mean = ci_half_width / mean * 100
-
-                    if (
-                        ci_percent_of_mean is not None
-                        and ci_percent_of_mean <= self.stability_config.threshold
-                    ):
-                        logger.info(
-                            f"Reached stability threshold {self.stability_config.threshold:.2f}% ({ci_percent_of_mean:.2f}%), stopping."
-                        )
-                        break
+                    logger.info(
+                        f"Reached stability threshold {self.stability_config.threshold:.2f}% ({relative_margin_of_error:.2f}%), stopping."
+                    )
+                    break
 
                 self.run()
-                print(self.format_status(mean, ci_half_width))
+                print(self.format_status(mean, margin_of_error))
                 dirty = True
 
                 if (
@@ -278,8 +273,9 @@ class Experiment[R = float, C = None](abc.ABC):
         """Return the number recorded runs."""
         return len(self.data.results)
 
-    def ci_half_width(self) -> float | None:
-        """Return the confidence interval at 95% for the current set of result scores.
+    def margin_of_error(self) -> float | None:
+        """Return the margin of error (half-width of the 95% confidence interval)
+        for the mean of the current set of result scores.
 
         None if there are less than 2 results.
         """
@@ -300,8 +296,20 @@ class Experiment[R = float, C = None](abc.ABC):
             return None
         return float(sum(scores) / self.run_count())
 
+    def _stability_metrics(self) -> tuple[float | None, float | None]:
+        """Return `(mean_score(), margin_of_error())` once `stability_config.min_samples`
+        has been reached; `(None, None)` if stability checking isn't configured
+        or there aren't enough runs yet.
+        """
+        if (
+            self.stability_config is None
+            or self.run_count() < self.stability_config.min_samples
+        ):
+            return None, None
+        return self.mean_score(), self.margin_of_error()
+
     def format_status(
-        self, mean: float | None, ci_half_width: float | None
+        self, mean: float | None, margin_of_error: float | None
     ) -> str | None:
         """Formats the current status of the experiment as a str.
 
@@ -313,8 +321,8 @@ class Experiment[R = float, C = None](abc.ABC):
 
         if mean is None:
             mean = self.mean_score()
-        if ci_half_width is None:
-            ci_half_width = self.ci_half_width()
+        if margin_of_error is None:
+            margin_of_error = self.margin_of_error()
 
         parts: list[str] = []
 
@@ -354,11 +362,13 @@ class Experiment[R = float, C = None](abc.ABC):
             if self.display.score_unit is not None:
                 parts.append(self.display.score_unit)
 
-            if ci_half_width is not None:
-                parts.append(f" ±{ci_half_width:{self.display.score_fmt}}, 95% CI | ")
+            if margin_of_error is not None:
+                parts.append(
+                    f" ±{margin_of_error:{self.display.score_fmt}} (95% CI) | "
+                )
 
-                ci_within_mean = ci_half_width / mean * 100
-                parts.append(f"CI within {ci_within_mean:.2f}% of mean")
+                relative_margin_of_error = margin_of_error / mean * 100
+                parts.append(f"Relative MoE: {relative_margin_of_error:.2f}% of mean")
 
         return "".join(parts)
 
