@@ -81,11 +81,6 @@ class BatchReliability:
             correct=self.correct + other.correct, total=self.total + other.total
         )
 
-    def __sub__(self, other: BatchReliability) -> BatchReliability:
-        return BatchReliability(
-            correct=self.correct - other.correct, total=self.total - other.total
-        )
-
 
 @final
 class EncodedFaultInjection(Experiment[int, int | None]):
@@ -105,7 +100,7 @@ class EncodedFaultInjection(Experiment[int, int | None]):
     _unencoded_golden: nn.Module | None
 
     # populated during first run
-    _golden_results: list[Tensor] = []
+    _golden_results: list[Tensor]
 
     def __init__(
         self,
@@ -122,12 +117,13 @@ class EncodedFaultInjection(Experiment[int, int | None]):
         progress: Progress | None = None,
     ) -> None:
         self._progress = progress
+        self._golden_results = []
 
         model = bundle.load_model(device, progress=progress)
         if golden_is_encoded:
-            self._unencoded_golden = copy.deepcopy(model)
-        else:
             self._unencoded_golden = None
+        else:
+            self._unencoded_golden = copy.deepcopy(model)
 
         self._model = EncodedModule(model, encoder, progress=progress)
         self._device = torch.device(device)
@@ -316,9 +312,8 @@ class EncodedFaultInjection(Experiment[int, int | None]):
 
         if result.total != self.data.context:
             raise RuntimeError(
-                "Computed {} elements from the golden results, model returned {}",
-                self.data.context,
-                result.total,
+                f"Computed {self.data.context} elements from the golden results, "
+                f"model returned {result.total}"
             )
 
         self.data.results[len(self.data.results)] = result.correct
@@ -364,10 +359,7 @@ def _batch_accuracy_degradation(
     golden_correct = int((golden_classifications == targets).sum().item())
     total = classifications.numel()
 
-    run_accuracy = BatchReliability(correct=correct, total=total)
-    golden_accuracy = BatchReliability(correct=golden_correct, total=total)
-
-    return golden_accuracy - run_accuracy
+    return BatchReliability(correct=golden_correct - correct, total=total)
 
 
 def _batch_accuracy(logits: Tensor, targets: Tensor) -> BatchReliability:
