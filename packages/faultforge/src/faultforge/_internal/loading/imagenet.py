@@ -51,7 +51,7 @@ def _get_tim_transform(model: nn.Module) -> Transform:
     return typing.cast(Transform, transform)
 
 
-class ImageNetModel(enum.Enum):
+class ImageNetModel(enum.StrEnum):
     """A pretrained image classifier evaluated on ImageNet."""
 
     # Hugging Face models

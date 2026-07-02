@@ -20,7 +20,7 @@ from faultforge._rust import cep
 _logger = logging.getLogger(__name__)
 
 
-class CepScheme(enum.Enum):
+class CepScheme(enum.StrEnum):
     """How many data bits to use per parity bit.
 
     D3P1 should result in the best accuracy in most cases because it results in

@@ -22,7 +22,7 @@ from faultforge._internal.loading.abc import ModelBundle
 logger = logging.getLogger(__name__)
 
 
-class CifarModel(enum.Enum):
+class CifarModel(enum.StrEnum):
     """A model from https://github.com/chenyaofo/pytorch-cifar-models"""
 
     ResNet20 = "resnet20"
@@ -45,7 +45,7 @@ class CifarModel(enum.Enum):
     RepVggA2 = "repvgg_a2"
 
 
-class CifarDataset(enum.Enum):
+class CifarDataset(enum.StrEnum):
     """A CIFAR dataset variant."""
 
     Cifar10 = "cifar10"

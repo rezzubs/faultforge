@@ -29,7 +29,7 @@ from faultforge._rust import Picker
 logger = logging.getLogger(__name__)
 
 
-class ReliabilityMetric(enum.Enum):
+class ReliabilityMetric(enum.StrEnum):
     """Ways to measure the reliability of a fault-injected model."""
 
     Accuracy = "accuracy"
