@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-faultforge = "faultforge_cli.main:app"
+faultforge = "faultforge_cli.main:main"
 
 [tool.uv.sources]
 faultforge = { workspace = true }

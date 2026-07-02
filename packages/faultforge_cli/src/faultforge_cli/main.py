@@ -1,12 +1,23 @@
 import typer
 
-app = typer.Typer()
+from faultforge_cli import encoded_memory
+from faultforge_cli.logging import setup_logging
+
+app = typer.Typer(
+    pretty_exceptions_enable=False,
+)
+
+app.add_typer(
+    encoded_memory.app,
+    name="encoded-memory",
+    help="Commands for encoded memory experiments.",
+)
 
 
-@app.command()
 def main() -> None:
-    pass
+    setup_logging()
+    app()
 
 
 if __name__ == "__main__":
-    app()
+    main()
