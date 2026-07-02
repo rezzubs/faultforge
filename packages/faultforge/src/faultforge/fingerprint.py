@@ -8,6 +8,7 @@ the result.
 from faultforge._internal.fingerprint import (
     ABSENT,
     FingerprintDifference,
+    FingerprintError,
     Scalar,
     format_differences,
 )
@@ -15,6 +16,7 @@ from faultforge._internal.fingerprint import (
 __all__ = [
     "ABSENT",
     "FingerprintDifference",
+    "FingerprintError",
     "Scalar",
     "format_differences",
 ]

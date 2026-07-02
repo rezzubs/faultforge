@@ -18,7 +18,7 @@ import scipy.stats
 from pydantic import BaseModel
 
 from faultforge._internal.common import AnyPath
-from faultforge._internal.fingerprint import Fingerprint, format_differences
+from faultforge._internal.fingerprint import Fingerprint, FingerprintError
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,8 @@ class Experiment[R = float, C = None](abc.ABC):
         """Overwrite current data from a file.
 
         The saved fingerprint is verified against the current configuration. A
-        mismatch raises `ValueError` describing exactly which parameters differ.
+        mismatch raises `FingerprintError` describing exactly which parameters
+        differ.
 
         See `load_into_file` for a version that uses a file-like object.
         """
@@ -227,7 +228,8 @@ class Experiment[R = float, C = None](abc.ABC):
         """Overwrite current data from a file.
 
         The saved fingerprint is verified against the current configuration. A
-        mismatch raises `ValueError` describing exactly which parameters differ.
+        mismatch raises `FingerprintError` describing exactly which parameters
+        differ.
 
         See `load_into` for a version that uses a path-like object.
         """
@@ -235,10 +237,7 @@ class Experiment[R = float, C = None](abc.ABC):
         data = type(self.data).model_validate_json(json)
         differences = self.data.fingerprint.diff(data.fingerprint)
         if differences:
-            raise ValueError(
-                "Saved experiment does not match the current configuration:\n"
-                + format_differences(differences)
-            )
+            raise FingerprintError(differences)
         self.data = data
 
     def save(self, path: AnyPath) -> None:

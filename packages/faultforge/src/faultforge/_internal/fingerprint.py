@@ -89,6 +89,20 @@ def format_differences(differences: list[FingerprintDifference]) -> str:
     return "\n".join(f"  - {difference}" for difference in differences)
 
 
+class FingerprintError(ValueError):
+    """Raised when a saved `Fingerprint` doesn't match the current configuration."""
+
+    differences: list[FingerprintDifference]
+    """The differences that caused the mismatch."""
+
+    def __init__(self, differences: list[FingerprintDifference]) -> None:
+        self.differences = differences
+        super().__init__(
+            "Saved experiment does not match the current configuration:\n"
+            + format_differences(differences)
+        )
+
+
 def collect_differences(
     expected: Fingerprint,
     actual: Fingerprint,

@@ -21,6 +21,7 @@ from faultforge.experiments.encoded_memory import (
     EncodedFaultInjection,
     ReliabilityMetric,
 )
+from faultforge.fingerprint import FingerprintError
 from faultforge.loading import (
     Cifar,
     CifarDataset,
@@ -246,6 +247,13 @@ def record(
             rich_help_panel="Recording Settings",
         ),
     ] = None,
+    overwrite: Annotated[
+        bool,
+        typer.Option(
+            help="If --output already exists but was recorded with a different configuration, discard it and start fresh instead of aborting.",
+            rich_help_panel="Recording Settings",
+        ),
+    ] = False,
     runs: Annotated[
         int | None,
         typer.Option(
@@ -341,7 +349,15 @@ def record(
         )
 
     if output is not None and output.exists():
-        experiment.load_from(output)
+        try:
+            experiment.load_from(output)
+        except FingerprintError as error:
+            if not overwrite:
+                logger.error(str(error))
+                raise typer.Exit(1) from None
+            logger.warning(
+                f"{output} was recorded with a different configuration and will be overwritten:\n{error}"
+            )
 
     if runs is not None:
         for _ in range(runs):

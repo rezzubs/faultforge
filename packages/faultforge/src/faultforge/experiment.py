@@ -17,8 +17,9 @@ via `format_status`, and stops once a `StabilityConfig` threshold is met,
 produced it, the `context`, and the accumulated `results`. Saving is
 controlled by `SaveConfig` (periodic autosave during `run_loop`, or manual
 `Experiment.save`/`save_atomic`); loading a file back in verifies its
-fingerprint against the current configuration and raises if they disagree, so
-a mismatched result file is caught rather than silently misused.
+fingerprint against the current configuration and raises
+`faultforge.fingerprint.FingerprintError` if they disagree, so a mismatched
+result file is caught rather than silently misused.
 
 `StabilityConfig` decides when `run_loop` should stop based on the relative
 margin of error (the margin of error as a percentage of the mean) of the mean
