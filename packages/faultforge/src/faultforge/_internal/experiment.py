@@ -169,10 +169,8 @@ class Experiment[R = float, C = None](abc.ABC):
                     break
 
                 mean, margin_of_error = self._stability_metrics()
-                relative_margin_of_error = (
-                    margin_of_error / mean * 100
-                    if mean is not None and margin_of_error is not None
-                    else None
+                relative_margin_of_error = self._relative_margin_of_error(
+                    mean, margin_of_error
                 )
 
                 if (
@@ -186,7 +184,10 @@ class Experiment[R = float, C = None](abc.ABC):
                     break
 
                 self.run()
-                print(self.format_status(mean, margin_of_error))
+                # Recomputed rather than reusing `mean`/`margin_of_error` above:
+                # those were computed before `self.run()` and would otherwise be
+                # stale by one run.
+                print(self.format_status(*self._stability_metrics()))
                 dirty = True
 
                 if (
@@ -307,6 +308,24 @@ class Experiment[R = float, C = None](abc.ABC):
             return None, None
         return self.mean_score(), self.margin_of_error()
 
+    @staticmethod
+    def _relative_margin_of_error(
+        mean: float | None, margin_of_error: float | None
+    ) -> float | None:
+        """The 95% margin of error as a percentage of the mean.
+
+        `None` if either input is `None`. A mean of exactly `0` would otherwise
+        raise `ZeroDivisionError` (a legitimate outcome for e.g. a 0% SDC
+        score); that case is treated as 0% relative error when there is no
+        error either, and as an undefined (infinite) relative error
+        otherwise.
+        """
+        if mean is None or margin_of_error is None:
+            return None
+        if mean == 0:
+            return 0.0 if margin_of_error == 0 else float("inf")
+        return margin_of_error / mean * 100
+
     def format_status(
         self, mean: float | None, margin_of_error: float | None
     ) -> str | None:
@@ -353,8 +372,6 @@ class Experiment[R = float, C = None](abc.ABC):
 
         parts.append(" | ")
 
-        mean = self.mean_score()
-
         if mean is not None:
             parts.append(f"mean {mean:{self.display.score_fmt}}")
 
@@ -362,12 +379,15 @@ class Experiment[R = float, C = None](abc.ABC):
                 parts.append(self.display.score_unit)
 
             if margin_of_error is not None:
-                parts.append(
-                    f" ±{margin_of_error:{self.display.score_fmt}} (95% CI) | "
-                )
+                parts.append(f" ±{margin_of_error:{self.display.score_fmt}} (95% CI)")
 
-                relative_margin_of_error = margin_of_error / mean * 100
-                parts.append(f"Relative MoE: {relative_margin_of_error:.2f}% of mean")
+                relative_margin_of_error = self._relative_margin_of_error(
+                    mean, margin_of_error
+                )
+                if relative_margin_of_error is not None:
+                    parts.append(
+                        f" | Relative MoE: {relative_margin_of_error:.2f}% of mean"
+                    )
 
         return "".join(parts)
 

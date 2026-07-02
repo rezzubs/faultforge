@@ -145,11 +145,11 @@ class _BatchedDataset(BatchedDataset):
         if not isinstance(labels, Tensor):
             raise TypeError(f"expected labels to be a Tensor, got {type(labels)}")
 
-        return DataBatch(inputs, labels)
+        return DataBatch(inputs, labels).to(self._device)
 
     @override
     def to(self, device: DeviceLike) -> Self:
-        self.device = torch.device(device)
+        self._device = torch.device(device)
         return self
 
     @override
