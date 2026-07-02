@@ -1,4 +1,4 @@
-use crate::{BitBuffer, ByteBuffer, OutOfBoundsError};
+use crate::{BitBuffer, ByteBuffer, Fault, OutOfBoundsError};
 
 /// Gives a [`BitBuffer`] implementation to sequences where the items cannot
 /// satisfy [`SizedBitBuffer`](crate::SizedBitBuffer).
@@ -29,6 +29,23 @@ where
         }
 
         Err(OutOfBoundsError)
+    }
+
+    /// The starting bit index of every item, plus the total bit count as a
+    /// trailing sentinel.
+    ///
+    /// Used by [`BitBuffer::apply_faults`] to look up the owning item for
+    /// many bit indices via binary search instead of re-scanning the whole
+    /// sequence (as [`Self::inner_bit_index`] does) for every single fault.
+    fn bit_offsets(&self) -> Vec<usize> {
+        let mut offsets = Vec::new();
+        let mut start_of_current = 0;
+        for buffer in self.0.into_iter() {
+            offsets.push(start_of_current);
+            start_of_current += buffer.bit_count();
+        }
+        offsets.push(start_of_current);
+        offsets
     }
 }
 
@@ -80,6 +97,28 @@ where
     fn flip_bit(&mut self, bit_index: usize) {
         let (outer, inner) = self.inner_bit_index(bit_index).expect("out of bounds");
         self.0[outer].flip_bit(inner)
+    }
+
+    /// Applies many faults, looking up each target item via a single
+    /// precomputed offset table instead of the O(item count) linear scan
+    /// [`Self::inner_bit_index`] would otherwise repeat for every fault.
+    fn apply_faults<It>(&mut self, faults: It)
+    where
+        It: Iterator<Item = (Fault, usize)>,
+    {
+        let offsets = self.bit_offsets();
+        let total_bits = *offsets.last().expect("offsets always has at least one element");
+
+        for (fault, bit_index) in faults {
+            assert!(bit_index < total_bits, "out of bounds");
+            // `offsets` is non-decreasing, so this partitions it into a
+            // prefix of items starting at or before `bit_index` and a
+            // suffix starting after it; the last item of the prefix owns
+            // the bit.
+            let outer = offsets.partition_point(|&start| start <= bit_index) - 1;
+            let inner = bit_index - offsets[outer];
+            self.0[outer].apply_fault(fault, inner);
+        }
     }
 }
 
@@ -251,5 +290,74 @@ mod tests {
         // Second bit of the last element
         buf.flip_bit(25);
         assert_eq!(buf.0[2][0], 0);
+    }
+
+    #[test]
+    fn apply_faults_matches_sequential_application() {
+        use crate::Fault;
+
+        // Includes empty items to exercise the offset-lookup edge case where
+        // multiple items share the same starting bit offset.
+        let mut batched =
+            NonUniformSequence(vec![vec![], vec![0u8, 0], vec![], vec![1], vec![0b10]]);
+        let mut sequential = batched.clone();
+
+        let faults = [(Fault::Flip, 0), (Fault::Flip, 9), (Fault::Flip, 16)];
+
+        batched.apply_faults(faults.into_iter());
+        for (fault, bit_index) in faults {
+            sequential.apply_fault(fault, bit_index);
+        }
+
+        assert_eq!(batched, sequential);
+    }
+
+    #[test]
+    #[should_panic(expected = "out of bounds")]
+    fn apply_faults_out_of_bounds_panics() {
+        let mut buf = NonUniformSequence(vec![vec![0u8], vec![0u8]]);
+        buf.apply_faults([(crate::Fault::Flip, 16)].into_iter());
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn apply_faults_matches_sequential_application_prop(
+            items in proptest::collection::vec(proptest::collection::vec(proptest::bool::ANY, 0..8), 0..8),
+            fault_indices in proptest::collection::vec(proptest::bool::ANY, 0..32),
+        ) {
+            let bit_count: usize = items.iter().map(Vec::len).sum();
+            proptest::prop_assume!(bit_count > 0);
+
+            let items: Vec<Vec<u8>> = items
+                .into_iter()
+                .map(|bits| bits.into_iter().map(|b| b as u8).collect())
+                .collect();
+
+            let mut batched = NonUniformSequence(items.clone());
+            let mut sequential = NonUniformSequence(items);
+
+            // Reuse `fault_indices` as a sequence of (bit_index, flip?) pairs
+            // by mapping each boolean into a bit index modulo the buffer size.
+            let faults: Vec<(crate::Fault, usize)> = fault_indices
+                .iter()
+                .enumerate()
+                .map(|(i, &flip)| {
+                    let bit_index = i % bit_count;
+                    let fault = if flip {
+                        crate::Fault::Flip
+                    } else {
+                        crate::Fault::StuckAt(crate::Bit::One)
+                    };
+                    (fault, bit_index)
+                })
+                .collect();
+
+            batched.apply_faults(faults.iter().copied());
+            for (fault, bit_index) in faults {
+                sequential.apply_fault(fault, bit_index);
+            }
+
+            proptest::prop_assert_eq!(batched, sequential);
+        }
     }
 }

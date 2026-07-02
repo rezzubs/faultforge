@@ -44,8 +44,11 @@ root rather than in their own submodule:
 - `Fault` (`BitFlip`, `StuckAt`): describes what happens to a targeted bit.
 - `Picker`: a Fisher-Yates based sampler used to pick fault locations
   without repeats.
-- `tensor_list_dtype`/`tensor_list_fault`: the tensor-level operations that
-  back fault injection.
+- `tensor_list_dtype`/`tensor_list_fault`/`tensor_list_faults`: the tensor-level
+  operations that back fault injection. Prefer `tensor_list_faults` (and
+  `Encoding.apply_faults`/`EncodedModule.apply_faults`) over injecting one fault
+  at a time in a loop: applying a batch pays its conversion overhead once for the
+  whole batch rather than once per fault.
 """
 
 import sys
@@ -58,7 +61,11 @@ from faultforge._internal.common import (
 )
 from faultforge._internal.fault import BitFlip, Fault, StuckAt
 from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.tensor import tensor_list_dtype, tensor_list_fault
+from faultforge._internal.tensor import (
+    tensor_list_dtype,
+    tensor_list_fault,
+    tensor_list_faults,
+)
 from faultforge._rust import Picker
 
 from . import _rust
@@ -75,6 +82,7 @@ __all__ = [
     "StuckAt",
     "tensor_list_dtype",
     "tensor_list_fault",
+    "tensor_list_faults",
 ]
 
 

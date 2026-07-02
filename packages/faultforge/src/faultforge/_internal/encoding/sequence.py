@@ -77,6 +77,10 @@ class EncodingSequence(Encoding):
         self._tail.apply_fault(fault, target_bit)
 
     @override
+    def apply_faults(self, faults: Sequence[tuple[Fault, int]]) -> None:
+        self._tail.apply_faults(faults)
+
+    @override
     def bit_count(self) -> int:
         return self._tail.bit_count()
 

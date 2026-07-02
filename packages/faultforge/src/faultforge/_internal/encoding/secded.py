@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
@@ -127,12 +128,22 @@ class SecdedEncoding(Encoding):
             self._needs_recompute,
         )
 
-    @override
-    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+    def _invalidate_decoded_cache(self) -> None:
         if not self._needs_recompute:
             logger.debug("Invalidating decoded tensor cache due to fault injection.")
         self._needs_recompute = True
+
+    @override
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+        self._invalidate_decoded_cache()
         self._encoded_data.apply_fault(fault_to_rust(fault), target_bit)
+
+    @override
+    def apply_faults(self, faults: Sequence[tuple[Fault, int]]) -> None:
+        self._invalidate_decoded_cache()
+        self._encoded_data.apply_faults(
+            [(fault_to_rust(fault), target_bit) for fault, target_bit in faults]
+        )
 
     @override
     def bit_count(self) -> int:

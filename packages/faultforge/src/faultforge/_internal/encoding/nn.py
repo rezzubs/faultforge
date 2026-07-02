@@ -1,6 +1,7 @@
 """PyTorch Modules with encoded parameters"""
 
 import copy
+from collections.abc import Sequence
 from typing import override
 
 import torch
@@ -104,6 +105,15 @@ class EncodedModule(nn.Module):
         """
         self._dirty = True
         self._memory.apply_fault(fault, target_bit)
+
+    def apply_faults(self, faults: Sequence[tuple[Fault, int]]) -> None:
+        """Apply multiple faults at once.
+
+        Equivalent to calling `apply_fault` in a loop, but faster: see
+        `Encoding.apply_faults`.
+        """
+        self._dirty = True
+        self._memory.apply_faults(faults)
 
     def bit_count(self) -> int:
         """Return the number of bits in the encoded data."""

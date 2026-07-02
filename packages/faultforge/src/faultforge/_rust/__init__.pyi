@@ -66,6 +66,18 @@ def list_of_array_fault_u8(
     fault: Fault,
     target_bit: int,
 ) -> None: ...
+def list_of_array_faults_f32(
+    input: ListOfArray[np.float32],
+    faults: list[tuple[Fault, int]],
+) -> None: ...
+def list_of_array_faults_u16(
+    input: ListOfArray[np.uint16],
+    faults: list[tuple[Fault, int]],
+) -> None: ...
+def list_of_array_faults_u8(
+    input: ListOfArray[np.uint8],
+    faults: list[tuple[Fault, int]],
+) -> None: ...
 def compare_array_list_bitwise_f32(
     a: ListOfArray[np.float32],
     b: ListOfArray[np.float32],

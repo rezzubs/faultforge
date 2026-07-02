@@ -5,6 +5,7 @@ See `faultforge.encoding` for a general overview.
 
 import abc
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
@@ -18,6 +19,7 @@ from faultforge._internal.progress import Progress, stage
 from faultforge._internal.tensor import (
     tensor_list_dtype,
     tensor_list_fault,
+    tensor_list_faults,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,6 +63,17 @@ class Encoding:
     def apply_fault(self, fault: Fault, target_bit: int) -> None:
         """Apply a fault to the encoded data at the given bit index."""
         ...
+
+    def apply_faults(self, faults: Sequence[tuple[Fault, int]]) -> None:
+        """Apply multiple faults at once.
+
+        The default implementation just calls `apply_fault` in a loop.
+        Encodings that can apply a batch more efficiently than one fault at a
+        time (e.g. by only paying a per-call conversion overhead once for the
+        whole batch) should override this.
+        """
+        for fault, target_bit in faults:
+            self.apply_fault(fault, target_bit)
 
     @abc.abstractmethod
     def bit_count(self) -> int:
@@ -205,12 +218,20 @@ class InPlaceEncoding(TensorEncoding):
         self._decoded_tensors = decoded
         return decoded
 
-    @override
-    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+    def _invalidate_decoded_cache(self) -> None:
         if self._decoded_tensors is not None:
             logger.debug("Invalidating decoded tensors due to fault injection")
         self._decoded_tensors = None
+
+    @override
+    def apply_fault(self, fault: Fault, target_bit: int) -> None:
+        self._invalidate_decoded_cache()
         tensor_list_fault(self._encoded_data, fault, target_bit)
+
+    @override
+    def apply_faults(self, faults: Sequence[tuple[Fault, int]]) -> None:
+        self._invalidate_decoded_cache()
+        tensor_list_faults(self._encoded_data, list(faults))
 
     @override
     def bit_count(self) -> int:

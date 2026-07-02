@@ -42,30 +42,47 @@ def tensor_list_fault(ts: list[torch.Tensor], fault: Fault, target_bit: int):
             - If values in `ts` don't all have the same data type.
             - If the data type is unsupported. See `FiDtype`.
     """
+    tensor_list_faults(ts, [(fault, target_bit)])
+
+
+def tensor_list_faults(ts: list[torch.Tensor], faults: list[tuple[Fault, int]]) -> None:
+    """Apply multiple faults, given as `(fault, target_bit)` pairs.
+
+    Every tensor in `ts` is converted to numpy and copied back exactly once
+    for the whole batch rather than once per fault, which matters a lot: a
+    single tensor's `numpy(force=True)`/`copy_()` round-trip is O(numel), so
+    doing it per-fault instead of per-batch turns fault injection from
+    O(faults * numel) into O(faults + numel).
+
+    Raises:
+        ValueError:
+            - If values in `ts` don't all have the same data type.
+            - If the data type is unsupported. See `FiDtype`.
+    """
 
     dtype = tensor_list_dtype(ts)
 
     if dtype is None:
         raise ValueError("`ts` is empty")
 
-    fault: _rust.Fault = fault_to_rust(fault)
+    rust_faults = [(fault_to_rust(fault), target_bit) for fault, target_bit in faults]
 
     # NOTE: the length checks are handled in rust.
     match FiDtype.from_torch(dtype):
         case FiDtype.F32:
             with torch.no_grad():
                 np_array = [t.numpy(force=True) for t in ts]
-                _rust.list_of_array_fault_f32(np_array, fault, target_bit)
+                _rust.list_of_array_faults_f32(np_array, rust_faults)
 
         case FiDtype.F16:
             with torch.no_grad():
                 np_array = [t.numpy(force=True).view(np.uint16) for t in ts]
-                _rust.list_of_array_fault_u16(np_array, fault, target_bit)
+                _rust.list_of_array_faults_u16(np_array, rust_faults)
                 np_array = [t.view(np.float16) for t in np_array]
         case FiDtype.U8:
             with torch.no_grad():
                 np_array = [t.numpy(force=True) for t in ts]
-                _rust.list_of_array_fault_u8(np_array, fault, target_bit)
+                _rust.list_of_array_faults_u8(np_array, rust_faults)
 
     for original, updated in zip(ts, np_array, strict=True):
         # We have to assert because Tensor.numpy returns `Unknown`.

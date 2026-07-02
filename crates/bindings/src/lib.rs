@@ -63,6 +63,12 @@ mod _rust {
     use crate::fault_injection::list_of_array_fault_u8;
     #[pymodule_export]
     use crate::fault_injection::list_of_array_fault_u16;
+    #[pymodule_export]
+    use crate::fault_injection::list_of_array_faults_f32;
+    #[pymodule_export]
+    use crate::fault_injection::list_of_array_faults_u8;
+    #[pymodule_export]
+    use crate::fault_injection::list_of_array_faults_u16;
 
     #[pymodule_export]
     use crate::comparison::compare_array_list_bitwise_f32;

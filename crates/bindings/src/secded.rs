@@ -161,15 +161,32 @@ impl PyEncoding {
         fault: PyFault,
         target_bit: usize,
     ) -> PyResult<()> {
-        if target_bit >= self.bit_count(py) {
-            return Err(PyIndexError::new_err(format!(
-                "target_bit {} is out of bounds",
-                target_bit
-            )));
+        self.apply_faults(py, vec![(fault, target_bit)])
+    }
+
+    /// Apply multiple faults at once.
+    ///
+    /// This is much cheaper than calling `apply_fault` in a loop: the whole
+    /// encoded buffer is round-tripped through Python objects (`to_rust`/
+    /// `from_rust`) exactly once for the batch instead of once per fault,
+    /// even though flipping a single bit is itself O(1).
+    pub fn apply_faults<'py>(
+        &mut self,
+        py: Python<'py>,
+        faults: Vec<(PyFault, usize)>,
+    ) -> PyResult<()> {
+        let bit_count = self.bit_count(py);
+        for (_, target_bit) in &faults {
+            if *target_bit >= bit_count {
+                return Err(PyIndexError::new_err(format!(
+                    "target_bit {} is out of bounds",
+                    target_bit
+                )));
+            }
         }
 
         let mut encoding = self.to_rust(py)?;
-        encoding.apply_fault(fault.0, target_bit);
+        encoding.apply_faults(faults.into_iter().map(|(fault, target_bit)| (fault.0, target_bit)));
 
         *self = PyEncoding::from_rust(py, encoding, self.data_bit_count, self.item_counts.clone())?;
 

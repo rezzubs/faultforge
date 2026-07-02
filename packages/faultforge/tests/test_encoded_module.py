@@ -119,3 +119,59 @@ def test_clone_fault_does_not_affect_original(
         after = encoded.forward(x)
 
     assert torch.eq(before, after).all()
+
+
+@pytest.mark.parametrize(
+    "encoder",
+    [
+        IdentityEncoder(),
+        SecdedEncoder(bits_per_chunk=64),
+        CepEncoder(),
+        MsetEncoder(),
+    ],
+)
+@given(
+    in_features=st.integers(min_value=1, max_value=16),
+    out_features=st.integers(min_value=1, max_value=16),
+    dtype=_DTYPES,
+    data=st.data(),
+)
+def test_apply_faults_matches_sequential_apply_fault(
+    encoder: Encoder,
+    in_features: int,
+    out_features: int,
+    dtype: torch.dtype,
+    data: st.DataObject,
+) -> None:
+    module = nn.Linear(in_features, out_features).to(dtype=dtype)
+    encoded = EncodedModule(module, encoder)
+
+    bit_count = encoded.bit_count()
+    target_bits = data.draw(
+        st.lists(
+            st.integers(min_value=0, max_value=bit_count - 1),
+            min_size=1,
+            max_size=min(bit_count, 8),
+            unique=True,
+        )
+    )
+
+    batched = encoded.clone()
+    batched.apply_faults([(BitFlip(), bit) for bit in target_bits])
+
+    sequential = encoded.clone()
+    for bit in target_bits:
+        sequential.apply_fault(BitFlip(), bit)
+
+    # Compare decoded parameters bit-exactly rather than via a forward pass:
+    # a bit flip can legitimately produce NaN, and NaN != NaN under normal
+    # float comparison even when the underlying bit patterns are identical.
+    int_dtype = torch.int32 if dtype == torch.float32 else torch.int16
+    batched_params = list(batched.decode().parameters())
+    sequential_params = list(sequential.decode().parameters())
+    for batched_param, sequential_param in zip(
+        batched_params, sequential_params, strict=True
+    ):
+        assert torch.equal(
+            batched_param.view(int_dtype), sequential_param.view(int_dtype)
+        )

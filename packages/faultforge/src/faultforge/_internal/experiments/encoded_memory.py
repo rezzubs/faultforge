@@ -268,9 +268,8 @@ class EncodedFaultInjection(Experiment[int, int | None]):
 
         picker = Picker(self._model.bit_count())
         model = self._model.clone()
-        with stage(
-            self._progress, "Fault Injection", total=self._faulty_bit_count
-        ) as s:
+        with stage(self._progress, "Fault Injection"):
+            fault_targets: list[tuple[BitFlip, int]] = []
             for _ in range(self._faulty_bit_count):
                 try:
                     fault_target = next(picker)
@@ -278,9 +277,9 @@ class EncodedFaultInjection(Experiment[int, int | None]):
                     raise RuntimeError(
                         "Expected fault targets to be within range but picker is exhausted"
                     )
+                fault_targets.append((BitFlip(), fault_target))
 
-                model.apply_fault(BitFlip(), fault_target)
-                s.advance()
+            model.apply_faults(fault_targets)
 
         result = BatchReliability(correct=0, total=0)
         with stage(self._progress, "Inference", total=self._dataset.batch_count()) as s:
