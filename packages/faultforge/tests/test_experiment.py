@@ -11,8 +11,10 @@ import pytest
 from faultforge import Fingerprint
 from faultforge.experiment import (
     Experiment,
+    RunLimit,
     SaveConfig,
-    StabilityConfig,
+    Stability,
+    StopCondition,
 )
 from pydantic import BaseModel
 
@@ -34,25 +36,27 @@ class _SavedData(BaseModel):
 
 
 class _TestExperiment(Experiment):
-    _max_runs: int | None
     _fingerprint: Fingerprint
     _results: dict[int, _TestResult]
+    _intrinsic_stop_conditions: list[StopCondition]
 
     def __init__(
         self,
         results: dict[int, _TestResult] | None = None,
         name: str = "test",
     ) -> None:
-        self._max_runs = None
         self._fingerprint = _fingerprint(name)
         self._results = results or {}
+        self._intrinsic_stop_conditions = []
 
-    def set_max_runs(self, max_runs: int | None) -> None:
-        self._max_runs = max_runs
+    def add_stop_condition(self, condition: StopCondition) -> None:
+        """Contribute an additional intrinsic condition, as if a subclass had
+        overridden `stop_conditions` itself."""
+        self._intrinsic_stop_conditions.append(condition)
 
     @override
-    def max_runs(self) -> int | None:
-        return self._max_runs
+    def stop_conditions(self) -> Sequence[StopCondition]:
+        return self._intrinsic_stop_conditions
 
     @override
     def scores(self) -> Sequence[float]:
@@ -100,13 +104,37 @@ def test_margin_of_error_identical_values():
     assert make([3.0, 3.0]).margin_of_error() == 0.0
 
 
+# SECTION format_status
+
+
+def test_format_status_no_results_is_none():
+    assert make().format_status() is None
+
+
+def test_format_status_shows_mean_once_two_scores():
+    # Mean/margin-of-error display isn't gated by any `Stability` condition -
+    # it shows up as soon as there's enough data, regardless of whether
+    # stopping is configured at all.
+    exp = make([1.0, 2.0])
+    status = exp.format_status()
+    assert status is not None
+    assert "mean" in status
+    assert "±" in status
+
+
+def test_format_status_omits_margin_with_one_score():
+    exp = make([1.0])
+    status = exp.format_status()
+    assert status is not None
+    assert "±" not in status
+
+
 # SECTION run_loop
 
 
-def test_run_loop_stops_at_max_runs():
+def test_run_loop_stops_at_run_limit():
     exp = make()
-    exp.set_max_runs(5)
-    exp.run_loop()
+    exp.run_loop(stop_conditions=[RunLimit(5)])
     assert exp.run_count() == 5
 
 
@@ -117,26 +145,35 @@ def test_run_loop_stops_when_stable():
     min_samples = 5
     exp = make([1.0] * (min_samples + 1))
     initial = exp.run_count()
-    exp.run_loop(
-        stability_config=StabilityConfig(min_samples=min_samples, threshold=0.01)
-    )
+    exp.run_loop(stop_conditions=[Stability(min_samples=min_samples, threshold=0.01)])
     assert exp.run_count() == initial
 
 
 def test_run_loop_does_not_stop_before_min_samples():
     # Even with a low margin of error, stability is skipped until min_samples
-    # is reached.
+    # is reached; RunLimit is what actually stops this run. RunLimit counts
+    # runs from when it starts tracking, so 3 more on top of the 3 pre-loaded
+    # results reaches a total of 6.
     exp = make([1.0] * 3)
-    exp.set_max_runs(6)
-    exp.run_loop(stability_config=StabilityConfig(min_samples=10, threshold=999.0))
+    exp.run_loop(
+        stop_conditions=[
+            Stability(min_samples=10, threshold=999.0),
+            RunLimit(3),
+        ]
+    )
     assert exp.run_count() == 6
 
 
 def test_run_loop_continues_while_unstable():
-    # Incrementing values → margin of error never reaches 0 → runs to max_runs.
+    # Incrementing values → margin of error never reaches 0 → runs to the
+    # run limit instead of stopping via stability.
     exp = make()
-    exp.set_max_runs(20)
-    exp.run_loop(stability_config=StabilityConfig(min_samples=2, threshold=0.0))
+    exp.run_loop(
+        stop_conditions=[
+            Stability(min_samples=2, threshold=0.0),
+            RunLimit(20),
+        ]
+    )
     assert exp.run_count() == 20
 
 
@@ -145,9 +182,22 @@ def test_run_loop_stability_check_with_single_sample_does_not_crash():
     # still returns None (fewer than 2 results), which used to raise
     # UnboundLocalError instead of just continuing.
     exp = make()
-    exp.set_max_runs(3)
-    exp.run_loop(stability_config=StabilityConfig(min_samples=1, threshold=0.01))
+    exp.run_loop(
+        stop_conditions=[
+            Stability(min_samples=1, threshold=0.01),
+            RunLimit(3),
+        ]
+    )
     assert exp.run_count() == 3
+
+
+def test_run_loop_merges_intrinsic_and_caller_stop_conditions():
+    # An experiment's own `stop_conditions()` override is checked alongside
+    # whatever the caller passes to `run_loop` - whichever fires first wins.
+    exp = make()
+    exp.add_stop_condition(RunLimit(4))
+    exp.run_loop(stop_conditions=[RunLimit(10)])
+    assert exp.run_count() == 4
 
 
 # SECTION save/load round-trip
@@ -228,9 +278,11 @@ def test_save_atomic_uses_tempfile(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 def test_run_loop_saves_at_end(tmp_path: Path):
     exp = make()
-    exp.set_max_runs(3)
     path = tmp_path / "experiment.json"
-    exp.run_loop(save_config=SaveConfig(path=path, interval_seconds=None))
+    exp.run_loop(
+        stop_conditions=[RunLimit(3)],
+        save_config=SaveConfig(path=path, interval_seconds=None),
+    )
     assert path.exists()
     loaded = make()
     loaded.load_from(path)

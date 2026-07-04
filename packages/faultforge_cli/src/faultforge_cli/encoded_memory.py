@@ -16,7 +16,7 @@ from faultforge.encoding import (
     MsetEncoder,
     SecdedEncoder,
 )
-from faultforge.experiment import SaveConfig, StabilityConfig
+from faultforge.experiment import RunLimit, SaveConfig, Stability, StopCondition
 from faultforge.experiments.encoded_memory import (
     EncodedFaultInjection,
     ReliabilityMetric,
@@ -329,6 +329,8 @@ def record(
         device=device,
         progress=Progress(),
     )
+    stop_conditions: list[StopCondition] = []
+
     save_config: SaveConfig | None = None
     if output is not None:
         output = Path(output).expanduser()
@@ -340,15 +342,17 @@ def record(
 
         save_config = SaveConfig(path=output, interval_seconds=autosave)
 
-    stability_config: StabilityConfig | None = None
     if stability_threshold is not None:
         if min_runs is None:
             min_samples = 0
         else:
             min_samples = min_runs
-        stability_config = StabilityConfig(
-            min_samples=min_samples, threshold=stability_threshold
+        stop_conditions.append(
+            Stability(min_samples=min_samples, threshold=stability_threshold)
         )
+
+    if runs is not None:
+        stop_conditions.append(RunLimit(runs))
 
     if output is not None and output.exists():
         try:
@@ -361,11 +365,4 @@ def record(
                 f"{output} was recorded with a different configuration and will be overwritten:\n{error}"
             )
 
-    if runs is not None:
-        for _ in range(runs):
-            experiment.run()
-        if output is not None:
-            experiment.save_atomic(output)
-            return
-
-    experiment.run_loop(stability_config=stability_config, save_config=save_config)
+    experiment.run_loop(stop_conditions=stop_conditions, save_config=save_config)

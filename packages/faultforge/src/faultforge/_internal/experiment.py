@@ -10,8 +10,14 @@ import signal
 import tempfile
 import time
 import types
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import (
+    Callable,
+    Sequence,
+)
+from dataclasses import (
+    dataclass,
+    field,
+)
 from pathlib import Path
 from typing import IO
 
@@ -20,16 +26,6 @@ import scipy.stats
 from faultforge._internal.common import AnyPath
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True)
-class StabilityConfig:
-    """When `Experiment.run_loop` should stop based on the stability of the mean score."""
-
-    min_samples: int
-    """Minimum number of runs before checking the stopping criterion."""
-    threshold: float
-    """Stop when the relative margin of error (the 95% margin of error as a percentage of the mean) falls below this value, e.g. 1.0 = 1%."""
 
 
 @dataclass(slots=True)
@@ -42,21 +38,94 @@ class SaveConfig:
     """How many seconds between saves. None means save only at the end."""
 
 
-@dataclass(slots=True)
-class DisplayConfig:
-    """How `Experiment.format_status` renders a score.
+def relative_margin_of_error(
+    mean: float | None, margin_of_error: float | None
+) -> float | None:
+    """The 95% margin of error as a percentage of the mean.
 
-    Returned by `Experiment.display`, purely a description of what this
-    experiment's score means, computed on demand the same way `fingerprint`
-    describes its identity on demand.
+    `None` if either input is `None`. A mean of exactly `0` would otherwise
+    raise `ZeroDivisionError` (a legitimate outcome for e.g. a 0% SDC score);
+    that case is treated as 0% relative error when there is no error either,
+    and as an undefined (infinite) relative error otherwise.
     """
+    if mean is None or margin_of_error is None:
+        return None
+    if mean == 0:
+        return 0.0 if margin_of_error == 0 else float("inf")
+    return margin_of_error / mean * 100
 
-    score_name: str = "Score"
-    """The name given to the result score."""
-    score_unit: str | None = None
-    """The unit printed after the result score."""
-    score_fmt: str = "6.2f"
-    """The format string used for printing result scores."""
+
+class ExperimentDisplay:
+    """Formats an `Experiment`'s status line for `run_loop`.
+
+    Returned by `Experiment.display`; nothing here is stored on the experiment,
+    it's computed on demand. Override any piece to customize; the default
+    renders `[Run n]: name = score unit | mean ± moe (95% CI) | Relative MoE: x%
+    of mean`."""
+
+    def score_name(self) -> str | None:
+        """The name given to the result score, or None to omit it."""
+        return None
+
+    def score_unit(self) -> str | None:
+        """The unit printed after a score, or None to omit it."""
+        return None
+
+    def format_score(self, score: float) -> str:
+        """Format a single score value (the latest score, mean, or margin of error)."""
+        return f"{score:6.2f}"
+
+    def progress_label(self, run_count: int) -> str:
+        """The leading `[...]` progress marker.
+
+        The base case only knows the run count. An experiment that also
+        knows a total (e.g. an exhaustive search over a known number of
+        cases) should override this using a value it tracks itself, rather
+        than have `Experiment` prescribe a "total" concept every subclass
+        must carry.
+        """
+        return f"[Run {run_count}]"
+
+    def format(
+        self,
+        *,
+        run_count: int,
+        score: float,
+        mean: float | None,
+        margin_of_error: float | None,
+    ) -> str:
+        """Compose the full status line from the pieces above."""
+        parts: list[str] = [self.progress_label(run_count), ": "]
+
+        score_name = self.score_name()
+        if score_name is not None:
+            parts.append(score_name)
+            parts.append(" = ")
+
+        score_unit = self.score_unit()
+
+        parts.append(self.format_score(score))
+        if score_unit is not None:
+            parts.append(score_unit)
+
+        if mean is not None:
+            parts.append(" | ")
+            parts.append(f"mean {self.format_score(mean)}")
+            if score_unit is not None:
+                parts.append(score_unit)
+
+            if margin_of_error is not None:
+                parts.append(f" ±{self.format_score(margin_of_error)} (95% CI)")
+                relative = relative_margin_of_error(mean, margin_of_error)
+                if relative is not None:
+                    parts.append(f" | Relative MoE: {relative:.2f}% of mean")
+
+        return "".join(parts)
+
+
+# A check run by `Experiment.run_loop` each iteration, before `run`. Returns a
+# human-readable reason to stop, or `None` to keep going.
+type StopCondition = Callable[[Experiment], str | None]
 
 
 class Experiment(abc.ABC):
@@ -70,7 +139,7 @@ class Experiment(abc.ABC):
     - `scores`: report every recorded score so far, in run order, as plain
       floats. This is the only view the generic machinery below needs, so it
       never has to know your result type.
-    - `display`: describe how to format your score for `format_status`.
+    - `display`: describe how to format your score, via `ExperimentDisplay`.
     - `serialize` / `deserialize`: turn your own state into a string and back.
       That's the only shape-specific part of persistence; `save`/`save_file`/
       `save_atomic`/`load_from`/`load_from_file` handle the file mechanics
@@ -81,12 +150,15 @@ class Experiment(abc.ABC):
       output and check it in `deserialize` via `Fingerprint.raise_if_differs`,
       which raises `FingerprintError` on a mismatch.
 
-    `run_loop` drives the experiment: it calls `run` repeatedly, prints
-    progress via `format_status`, and stops once a `StabilityConfig`
-    threshold is met, `max_runs` is exhausted, or the user interrupts with
-    Ctrl+C. `StabilityConfig`/`SaveConfig` are passed to `run_loop` directly
-    rather than stored on the experiment, since they're session-level
-    concerns decided by the caller, not part of the experiment's identity.
+    `run_loop` drives the experiment: it calls `run` repeatedly, prints progress
+    via `format_status`, and stops once any `StopCondition` fires - including
+    Ctrl+C, which is just another condition `run_loop` installs internally.
+    Conditions come from two places: `stop_conditions()`, overridden by a
+    subclass to contribute conditions driven by its own internal state (e.g. "no
+    distinct runs remain"), and the `stop_conditions` argument to `run_loop`
+    itself, for session-level concerns decided by the caller (e.g. `Stability`,
+    `RunLimit`). Neither is required - by default `run_loop` runs until
+    interrupted.
 
     See `faultforge.experiments.encoded_memory` for a complete example.
     """
@@ -99,9 +171,18 @@ class Experiment(abc.ABC):
     def scores(self) -> Sequence[float]:
         """Every score recorded so far, in the order the runs happened."""
 
-    def display(self) -> DisplayConfig:
+    def display(self) -> ExperimentDisplay:
         """Describes how `format_status` should render this experiment's score."""
-        return DisplayConfig()
+        return ExperimentDisplay()
+
+    def stop_conditions(self) -> Sequence[StopCondition]:
+        """Stop conditions intrinsic to this experiment.
+
+        Checked by `run_loop` alongside any passed in by the caller. Override
+        to contribute e.g. an exhaustion check driven by your own internal
+        state; the default contributes none.
+        """
+        return ()
 
     @abc.abstractmethod
     def serialize(self) -> str:
@@ -152,10 +233,6 @@ class Experiment(abc.ABC):
         """
         self.deserialize(file.read())
 
-    def max_runs(self) -> int | None:
-        """The number of possible different runs."""
-        return None
-
     def run_count(self) -> int:
         """Return the number of recorded runs."""
         return len(self.scores())
@@ -163,18 +240,17 @@ class Experiment(abc.ABC):
     def run_loop(
         self,
         *,
-        stability_config: StabilityConfig | None = None,
+        stop_conditions: Sequence[StopCondition] = (),
         save_config: SaveConfig | None = None,
     ) -> None:
-        """Keep running until interrupted, reached stability, or exhausted all possible cases."""
+        """Keep running until a stop condition is met, including Ctrl+C."""
 
-        stop_requested = False
+        interrupted = _Interrupted()
         original_handler = signal.getsignal(signal.SIGINT)
 
         def _handle_first_interrupt(sig: int, frame: types.FrameType | None) -> None:
             _ = sig, frame
-            nonlocal stop_requested
-            stop_requested = True
+            interrupted.trigger()
             logger.info(
                 "Received Ctrl+C. Finishing current run before stopping. Use Ctrl+C again to force quit."
             )
@@ -182,37 +258,21 @@ class Experiment(abc.ABC):
 
         _ = signal.signal(signal.SIGINT, _handle_first_interrupt)
 
+        all_conditions = [*self.stop_conditions(), *stop_conditions, interrupted]
+
         dirty = False
         passed_seconds = 0.0
         start = time.monotonic()
 
         try:
-            while not stop_requested:
-                max_runs = self.max_runs()
-                if max_runs is not None and self.run_count() >= max_runs:
-                    logger.info("Exhausted all possible cases.")
-                    break
-
-                mean, margin_of_error = self._stability_metrics(stability_config)
-                relative_margin_of_error = self._relative_margin_of_error(
-                    mean, margin_of_error
-                )
-
-                if (
-                    stability_config is not None
-                    and relative_margin_of_error is not None
-                    and relative_margin_of_error <= stability_config.threshold
-                ):
-                    logger.info(
-                        f"Reached stability threshold {stability_config.threshold:.2f}% ({relative_margin_of_error:.2f}%), stopping."
-                    )
+            while True:
+                reason = _first_stop_reason(all_conditions, self)
+                if reason is not None:
+                    logger.info(reason)
                     break
 
                 self.run()
-                # Recomputed rather than reusing `mean`/`margin_of_error` above:
-                # the existing stability metrics were computed before
-                # `self.run()` and would otherwise be stale by one run.
-                print(self.format_status(*self._stability_metrics(stability_config)))
+                print(self.format_status())
                 dirty = True
 
                 if save_config is not None and save_config.interval_seconds is not None:
@@ -256,93 +316,84 @@ class Experiment(abc.ABC):
             return None
         return float(sum(scores) / len(scores))
 
-    def _stability_metrics(
-        self, stability_config: StabilityConfig | None
-    ) -> tuple[float | None, float | None]:
-        """Return `(mean_score(), margin_of_error())` once `stability_config.min_samples`
-        has been reached; `(None, None)` if stability checking isn't configured
-        or there aren't enough runs yet.
-        """
-        if stability_config is None or self.run_count() < stability_config.min_samples:
-            return None, None
-        return self.mean_score(), self.margin_of_error()
-
-    @staticmethod
-    def _relative_margin_of_error(
-        mean: float | None, margin_of_error: float | None
-    ) -> float | None:
-        """The 95% margin of error as a percentage of the mean.
-
-        `None` if either input is `None`. A mean of exactly `0` would otherwise
-        raise `ZeroDivisionError` (a legitimate outcome for e.g. a 0% SDC
-        score); that case is treated as 0% relative error when there is no
-        error either, and as an undefined (infinite) relative error
-        otherwise.
-        """
-        if mean is None or margin_of_error is None:
-            return None
-        if mean == 0:
-            return 0.0 if margin_of_error == 0 else float("inf")
-        return margin_of_error / mean * 100
-
-    def format_status(
-        self, mean: float | None, margin_of_error: float | None
-    ) -> str | None:
+    def format_status(self) -> str | None:
         """Formats the current status of the experiment as a str.
 
         None if there are no results yet.
         """
         scores = self.scores()
-        run_count = len(scores)
-        if run_count == 0:
+        if not scores:
             return None
+        return self.display().format(
+            run_count=len(scores),
+            score=scores[-1],
+            mean=self.mean_score(),
+            margin_of_error=self.margin_of_error(),
+        )
 
-        if mean is None:
-            mean = self.mean_score()
-        if margin_of_error is None:
-            margin_of_error = self.margin_of_error()
 
-        display = self.display()
-        parts: list[str] = []
+class _Interrupted:
+    """A `StopCondition` that fires once Ctrl+C has been received.
 
-        max_runs = self.max_runs()
-        if max_runs is not None:
-            width = len(str(max_runs))
-            completion_percentage = (run_count / max_runs) * 100
-            progress = (
-                f"[{run_count:>{width}} / {max_runs} | {completion_percentage:6.2f}%]: "
+    Installed by `run_loop` as one of its stop conditions, so an interrupt is
+    just another reason the loop stops rather than a separate boolean path.
+    """
+
+    def __init__(self) -> None:
+        self._triggered = False
+
+    def trigger(self) -> None:
+        self._triggered = True
+
+    def __call__(self, experiment: Experiment) -> str | None:
+        _ = experiment
+        return "Interrupted by Ctrl+C" if self._triggered else None
+
+
+def _first_stop_reason(
+    conditions: Sequence[StopCondition], experiment: Experiment
+) -> str | None:
+    """The reason given by the first condition in `conditions` that wants to stop, if any."""
+    for condition in conditions:
+        if (reason := condition(experiment)) is not None:
+            return reason
+    return None
+
+
+@dataclass(slots=True)
+class Stability:
+    """A `StopCondition`: stop once the mean score's margin of error is small
+    relative to the mean."""
+
+    min_samples: int
+    """Minimum number of runs before checking the stopping criterion."""
+    threshold: float
+    """Stop when the relative margin of error (95% margin of error as a percentage of the mean) falls below this value, e.g. 1.0 = 1%."""
+
+    def __call__(self, experiment: Experiment) -> str | None:
+        if experiment.run_count() < self.min_samples:
+            return None
+        relative = relative_margin_of_error(
+            experiment.mean_score(), experiment.margin_of_error()
+        )
+        if relative is not None and relative <= self.threshold:
+            return (
+                f"Reached stability threshold {self.threshold:.2f}% ({relative:.2f}%)"
             )
-        else:
-            progress = f"[Run {run_count}]: "
+        return None
 
-        parts.append(progress)
 
-        if display.score_name is not None:
-            parts.append(display.score_name)
-            parts.append(" = ")
+@dataclass(slots=True)
+class RunLimit:
+    """A `StopCondition`: stop after `limit` additional runs since this
+    instance started tracking."""
 
-        parts.append(f"{scores[-1]:{display.score_fmt}}")
+    limit: int
+    _baseline: int | None = field(default=None, init=False, repr=False)
 
-        if display.score_unit is not None:
-            parts.append(display.score_unit)
-
-        parts.append(" | ")
-
-        if mean is not None:
-            parts.append(f"mean {mean:{display.score_fmt}}")
-
-            if display.score_unit is not None:
-                parts.append(display.score_unit)
-
-            if margin_of_error is not None:
-                parts.append(f" ±{margin_of_error:{display.score_fmt}} (95% CI)")
-
-                relative_margin_of_error = self._relative_margin_of_error(
-                    mean, margin_of_error
-                )
-                if relative_margin_of_error is not None:
-                    parts.append(
-                        f" | Relative MoE: {relative_margin_of_error:.2f}% of mean"
-                    )
-
-        return "".join(parts)
+    def __call__(self, experiment: Experiment) -> str | None:
+        if self._baseline is None:
+            self._baseline = experiment.run_count()
+        if experiment.run_count() - self._baseline >= self.limit:
+            return f"Reached requested run limit ({self.limit})"
+        return None

@@ -19,8 +19,8 @@ from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.encoding.abc import Encoder
 from faultforge._internal.encoding.nn import EncodedModule
 from faultforge._internal.experiment import (
-    DisplayConfig,
     Experiment,
+    ExperimentDisplay,
 )
 from faultforge._internal.fault import BitFlip
 from faultforge._internal.fingerprint import Fingerprint
@@ -89,6 +89,21 @@ class _SavedData(BaseModel):
     fingerprint: Fingerprint
     total_items: int | None
     results: list[int]
+
+
+class _Display(ExperimentDisplay):
+    """`EncodedFaultInjection`'s display: names/units the score per metric."""
+
+    def __init__(self, metric: ReliabilityMetric) -> None:
+        self._metric = metric
+
+    @override
+    def score_name(self) -> str | None:
+        return self._metric.score_name()
+
+    @override
+    def score_unit(self) -> str | None:
+        return "%"
 
 
 @final
@@ -258,10 +273,8 @@ class EncodedFaultInjection(Experiment):
         return [self._score(correct) for correct in self._results]
 
     @override
-    def display(self) -> DisplayConfig:
-        return DisplayConfig(
-            score_name=self._reliability_metric.score_name(), score_unit="%"
-        )
+    def display(self) -> ExperimentDisplay:
+        return _Display(self._reliability_metric)
 
     @override
     def serialize(self) -> str:

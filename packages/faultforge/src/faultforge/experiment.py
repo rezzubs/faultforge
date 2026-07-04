@@ -4,15 +4,21 @@ See `Experiment` for the full overview.
 """
 
 from faultforge._internal.experiment import (
-    DisplayConfig,
     Experiment,
+    ExperimentDisplay,
+    RunLimit,
     SaveConfig,
-    StabilityConfig,
+    Stability,
+    StopCondition,
+    relative_margin_of_error,
 )
 
 __all__ = [
-    "DisplayConfig",
     "Experiment",
+    "ExperimentDisplay",
+    "RunLimit",
     "SaveConfig",
-    "StabilityConfig",
+    "Stability",
+    "StopCondition",
+    "relative_margin_of_error",
 ]
