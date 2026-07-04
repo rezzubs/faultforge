@@ -61,7 +61,11 @@ class ExperimentDisplay:
     Returned by `Experiment.display`; nothing here is stored on the experiment,
     it's computed on demand. Override any piece to customize; the default
     renders `[Run n]: name = score unit | mean ± moe (95% CI) | Relative MoE: x%
-    of mean`."""
+    of mean`, with the `Relative MoE` fragment only shown when a `Stability`
+    condition is among the ones currently configured on `run_loop` - it's the
+    exact quantity `Stability` checks against its threshold, so it has nothing
+    to say if there's no threshold to preview.
+    """
 
     def score_name(self) -> str | None:
         """The name given to the result score, or None to omit it."""
@@ -93,8 +97,15 @@ class ExperimentDisplay:
         score: float,
         mean: float | None,
         margin_of_error: float | None,
+        stop_conditions: Sequence[StopCondition] = (),
     ) -> str:
-        """Compose the full status line from the pieces above."""
+        """Compose the full status line from the pieces above.
+
+        `stop_conditions` is whatever's currently configured on `run_loop`
+        (both intrinsic and caller-supplied), passed through so a subclass can
+        shape its output around what's actually being checked - the default
+        implementation uses it only to decide whether to show `Relative MoE`.
+        """
         parts: list[str] = [self.progress_label(run_count), ": "]
 
         score_name = self.score_name()
@@ -108,18 +119,30 @@ class ExperimentDisplay:
         if score_unit is not None:
             parts.append(score_unit)
 
-        if mean is not None:
-            parts.append(" | ")
-            parts.append(f"mean {self.format_score(mean)}")
-            if score_unit is not None:
-                parts.append(score_unit)
+        if mean is None:
+            return "".join(parts)
 
-            if margin_of_error is not None:
-                parts.append(f" ±{self.format_score(margin_of_error)} (95% CI)")
-                relative = relative_margin_of_error(mean, margin_of_error)
-                if relative is not None:
-                    parts.append(f" | Relative MoE: {relative:.2f}% of mean")
+        parts.append(" | ")
+        parts.append(f"mean {self.format_score(mean)}")
+        if score_unit is not None:
+            parts.append(score_unit)
 
+        if margin_of_error is None:
+            return "".join(parts)
+
+        parts.append(f" ±{self.format_score(margin_of_error)} (95% CI)")
+
+        has_stability = any(
+            isinstance(condition, Stability) for condition in stop_conditions
+        )
+        if not has_stability:
+            return "".join(parts)
+
+        relative = relative_margin_of_error(mean, margin_of_error)
+        if relative is None:
+            return "".join(parts)
+
+        parts.append(f" | Relative MoE: {relative:.2f}% of mean")
         return "".join(parts)
 
 
@@ -272,7 +295,7 @@ class Experiment(abc.ABC):
                     break
 
                 self.run()
-                print(self.format_status())
+                print(self.format_status(all_conditions))
                 dirty = True
 
                 if save_config is not None and save_config.interval_seconds is not None:
@@ -316,10 +339,15 @@ class Experiment(abc.ABC):
             return None
         return float(sum(scores) / len(scores))
 
-    def format_status(self) -> str | None:
+    def format_status(
+        self, stop_conditions: Sequence[StopCondition] = ()
+    ) -> str | None:
         """Formats the current status of the experiment as a str.
 
-        None if there are no results yet.
+        None if there are no results yet. `stop_conditions` lets a caller
+        (typically `run_loop`) tell the display what's currently configured;
+        it's `()` if called standalone, which `ExperimentDisplay` treats as
+        "nothing configured" rather than anything meaningful to report on.
         """
         scores = self.scores()
         if not scores:
@@ -329,6 +357,7 @@ class Experiment(abc.ABC):
             score=scores[-1],
             mean=self.mean_score(),
             margin_of_error=self.margin_of_error(),
+            stop_conditions=stop_conditions,
         )
 
 

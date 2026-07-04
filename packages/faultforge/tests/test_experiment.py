@@ -112,9 +112,8 @@ def test_format_status_no_results_is_none():
 
 
 def test_format_status_shows_mean_once_two_scores():
-    # Mean/margin-of-error display isn't gated by any `Stability` condition -
-    # it shows up as soon as there's enough data, regardless of whether
-    # stopping is configured at all.
+    # Mean/margin-of-error display shows up as soon as there's enough data,
+    # regardless of whether any stop condition is configured at all.
     exp = make([1.0, 2.0])
     status = exp.format_status()
     assert status is not None
@@ -127,6 +126,20 @@ def test_format_status_omits_margin_with_one_score():
     status = exp.format_status()
     assert status is not None
     assert "±" not in status
+
+
+def test_format_status_omits_relative_moe_without_stability():
+    exp = make([1.0, 2.0])
+    status = exp.format_status([RunLimit(5)])
+    assert status is not None
+    assert "Relative MoE" not in status
+
+
+def test_format_status_shows_relative_moe_with_stability():
+    exp = make([1.0, 2.0])
+    status = exp.format_status([Stability(min_samples=0, threshold=1.0)])
+    assert status is not None
+    assert "Relative MoE" in status
 
 
 # SECTION run_loop
