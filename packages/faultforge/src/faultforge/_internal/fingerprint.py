@@ -53,6 +53,15 @@ class Fingerprint(BaseModel):
         collect_differences(self, other, [], differences)
         return differences
 
+    def raise_if_differs(self, other: Fingerprint) -> None:
+        """Raise `FingerprintError` if `other` differs from `self`.
+
+        Convenience wrapper around `diff`, e.g. for `Experiment.deserialize`
+        implementations verifying a loaded fingerprint against the current one.
+        """
+        if differences := self.diff(other):
+            raise FingerprintError(differences)
+
 
 class Absent:
     """Marks a value that is present on one side of a diff but not the other."""

@@ -6,10 +6,12 @@ See `faultforge.experiments.encoded_memory` for a general overview.
 import copy
 import enum
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import final, override
 
 import torch
+from pydantic import BaseModel
 from torch import Tensor, nn
 
 from faultforge._internal.common import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DeviceLike
@@ -17,7 +19,6 @@ from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.encoding.abc import Encoder
 from faultforge._internal.encoding.nn import EncodedModule
 from faultforge._internal.experiment import (
-    Data,
     DisplayConfig,
     Experiment,
 )
@@ -82,13 +83,17 @@ class BatchReliability:
         )
 
 
-@final
-class EncodedFaultInjection(Experiment[int, int | None]):
-    """An experiment which emulates single-event upsets in the encoded memory that stores model parameters.
+class _SavedData(BaseModel):
+    """The on-disk shape of an `EncodedFaultInjection`'s results."""
 
-    `data.context` stores the total number of items processed (depending on the
-    chosen metric); this is available after the first run.
-    """
+    fingerprint: Fingerprint
+    total_items: int | None
+    results: list[int]
+
+
+@final
+class EncodedFaultInjection(Experiment):
+    """An experiment which emulates single-event upsets in the encoded memory that stores model parameters."""
 
     _model: EncodedModule
     _dataset: BatchedDataset
@@ -96,11 +101,14 @@ class EncodedFaultInjection(Experiment[int, int | None]):
     _reliability_metric: ReliabilityMetric
     _faulty_bit_count: int
     _progress: Progress | None
+    _fingerprint: Fingerprint
 
     _unencoded_golden: nn.Module | None
 
     # populated during first run
     _golden_results: list[Tensor]
+    _total_items: int | None
+    _results: list[int]
 
     def __init__(
         self,
@@ -118,6 +126,8 @@ class EncodedFaultInjection(Experiment[int, int | None]):
     ) -> None:
         self._progress = progress
         self._golden_results = []
+        self._total_items = None
+        self._results = []
 
         model = bundle.load_model(device, progress=progress)
         if golden_is_encoded:
@@ -180,17 +190,7 @@ class EncodedFaultInjection(Experiment[int, int | None]):
                 f"Resolved bit error rate {faults} to {self._faulty_bit_count} faults"
             )
 
-        super().__init__(
-            data=Data[int, int | None](
-                fingerprint=fingerprint,
-                context=None,
-                results={},
-            ),
-            display=DisplayConfig(
-                score_name=reliability_metric.score_name(),
-                score_unit="%",
-            ),
-        )
+        self._fingerprint = fingerprint
 
     def _process_golden(self, golden_result: Tensor) -> Tensor:
         """Run a function on the golden result after computing it.
@@ -211,8 +211,9 @@ class EncodedFaultInjection(Experiment[int, int | None]):
     def _populate_golden(self):
         """Populate the golden results.
 
-        Additionally sets context to the total number of predictions; this is
-        used for computing SDC scores as well as the number of injected faults.
+        Additionally sets `_total_items` to the total number of predictions;
+        this is used for computing SDC scores as well as the number of
+        injected faults.
         """
         total_items = 0
 
@@ -233,29 +234,49 @@ class EncodedFaultInjection(Experiment[int, int | None]):
         finally:
             self._dataset.reset()
 
-        if self.data.context is None:
-            self.data.context = total_items
+        if self._total_items is None:
+            self._total_items = total_items
         else:
-            assert self.data.context == total_items, (
-                "data.context mismatch vs previous run"
+            assert self._total_items == total_items, (
+                "_total_items mismatch vs previous run"
             )
 
-    @override
-    def result_score(self, result: int) -> float:
-        if self.data.context is None:
+    def _score(self, correct: int) -> float:
+        if self._total_items is None:
             raise RuntimeError("Unable to score a result before the first run")
 
         match self._reliability_metric:
             case ReliabilityMetric.Sdc | ReliabilityMetric.Top1Sdc:
-                return 100 - float(result) / float(self.data.context) * 100
+                return 100 - float(correct) / float(self._total_items) * 100
             case ReliabilityMetric.Accuracy | ReliabilityMetric.AccuracyDegradation:
-                return float(result) / float(self.data.context) * 100
+                return float(correct) / float(self._total_items) * 100
 
     @override
-    def latest_result(self) -> int | None:
-        if not self.data.results:
-            return None
-        return len(self.data.results) - 1
+    def scores(self) -> Sequence[float]:
+        if self._total_items is None:
+            return []
+        return [self._score(correct) for correct in self._results]
+
+    @override
+    def display(self) -> DisplayConfig:
+        return DisplayConfig(
+            score_name=self._reliability_metric.score_name(), score_unit="%"
+        )
+
+    @override
+    def serialize(self) -> str:
+        return _SavedData(
+            fingerprint=self._fingerprint,
+            total_items=self._total_items,
+            results=self._results,
+        ).model_dump_json()
+
+    @override
+    def deserialize(self, content: str) -> None:
+        loaded = _SavedData.model_validate_json(content)
+        self._fingerprint.raise_if_differs(loaded.fingerprint)
+        self._total_items = loaded.total_items
+        self._results = loaded.results
 
     @override
     def run(self) -> None:
@@ -304,19 +325,19 @@ class EncodedFaultInjection(Experiment[int, int | None]):
 
         self._dataset.reset()
 
-        if self.data.context is None:
-            self.data.context = result.total
+        if self._total_items is None:
+            self._total_items = result.total
             assert not self._reliability_metric.requires_golden(), (
-                "context should be set by populate_golden"
+                "_total_items should be set by _populate_golden"
             )
 
-        if result.total != self.data.context:
+        if result.total != self._total_items:
             raise RuntimeError(
-                f"Computed {self.data.context} elements from the golden results, "
+                f"Computed {self._total_items} elements from the golden results, "
                 f"model returned {result.total}"
             )
 
-        self.data.results[len(self.data.results)] = result.correct
+        self._results.append(result.correct)
 
 
 def _batch_critical_sdc(

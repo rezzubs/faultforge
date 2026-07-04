@@ -10,35 +10,16 @@ import signal
 import tempfile
 import time
 import types
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
 import scipy.stats
-from pydantic import BaseModel
 
 from faultforge._internal.common import AnyPath
-from faultforge._internal.fingerprint import Fingerprint, FingerprintError
 
 logger = logging.getLogger(__name__)
-
-
-class Data[R = float, C = None](BaseModel):
-    """The data collected during an experiment.
-
-    This is the part of an experiment that gets saved to disk.
-    """
-
-    fingerprint: Fingerprint
-    """A structural identity used to verify a loaded file against the current configuration."""
-    context: C
-    """Additional context separate from results."""
-    results: dict[int, R]
-    """The results computed thus far.
-
-    Each key should be a unique identifier for that run. For non-deterministic
-    experiments the key can be set to the run number.
-    """
 
 
 @dataclass(slots=True)
@@ -53,94 +34,139 @@ class StabilityConfig:
 
 @dataclass(slots=True)
 class SaveConfig:
-    """Where and how often `Experiment.run_loop` persists its data."""
+    """Where and how often `Experiment.run_loop` persists progress."""
 
     path: AnyPath
-    """Where to save the experiment data."""
+    """Where to save the experiment's results, via `Experiment.save_atomic`."""
     interval_seconds: float | None
     """How many seconds between saves. None means save only at the end."""
 
 
 @dataclass(slots=True)
 class DisplayConfig:
-    """Controls how `Experiment.format_status` renders progress."""
+    """How `Experiment.format_status` renders a score.
 
-    score_name: str | None = None
-    """The name that is given to the result score."""
+    Returned by `Experiment.display`, purely a description of what this
+    experiment's score means, computed on demand the same way `fingerprint`
+    describes its identity on demand.
+    """
+
+    score_name: str = "Score"
+    """The name given to the result score."""
     score_unit: str | None = None
-    """The unit that is printed after the result score."""
+    """The unit printed after the result score."""
     score_fmt: str = "6.2f"
     """The format string used for printing result scores."""
 
 
-class Experiment[R = float, C = None](abc.ABC):
-    """Record a series of experiments.
+class Experiment(abc.ABC):
+    """The behavior of a repeatable, scoreable unit of work.
 
-    Each run produces a result which is scored by `self.result_score`. The
-    `data` attribute will be saved to disk. Other attributes are used for
-    configuration.
+    Subclasses own the shape of their own results (a list, a dict keyed
+    however makes sense, ...) and how that state is persisted; this class only
+    prescribes what's needed to drive and monitor a series of runs:
 
-    The experiment can also have arbitrary context (`C`) associated with it
-    which is saved next to the results.
+    - `run`: perform one iteration and record it internally, any way you like.
+    - `scores`: report every recorded score so far, in run order, as plain
+      floats. This is the only view the generic machinery below needs, so it
+      never has to know your result type.
+    - `display`: describe how to format your score for `format_status`.
+    - `serialize` / `deserialize`: turn your own state into a string and back.
+      That's the only shape-specific part of persistence; `save`/`save_file`/
+      `save_atomic`/`load_from`/`load_from_file` handle the file mechanics
+      (atomic writes, path expansion, reading a path or an already-open file)
+      generically on top of these two. Fingerprinting isn't part of this
+      contract either: if you want to verify a loaded file against your
+      current configuration, include your own `Fingerprint` in `serialize`'s
+      output and check it in `deserialize` via `Fingerprint.raise_if_differs`,
+      which raises `FingerprintError` on a mismatch.
 
-    A concrete experiment is constructed directly from its live components
-    (models, encoders, ...). The identity of those components is captured as a
-    `Fingerprint` in `data.fingerprint` so that a previously saved file can be
-    verified against the current configuration when loaded.
+    `run_loop` drives the experiment: it calls `run` repeatedly, prints
+    progress via `format_status`, and stops once a `StabilityConfig`
+    threshold is met, `max_runs` is exhausted, or the user interrupts with
+    Ctrl+C. `StabilityConfig`/`SaveConfig` are passed to `run_loop` directly
+    rather than stored on the experiment, since they're session-level
+    concerns decided by the caller, not part of the experiment's identity.
 
-    All fields of `data` need to be (de)serializable by pydantic.
+    See `faultforge.experiments.encoded_memory` for a complete example.
     """
-
-    data: Data[R, C]
-    """The data that is saved to disk."""
-    display: DisplayConfig
-    """Configuration for displaying experiment results."""
-    stability_config: StabilityConfig | None
-    """Configuration for stability checking."""
-    save_config: SaveConfig | None
-    """Configuration for saving experiment results."""
-
-    def __init__(
-        self,
-        data: Data[R, C],
-        display: DisplayConfig | None = None,
-        stability_config: StabilityConfig | None = None,
-        save_config: SaveConfig | None = None,
-    ) -> None:
-        self.data = data
-        self.display = display or DisplayConfig()
-        self.stability_config = stability_config
-        self.save_config = save_config
-
-    def result_score(self, result: R) -> float:
-        """Convert a result to a float score.
-
-        A default implementation is provided for `float` and `int` results. For
-        other result types this should be overridden.
-        """
-        if isinstance(result, (float, int)):
-            return float(result)
-        raise NotImplementedError(
-            f"{type(self)} did not override `score` but has a custom result type {type(result)}"
-        )
 
     @abc.abstractmethod
     def run(self) -> None:
-        """Run a single iteration of the experiment."""
+        """Run a single iteration and record its result internally."""
 
     @abc.abstractmethod
-    def latest_result(self) -> int | None:
-        """Return the id of the latest result."""
-        ...
+    def scores(self) -> Sequence[float]:
+        """Every score recorded so far, in the order the runs happened."""
+
+    def display(self) -> DisplayConfig:
+        """Describes how `format_status` should render this experiment's score."""
+        return DisplayConfig()
+
+    @abc.abstractmethod
+    def serialize(self) -> str:
+        """Serialize current results to a string, for `save`/`save_atomic`.
+
+        If you want to guard against loading a file saved under a different
+        configuration, include your own `Fingerprint` in the output here so
+        `deserialize` can check it, e.g. via `Fingerprint.raise_if_differs`.
+        """
+
+    @abc.abstractmethod
+    def deserialize(self, content: str) -> None:
+        """Restore results from a string previously produced by `serialize`."""
+
+    def save(self, path: AnyPath) -> None:
+        """Save current results to `path`."""
+        with open(Path(path).expanduser(), "w") as f:
+            self.save_file(f)
+
+    def save_file(self, file: IO[str]) -> None:
+        """Save current results to `file`.
+
+        See `save` for a version that takes a path.
+        """
+        file.write(self.serialize())
+
+    def save_atomic(self, path: AnyPath) -> None:
+        """Save current results to `path`, atomically.
+
+        Will not corrupt existing data if the write fails partway.
+        """
+        with tempfile.NamedTemporaryFile("w", delete=False) as temp:
+            temp.write(self.serialize())
+        os.replace(temp.name, Path(path).expanduser())
+
+    def load_from(self, path: AnyPath) -> None:
+        """Restore results from `path`, previously written by `save`/`save_atomic`.
+
+        See `load_from_file` for a version that takes a file-like object.
+        """
+        with open(Path(path).expanduser(), "r") as f:
+            self.load_from_file(f)
+
+    def load_from_file(self, file: IO[str]) -> None:
+        """Restore results from `file`, previously written by `save_file`.
+
+        See `load_from` for a version that takes a path.
+        """
+        self.deserialize(file.read())
 
     def max_runs(self) -> int | None:
         """The number of possible different runs."""
         return None
 
+    def run_count(self) -> int:
+        """Return the number of recorded runs."""
+        return len(self.scores())
+
     def run_loop(
         self,
+        *,
+        stability_config: StabilityConfig | None = None,
+        save_config: SaveConfig | None = None,
     ) -> None:
-        """Keep running the experiment until interupted, reached stability, or exhausted all possible cases."""
+        """Keep running until interrupted, reached stability, or exhausted all possible cases."""
 
         stop_requested = False
         original_handler = signal.getsignal(signal.SIGINT)
@@ -157,7 +183,6 @@ class Experiment[R = float, C = None](abc.ABC):
         _ = signal.signal(signal.SIGINT, _handle_first_interrupt)
 
         dirty = False
-
         passed_seconds = 0.0
         start = time.monotonic()
 
@@ -168,118 +193,53 @@ class Experiment[R = float, C = None](abc.ABC):
                     logger.info("Exhausted all possible cases.")
                     break
 
-                mean, margin_of_error = self._stability_metrics()
+                mean, margin_of_error = self._stability_metrics(stability_config)
                 relative_margin_of_error = self._relative_margin_of_error(
                     mean, margin_of_error
                 )
 
                 if (
-                    self.stability_config is not None
+                    stability_config is not None
                     and relative_margin_of_error is not None
-                    and relative_margin_of_error <= self.stability_config.threshold
+                    and relative_margin_of_error <= stability_config.threshold
                 ):
                     logger.info(
-                        f"Reached stability threshold {self.stability_config.threshold:.2f}% ({relative_margin_of_error:.2f}%), stopping."
+                        f"Reached stability threshold {stability_config.threshold:.2f}% ({relative_margin_of_error:.2f}%), stopping."
                     )
                     break
 
                 self.run()
                 # Recomputed rather than reusing `mean`/`margin_of_error` above:
-                # those were computed before `self.run()` and would otherwise be
-                # stale by one run.
-                print(self.format_status(*self._stability_metrics()))
+                # the existing stability metrics were computed before
+                # `self.run()` and would otherwise be stale by one run.
+                print(self.format_status(*self._stability_metrics(stability_config)))
                 dirty = True
 
-                if (
-                    self.save_config is not None
-                    and self.save_config.interval_seconds is not None
-                ):
+                if save_config is not None and save_config.interval_seconds is not None:
                     now = time.monotonic()
                     passed_seconds += now - start
                     start = now
 
-                    if self.save_config.interval_seconds < passed_seconds:
+                    if save_config.interval_seconds < passed_seconds:
                         logger.debug(
-                            f"Passed {self.save_config.interval_seconds}s ({passed_seconds}) since last save"
+                            f"Passed {save_config.interval_seconds}s ({passed_seconds}) since last save"
                         )
-
-                        self.save_atomic(self.save_config.path)
+                        self.save_atomic(save_config.path)
                         passed_seconds = 0.0
 
         finally:
             _ = signal.signal(signal.SIGINT, original_handler)
 
-        if dirty and self.save_config is not None:
-            self.save(self.save_config.path)
-
-    def load_from(self, path: AnyPath) -> None:
-        """Overwrite current data from a file.
-
-        The saved fingerprint is verified against the current configuration. A
-        mismatch raises `FingerprintError` describing exactly which parameters
-        differ.
-
-        See `load_into_file` for a version that uses a file-like object.
-        """
-
-        with open(Path(path).expanduser(), "r") as f:
-            self.load_from_file(f)
-
-    def load_from_file(self, file: IO[str]) -> None:
-        """Overwrite current data from a file.
-
-        The saved fingerprint is verified against the current configuration. A
-        mismatch raises `FingerprintError` describing exactly which parameters
-        differ.
-
-        See `load_into` for a version that uses a path-like object.
-        """
-        json = file.read()
-        data = type(self.data).model_validate_json(json)
-        differences = self.data.fingerprint.diff(data.fingerprint)
-        if differences:
-            raise FingerprintError(differences)
-        self.data = data
-
-    def save(self, path: AnyPath) -> None:
-        """Save the experiment data to disk."""
-        with open(path, "w") as f:
-            self._save_file_helper(f, None)
-
-    def save_file(self, file: IO[str]) -> None:
-        """Save the experiment data to disk using an IO object."""
-        self._save_file_helper(file, None)
-
-    def save_atomic(self, path: AnyPath) -> None:
-        """Save the experiment data to disk atomically.
-
-        Will not corrupt existing data if the write fails partway.
-        """
-
-        logger.info(f"Saving experiment data to {path}")
-
-        logger.debug("Running atomic save")
-
-        with tempfile.NamedTemporaryFile("w", delete=False) as temp:
-            self._save_file_helper(temp, temp.name)
-
-        logger.debug(f"Moving saved data from {temp.name} to {path}")
-
-        os.replace(temp.name, Path(path).expanduser())
-
-        logger.debug("Move successful")
-
-    def run_count(self) -> int:
-        """Return the number recorded runs."""
-        return len(self.data.results)
+        if dirty and save_config is not None:
+            self.save_atomic(save_config.path)
 
     def margin_of_error(self) -> float | None:
         """Return the margin of error (half-width of the 95% confidence interval)
-        for the mean of the current set of result scores.
+        for the mean of the current set of scores.
 
         None if there are less than 2 results.
         """
-        scores = [self.result_score(r) for r in self.data.results.values()]
+        scores = self.scores()
         n = len(scores)
         if n < 2:
             return None
@@ -287,24 +247,23 @@ class Experiment[R = float, C = None](abc.ABC):
         return float(t * scipy.stats.sem(scores))
 
     def mean_score(self) -> float | None:
-        """Return the mean score of the current set of result scores.
+        """Return the mean of the current set of scores.
 
         None if there are no results yet.
         """
-        scores = [self.result_score(r) for r in self.data.results.values()]
+        scores = self.scores()
         if not scores:
             return None
-        return float(sum(scores) / self.run_count())
+        return float(sum(scores) / len(scores))
 
-    def _stability_metrics(self) -> tuple[float | None, float | None]:
+    def _stability_metrics(
+        self, stability_config: StabilityConfig | None
+    ) -> tuple[float | None, float | None]:
         """Return `(mean_score(), margin_of_error())` once `stability_config.min_samples`
         has been reached; `(None, None)` if stability checking isn't configured
         or there aren't enough runs yet.
         """
-        if (
-            self.stability_config is None
-            or self.run_count() < self.stability_config.min_samples
-        ):
+        if stability_config is None or self.run_count() < stability_config.min_samples:
             return None, None
         return self.mean_score(), self.margin_of_error()
 
@@ -333,7 +292,8 @@ class Experiment[R = float, C = None](abc.ABC):
 
         None if there are no results yet.
         """
-        run_count = self.run_count()
+        scores = self.scores()
+        run_count = len(scores)
         if run_count == 0:
             return None
 
@@ -342,6 +302,7 @@ class Experiment[R = float, C = None](abc.ABC):
         if margin_of_error is None:
             margin_of_error = self.margin_of_error()
 
+        display = self.display()
         parts: list[str] = []
 
         max_runs = self.max_runs()
@@ -356,30 +317,25 @@ class Experiment[R = float, C = None](abc.ABC):
 
         parts.append(progress)
 
-        if self.display.score_name is not None:
-            parts.append(self.display.score_name)
+        if display.score_name is not None:
+            parts.append(display.score_name)
             parts.append(" = ")
 
-        latest_key = self.latest_result()
-        if latest_key is None:
-            return None
+        parts.append(f"{scores[-1]:{display.score_fmt}}")
 
-        last = self.result_score(self.data.results[latest_key])
-        parts.append(f"{last:{self.display.score_fmt}}")
-
-        if self.display.score_unit is not None:
-            parts.append(self.display.score_unit)
+        if display.score_unit is not None:
+            parts.append(display.score_unit)
 
         parts.append(" | ")
 
         if mean is not None:
-            parts.append(f"mean {mean:{self.display.score_fmt}}")
+            parts.append(f"mean {mean:{display.score_fmt}}")
 
-            if self.display.score_unit is not None:
-                parts.append(self.display.score_unit)
+            if display.score_unit is not None:
+                parts.append(display.score_unit)
 
             if margin_of_error is not None:
-                parts.append(f" ±{margin_of_error:{self.display.score_fmt}} (95% CI)")
+                parts.append(f" ±{margin_of_error:{display.score_fmt}} (95% CI)")
 
                 relative_margin_of_error = self._relative_margin_of_error(
                     mean, margin_of_error
@@ -390,17 +346,3 @@ class Experiment[R = float, C = None](abc.ABC):
                     )
 
         return "".join(parts)
-
-    def _save_file_helper(self, to: IO[str], temp_name: str | None) -> None:
-        """Save the experiment data to disk."""
-        if temp_name is not None:
-            logger.debug(f"Saving to tempfile {temp_name}")
-        else:
-            logger.info(f"Saving experiment data to {to}")
-
-        json = self.data.model_dump_json()
-
-        written = to.write(json)
-        assert written == len(json)
-
-        logger.debug("Save successful")

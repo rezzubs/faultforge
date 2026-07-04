@@ -1,6 +1,7 @@
 """Tests for the public Experiment API (faultforge.experiment)."""
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
@@ -9,11 +10,11 @@ from typing import override
 import pytest
 from faultforge import Fingerprint
 from faultforge.experiment import (
-    Data,
     Experiment,
     SaveConfig,
     StabilityConfig,
 )
+from pydantic import BaseModel
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 
@@ -27,50 +28,61 @@ class _TestResult:
     value: float
 
 
-class _TestExperiment(Experiment[_TestResult, None]):
-    _max_runs: int | None = None
-    _latest: int | None = None
+class _SavedData(BaseModel):
+    fingerprint: Fingerprint
+    results: dict[int, float]
+
+
+class _TestExperiment(Experiment):
+    _max_runs: int | None
+    _fingerprint: Fingerprint
+    _results: dict[int, _TestResult]
 
     def __init__(
         self,
-        data: Data[_TestResult, None] | None = None,
+        results: dict[int, _TestResult] | None = None,
+        name: str = "test",
     ) -> None:
-        super().__init__(
-            data or Data(fingerprint=_fingerprint(), context=None, results={})
-        )
         self._max_runs = None
-        self._latest = None
+        self._fingerprint = _fingerprint(name)
+        self._results = results or {}
 
     def set_max_runs(self, max_runs: int | None) -> None:
         self._max_runs = max_runs
-
-    @override
-    def latest_result(self) -> int | None:
-        return self._latest
 
     @override
     def max_runs(self) -> int | None:
         return self._max_runs
 
     @override
-    def result_score(self, result: _TestResult) -> float:
-        return result.value
+    def scores(self) -> Sequence[float]:
+        return [result.value for result in self._results.values()]
 
     @override
     def run(self) -> None:
-        key = len(self.data.results)
-        self.data.results[key] = _TestResult(value=float(key + 1))
-        self._latest = key
+        key = len(self._results)
+        self._results[key] = _TestResult(value=float(key + 1))
+
+    @override
+    def serialize(self) -> str:
+        return _SavedData(
+            fingerprint=self._fingerprint,
+            results={key: result.value for key, result in self._results.items()},
+        ).model_dump_json()
+
+    @override
+    def deserialize(self, content: str) -> None:
+        loaded = _SavedData.model_validate_json(content)
+        self._fingerprint.raise_if_differs(loaded.fingerprint)
+        self._results = {
+            key: _TestResult(value=value) for key, value in loaded.results.items()
+        }
 
 
 def make(values: list[float] | None = None, name: str = "test") -> _TestExperiment:
     """Create a test experiment with existing results"""
-    data = Data[_TestResult, None](
-        fingerprint=_fingerprint(name),
-        context=None,
-        results={k: _TestResult(value=v) for k, v in enumerate(values or [])},
-    )
-    return _TestExperiment(data=data)
+    results = {key: _TestResult(value=value) for key, value in enumerate(values or [])}
+    return _TestExperiment(results=results, name=name)
 
 
 # SECTION margin_of_error
@@ -104,9 +116,10 @@ def test_run_loop_stops_when_stable():
     # checked immediately.
     min_samples = 5
     exp = make([1.0] * (min_samples + 1))
-    exp.stability_config = StabilityConfig(min_samples=min_samples, threshold=0.01)
     initial = exp.run_count()
-    exp.run_loop()
+    exp.run_loop(
+        stability_config=StabilityConfig(min_samples=min_samples, threshold=0.01)
+    )
     assert exp.run_count() == initial
 
 
@@ -115,8 +128,7 @@ def test_run_loop_does_not_stop_before_min_samples():
     # is reached.
     exp = make([1.0] * 3)
     exp.set_max_runs(6)
-    exp.stability_config = StabilityConfig(min_samples=10, threshold=999.0)
-    exp.run_loop()
+    exp.run_loop(stability_config=StabilityConfig(min_samples=10, threshold=999.0))
     assert exp.run_count() == 6
 
 
@@ -124,8 +136,7 @@ def test_run_loop_continues_while_unstable():
     # Incrementing values → margin of error never reaches 0 → runs to max_runs.
     exp = make()
     exp.set_max_runs(20)
-    exp.stability_config = StabilityConfig(min_samples=2, threshold=0.0)
-    exp.run_loop()
+    exp.run_loop(stability_config=StabilityConfig(min_samples=2, threshold=0.0))
     assert exp.run_count() == 20
 
 
@@ -135,8 +146,7 @@ def test_run_loop_stability_check_with_single_sample_does_not_crash():
     # UnboundLocalError instead of just continuing.
     exp = make()
     exp.set_max_runs(3)
-    exp.stability_config = StabilityConfig(min_samples=1, threshold=0.01)
-    exp.run_loop()
+    exp.run_loop(stability_config=StabilityConfig(min_samples=1, threshold=0.01))
     assert exp.run_count() == 3
 
 
@@ -154,14 +164,14 @@ def test_save_writes_correct_json(tmp_path: Path):
     exp = make([1.0, 2.0, 3.0])
     path = tmp_path / "experiment.json"
     exp.save(path)
-    assert path.read_text() == exp.data.model_dump_json()
+    assert path.read_text() == exp.serialize()
 
 
 def test_save_atomic_writes_correct_json(tmp_path: Path):
     exp = make([10.0, 20.0])
     path = tmp_path / "experiment.json"
     exp.save_atomic(path)
-    assert path.read_text() == exp.data.model_dump_json()
+    assert path.read_text() == exp.serialize()
 
 
 def test_load_preserves_results(tmp_path: Path):
@@ -171,11 +181,27 @@ def test_load_preserves_results(tmp_path: Path):
     loaded = make()
     loaded.load_from(path)
     assert loaded.run_count() == exp.run_count()
-    assert all(isinstance(r, _TestResult) for r in loaded.data.results.values())
-    assert {k: r.value for k, r in loaded.data.results.items()} == {
+    assert all(isinstance(result, _TestResult) for result in loaded._results.values())
+    assert {key: result.value for key, result in loaded._results.items()} == {
         0: 1.0,
         1: 2.0,
         2: 3.0,
+    }
+
+
+def test_save_load_via_file_object(tmp_path: Path):
+    exp = make([7.0, 8.0])
+    path = tmp_path / "experiment.json"
+    with open(path, "w") as f:
+        exp.save_file(f)
+    assert path.read_text() == exp.serialize()
+
+    loaded = make()
+    with open(path, "r") as f:
+        loaded.load_from_file(f)
+    assert {key: result.value for key, result in loaded._results.items()} == {
+        0: 7.0,
+        1: 8.0,
     }
 
 
@@ -204,20 +230,11 @@ def test_run_loop_saves_at_end(tmp_path: Path):
     exp = make()
     exp.set_max_runs(3)
     path = tmp_path / "experiment.json"
-    exp.save_config = SaveConfig(path=path, interval_seconds=None)
-    exp.run_loop()
+    exp.run_loop(save_config=SaveConfig(path=path, interval_seconds=None))
     assert path.exists()
     loaded = make()
     loaded.load_from(path)
     assert loaded.run_count() == 3
-
-
-def test_save_load_via_file_object(tmp_path: Path):
-    exp = make([7.0, 8.0])
-    path = tmp_path / "experiment.json"
-    with open(path, "w") as f:
-        exp.save_file(f)
-    assert path.read_text() == exp.data.model_dump_json()
 
 
 def test_parameter_mismatch(tmp_path: Path):

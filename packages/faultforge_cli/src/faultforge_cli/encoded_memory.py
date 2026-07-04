@@ -329,6 +329,7 @@ def record(
         device=device,
         progress=Progress(),
     )
+    save_config: SaveConfig | None = None
     if output is not None:
         output = Path(output).expanduser()
         if not output.parent.exists():
@@ -337,14 +338,15 @@ def record(
         else:
             logger.debug(f"Output parent directory {output.parent} already exists")
 
-        experiment.save_config = SaveConfig(path=output, interval_seconds=autosave)
+        save_config = SaveConfig(path=output, interval_seconds=autosave)
 
+    stability_config: StabilityConfig | None = None
     if stability_threshold is not None:
         if min_runs is None:
             min_samples = 0
         else:
             min_samples = min_runs
-        experiment.stability_config = StabilityConfig(
+        stability_config = StabilityConfig(
             min_samples=min_samples, threshold=stability_threshold
         )
 
@@ -366,4 +368,4 @@ def record(
             experiment.save_atomic(output)
             return
 
-    experiment.run_loop()
+    experiment.run_loop(stability_config=stability_config, save_config=save_config)
