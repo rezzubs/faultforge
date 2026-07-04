@@ -19,7 +19,10 @@ from dataclasses import (
     field,
 )
 from pathlib import Path
-from typing import IO
+from typing import (
+    IO,
+    Self,
+)
 
 import scipy.stats
 
@@ -269,25 +272,13 @@ class Experiment(abc.ABC):
         """Keep running until a stop condition is met, including Ctrl+C."""
 
         interrupted = _Interrupted()
-        original_handler = signal.getsignal(signal.SIGINT)
-
-        def _handle_first_interrupt(sig: int, frame: types.FrameType | None) -> None:
-            _ = sig, frame
-            interrupted.trigger()
-            logger.info(
-                "Received Ctrl+C. Finishing current run before stopping. Use Ctrl+C again to force quit."
-            )
-            _ = signal.signal(signal.SIGINT, original_handler)
-
-        _ = signal.signal(signal.SIGINT, _handle_first_interrupt)
-
         all_conditions = [*self.stop_conditions(), *stop_conditions, interrupted]
 
         dirty = False
         passed_seconds = 0.0
         start = time.monotonic()
 
-        try:
+        with interrupted:
             while True:
                 reason = _first_stop_reason(all_conditions, self)
                 if reason is not None:
@@ -309,9 +300,6 @@ class Experiment(abc.ABC):
                         )
                         self.save_atomic(save_config.path)
                         passed_seconds = 0.0
-
-        finally:
-            _ = signal.signal(signal.SIGINT, original_handler)
 
         if dirty and save_config is not None:
             self.save_atomic(save_config.path)
@@ -364,15 +352,35 @@ class Experiment(abc.ABC):
 class _Interrupted:
     """A `StopCondition` that fires once Ctrl+C has been received.
 
-    Installed by `run_loop` as one of its stop conditions, so an interrupt is
-    just another reason the loop stops rather than a separate boolean path.
+    Used as a context manager for the duration of `run_loop`: entering
+    installs a SIGINT handler, exiting restores the original - as does the
+    first Ctrl+C itself, so a second one behaves normally (e.g. force-quitting).
     """
 
     def __init__(self) -> None:
         self._triggered = False
 
-    def trigger(self) -> None:
+    def __enter__(self) -> Self:
+        self._original_handler = signal.getsignal(signal.SIGINT)
+        _ = signal.signal(signal.SIGINT, self._handle)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: types.TracebackType | None,
+    ) -> None:
+        _ = exc_type, exc, tb
+        _ = signal.signal(signal.SIGINT, self._original_handler)
+
+    def _handle(self, sig: int, frame: types.FrameType | None) -> None:
+        _ = sig, frame
         self._triggered = True
+        logger.info(
+            "Received Ctrl+C. Finishing current run before stopping. Use Ctrl+C again to force quit."
+        )
+        _ = signal.signal(signal.SIGINT, self._original_handler)
 
     def __call__(self, experiment: Experiment) -> str | None:
         _ = experiment
