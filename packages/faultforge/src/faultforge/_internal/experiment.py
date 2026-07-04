@@ -183,8 +183,8 @@ class Experiment(abc.ABC):
     subclass to contribute conditions driven by its own internal state (e.g. "no
     distinct runs remain"), and the `stop_conditions` argument to `run_loop`
     itself, for session-level concerns decided by the caller (e.g. `Stability`,
-    `RunLimit`). Neither is required - by default `run_loop` runs until
-    interrupted.
+    `AdditionalRuns`, `MaxRuns`). Neither is required - by default `run_loop`
+    runs until interrupted.
 
     See `faultforge.experiments.encoded_memory` for a complete example.
     """
@@ -421,16 +421,39 @@ class Stability:
 
 
 @dataclass(slots=True)
-class RunLimit:
-    """A `StopCondition`: stop after `limit` additional runs since this
-    instance started tracking."""
+class AdditionalRuns:
+    """A `StopCondition`: stop after `count` more runs, on top of however many
+    already existed when this instance first got checked (typically the start
+    of `run_loop`).
 
-    limit: int
+    Use `MaxRuns` instead if you want to cap the *total* run count regardless
+    of how many results already exist (e.g. loaded from a save file).
+    """
+
+    count: int
     _baseline: int | None = field(default=None, init=False, repr=False)
 
     def __call__(self, experiment: Experiment) -> str | None:
         if self._baseline is None:
             self._baseline = experiment.run_count()
-        if experiment.run_count() - self._baseline >= self.limit:
-            return f"Reached requested run limit ({self.limit})"
+        if experiment.run_count() - self._baseline >= self.count:
+            return f"Reached requested additional run count (+{self.count})"
+        return None
+
+
+@dataclass(slots=True)
+class MaxRuns:
+    """A `StopCondition`: stop once the total run count reaches `total`,
+    including any results that already existed before this instance was ever
+    checked (e.g. loaded from a save file).
+
+    Use `AdditionalRuns` instead if you want to run a fixed number more
+    regardless of how many results already exist.
+    """
+
+    total: int
+
+    def __call__(self, experiment: Experiment) -> str | None:
+        if experiment.run_count() >= self.total:
+            return f"Reached max run count ({self.total})"
         return None

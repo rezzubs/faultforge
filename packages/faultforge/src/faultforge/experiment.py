@@ -4,9 +4,10 @@ See `Experiment` for the full overview.
 """
 
 from faultforge._internal.experiment import (
+    AdditionalRuns,
     Experiment,
     ExperimentDisplay,
-    RunLimit,
+    MaxRuns,
     SaveConfig,
     Stability,
     StopCondition,
@@ -14,9 +15,10 @@ from faultforge._internal.experiment import (
 )
 
 __all__ = [
+    "AdditionalRuns",
     "Experiment",
     "ExperimentDisplay",
-    "RunLimit",
+    "MaxRuns",
     "SaveConfig",
     "Stability",
     "StopCondition",

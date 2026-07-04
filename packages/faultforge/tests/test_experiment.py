@@ -10,8 +10,9 @@ from typing import override
 import pytest
 from faultforge import Fingerprint
 from faultforge.experiment import (
+    AdditionalRuns,
     Experiment,
-    RunLimit,
+    MaxRuns,
     SaveConfig,
     Stability,
     StopCondition,
@@ -130,7 +131,7 @@ def test_format_status_omits_margin_with_one_score():
 
 def test_format_status_omits_relative_moe_without_stability():
     exp = make([1.0, 2.0])
-    status = exp.format_status([RunLimit(5)])
+    status = exp.format_status([AdditionalRuns(5)])
     assert status is not None
     assert "Relative MoE" not in status
 
@@ -145,9 +146,9 @@ def test_format_status_shows_relative_moe_with_stability():
 # SECTION run_loop
 
 
-def test_run_loop_stops_at_run_limit():
+def test_run_loop_stops_at_additional_runs():
     exp = make()
-    exp.run_loop(stop_conditions=[RunLimit(5)])
+    exp.run_loop(stop_conditions=[AdditionalRuns(5)])
     assert exp.run_count() == 5
 
 
@@ -164,14 +165,14 @@ def test_run_loop_stops_when_stable():
 
 def test_run_loop_does_not_stop_before_min_samples():
     # Even with a low margin of error, stability is skipped until min_samples
-    # is reached; RunLimit is what actually stops this run. RunLimit counts
+    # is reached; AdditionalRuns is what actually stops this run. It counts
     # runs from when it starts tracking, so 3 more on top of the 3 pre-loaded
     # results reaches a total of 6.
     exp = make([1.0] * 3)
     exp.run_loop(
         stop_conditions=[
             Stability(min_samples=10, threshold=999.0),
-            RunLimit(3),
+            AdditionalRuns(3),
         ]
     )
     assert exp.run_count() == 6
@@ -184,7 +185,7 @@ def test_run_loop_continues_while_unstable():
     exp.run_loop(
         stop_conditions=[
             Stability(min_samples=2, threshold=0.0),
-            RunLimit(20),
+            AdditionalRuns(20),
         ]
     )
     assert exp.run_count() == 20
@@ -198,7 +199,7 @@ def test_run_loop_stability_check_with_single_sample_does_not_crash():
     exp.run_loop(
         stop_conditions=[
             Stability(min_samples=1, threshold=0.01),
-            RunLimit(3),
+            AdditionalRuns(3),
         ]
     )
     assert exp.run_count() == 3
@@ -208,8 +209,28 @@ def test_run_loop_merges_intrinsic_and_caller_stop_conditions():
     # An experiment's own `stop_conditions()` override is checked alongside
     # whatever the caller passes to `run_loop` - whichever fires first wins.
     exp = make()
-    exp.add_stop_condition(RunLimit(4))
-    exp.run_loop(stop_conditions=[RunLimit(10)])
+    exp.add_stop_condition(AdditionalRuns(4))
+    exp.run_loop(stop_conditions=[AdditionalRuns(10)])
+    assert exp.run_count() == 4
+
+
+def test_run_loop_stops_at_max_runs():
+    # Unlike AdditionalRuns, MaxRuns counts existing results toward the total.
+    exp = make([1.0, 2.0])
+    exp.run_loop(stop_conditions=[MaxRuns(5)])
+    assert exp.run_count() == 5
+
+
+def test_run_loop_max_runs_already_reached_does_nothing():
+    exp = make([1.0] * 5)
+    exp.run_loop(stop_conditions=[MaxRuns(5)])
+    assert exp.run_count() == 5
+
+
+def test_run_loop_additional_runs_and_max_runs_combined_max_wins():
+    # MaxRuns(4) is reached before AdditionalRuns(10) would allow.
+    exp = make([1.0, 2.0])
+    exp.run_loop(stop_conditions=[AdditionalRuns(10), MaxRuns(4)])
     assert exp.run_count() == 4
 
 
@@ -293,7 +314,7 @@ def test_run_loop_saves_at_end(tmp_path: Path):
     exp = make()
     path = tmp_path / "experiment.json"
     exp.run_loop(
-        stop_conditions=[RunLimit(3)],
+        stop_conditions=[AdditionalRuns(3)],
         save_config=SaveConfig(path=path, interval_seconds=None),
     )
     assert path.exists()

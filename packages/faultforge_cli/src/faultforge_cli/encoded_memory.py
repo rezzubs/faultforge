@@ -16,7 +16,13 @@ from faultforge.encoding import (
     MsetEncoder,
     SecdedEncoder,
 )
-from faultforge.experiment import RunLimit, SaveConfig, Stability, StopCondition
+from faultforge.experiment import (
+    AdditionalRuns,
+    MaxRuns,
+    SaveConfig,
+    Stability,
+    StopCondition,
+)
 from faultforge.experiments.encoded_memory import (
     EncodedFaultInjection,
     ReliabilityMetric,
@@ -257,7 +263,14 @@ def record(
     runs: Annotated[
         int | None,
         typer.Option(
-            help="Run the experiment an exact number of times. Incompatible with --min-runs and --stability-threshold.",
+            help="Run the experiment N additional times on top of any existing results (e.g. loaded via --output). Incompatible with --min-runs and --stability-threshold. Can be combined with --max-runs.",
+            rich_help_panel="Recording Settings",
+        ),
+    ] = None,
+    max_runs: Annotated[
+        int | None,
+        typer.Option(
+            help="Stop once the results contain N runs in total, including any already loaded via --output. Can be combined with --runs or --stability-threshold.",
             rich_help_panel="Recording Settings",
         ),
     ] = None,
@@ -352,7 +365,10 @@ def record(
         )
 
     if runs is not None:
-        stop_conditions.append(RunLimit(runs))
+        stop_conditions.append(AdditionalRuns(runs))
+
+    if max_runs is not None:
+        stop_conditions.append(MaxRuns(max_runs))
 
     if output is not None and output.exists():
         try:
