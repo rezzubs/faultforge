@@ -82,6 +82,20 @@ class ReliabilityMetric(enum.StrEnum):
                 return "Top-1 SDC"
 
 
+def compute_score(metric: ReliabilityMetric, correct: int, total: int) -> float:
+    """Score a single run's correct/total accounting under `metric`.
+
+    Pure so it can be reused both by a live `EncodedFaultInjection` (via
+    `_score`) and by `SavedResult.scores`, which recomputes scores from a
+    saved file without reconstructing a model/dataset.
+    """
+    match metric:
+        case ReliabilityMetric.Sdc | ReliabilityMetric.Top1Sdc:
+            return 100 - float(correct) / float(total) * 100
+        case ReliabilityMetric.Accuracy | ReliabilityMetric.AccuracyDegradation:
+            return float(correct) / float(total) * 100
+
+
 @final
 @dataclass(slots=True)
 class BatchReliability:
@@ -136,12 +150,60 @@ class DetailedResult(BaseModel):
 ExperimentResult = Annotated[SimpleResult | DetailedResult, Field(discriminator="kind")]
 
 
-class _SavedData(BaseModel):
-    """The on-disk shape of an `EncodedFaultInjection`'s results."""
+class SavedResult(BaseModel):
+    """The on-disk shape of an `EncodedFaultInjection`'s results.
+
+    Standalone-loadable: everything needed to recompute scores and bit
+    error rate lives here, so a result file can be inspected (e.g. for
+    plotting) without reconstructing the model/dataset that produced it.
+    """
 
     fingerprint: Fingerprint
     total_items: int | None
+    total_bits: int
+    """The size (in bits) of the encoded memory faults were injected into.
+
+    Recorded directly rather than left as part of `Fingerprint.scalars`,
+    since it's already fully determined by the model/encoder/dtype
+    fingerprints that *are* part of identity - this just avoids recomputing
+    it, the same rationale as `total_items`.
+    """
     result: ExperimentResult
+
+    @classmethod
+    def load(cls, path: AnyPath) -> SavedResult:
+        """Load a single result file previously written by
+        `Experiment.save`/`save_atomic`.
+
+        Unlike reconstructing an `EncodedFaultInjection`, this doesn't
+        require the model/dataset that produced it - just the file itself.
+        """
+        path = Path(path).expanduser()
+        with open_text(path, "rt", compressed=is_compressed(path)) as f:
+            return cls.model_validate_json(f.read())
+
+    def reliability_metric(self) -> ReliabilityMetric:
+        return ReliabilityMetric(self.fingerprint.scalars["reliability_metric"])
+
+    def scores(self) -> list[float]:
+        """Every recorded run's score, in run order.
+
+        Empty if `total_items` is `None` (no run has completed yet),
+        mirroring `EncodedFaultInjection.scores()`.
+        """
+        if self.total_items is None:
+            return []
+        metric = self.reliability_metric()
+        return [
+            compute_score(metric, correct, self.total_items)
+            for correct in self.result.correct_counts()
+        ]
+
+    def bit_error_rate(self) -> float:
+        """The realized fraction of encoded bits flipped, `faults / total_bits`."""
+        faults = self.fingerprint.scalars["faults"]
+        assert isinstance(faults, int)
+        return faults / self.total_bits
 
 
 def _discard_bitmasks(
@@ -177,12 +239,12 @@ def discard_bitmasks_in_file(path: AnyPath) -> None:
     """
     path = Path(path).expanduser()
     compressed = is_compressed(path)
-    with open_text(path, "rt", compressed=compressed) as f:
-        loaded = _SavedData.model_validate_json(f.read())
+    loaded = SavedResult.load(path)
     result, fingerprint = _discard_bitmasks(loaded.result, loaded.fingerprint)
-    updated = _SavedData(
+    updated = SavedResult(
         fingerprint=fingerprint,
         total_items=loaded.total_items,
+        total_bits=loaded.total_bits,
         result=result,
     ).model_dump_json()
 
@@ -279,6 +341,7 @@ class EncodedFaultInjection(Experiment):
     _dtype: torch.dtype
     _reliability_metric: ReliabilityMetric
     _faulty_bit_count: int
+    _total_bits: int
     _progress: Progress | None
     _fingerprint: Fingerprint
     _show_fault_summary: bool
@@ -345,7 +408,7 @@ class EncodedFaultInjection(Experiment):
                 "reliability_metric": reliability_metric.value,
                 "golden": "encoded" if golden_is_encoded else "unencoded",
                 "compare_bitwise": compare_bitwise,
-                "dtype": EncodingDtype.from_torch(dtype).name.lower(),
+                "dtype": EncodingDtype.from_torch(dtype).value,
             },
             children={
                 "bundle": [bundle.fingerprint()],
@@ -361,13 +424,14 @@ class EncodedFaultInjection(Experiment):
         if test_image_limit is not None:
             fingerprint.scalars["test_image_limit"] = test_image_limit
 
+        self._total_bits = self._model.bit_count()
+
         if isinstance(faults, int):
-            if faults > self._model.bit_count():
+            if faults > self._total_bits:
                 raise ValueError(
-                    f"`faults` ({faults}) is greater than the number of bits in model parameters ({self._model.bit_count()})"
+                    f"`faults` ({faults}) is greater than the number of bits in model parameters ({self._total_bits})"
                 )
 
-            fingerprint.scalars["faults"] = faults
             self._faulty_bit_count = faults
         elif isinstance(faults, float):
             if faults > 1.0:
@@ -375,11 +439,18 @@ class EncodedFaultInjection(Experiment):
                     f"`faults` ({faults}) is greater than 1.0 (floats are interpreted as the bit error rate)"
                 )
 
-            fingerprint.scalars["bit_error_rate"] = faults
-            self._faulty_bit_count = int(round(faults * self._model.bit_count()))
+            self._faulty_bit_count = int(round(faults * self._total_bits))
             logger.debug(
                 f"Resolved bit error rate {faults} to {self._faulty_bit_count} faults"
             )
+
+        # Always store the resolved fault count rather than branching on
+        # which of `faults`/`bit_error_rate` the caller passed in, so that
+        # e.g. `faults=328` and a `bit_error_rate` that happens to resolve to
+        # 328 for this exact model produce identical fingerprints (otherwise
+        # resuming a saved file with the other input style would spuriously
+        # fail the fingerprint check).
+        fingerprint.scalars["faults"] = self._faulty_bit_count
 
         self._fingerprint = fingerprint
 
@@ -439,11 +510,7 @@ class EncodedFaultInjection(Experiment):
         if self._total_items is None:
             raise RuntimeError("Unable to score a result before the first run")
 
-        match self._reliability_metric:
-            case ReliabilityMetric.Sdc | ReliabilityMetric.Top1Sdc:
-                return 100 - float(correct) / float(self._total_items) * 100
-            case ReliabilityMetric.Accuracy | ReliabilityMetric.AccuracyDegradation:
-                return float(correct) / float(self._total_items) * 100
+        return compute_score(self._reliability_metric, correct, self._total_items)
 
     @override
     def scores(self) -> Sequence[float]:
@@ -466,17 +533,19 @@ class EncodedFaultInjection(Experiment):
 
     @override
     def serialize(self) -> str:
-        return _SavedData(
+        return SavedResult(
             fingerprint=self._fingerprint,
             total_items=self._total_items,
+            total_bits=self._total_bits,
             result=self._result,
         ).model_dump_json()
 
     @override
     def deserialize(self, content: str) -> None:
-        loaded = _SavedData.model_validate_json(content)
+        loaded = SavedResult.model_validate_json(content)
         self._fingerprint.raise_if_differs(loaded.fingerprint)
         self._total_items = loaded.total_items
+        self._total_bits = loaded.total_bits
         self._result = loaded.result
 
     def _inject_faults(self) -> EncodedModule:

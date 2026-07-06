@@ -7,11 +7,11 @@ import enum
 import torch
 
 
-class EncodingDtype(enum.Enum):
+class EncodingDtype(enum.StrEnum):
     """Data types that support encoding."""
 
-    F32 = enum.auto()
-    F16 = enum.auto()
+    F32 = "f32"
+    F16 = "f16"
 
     @classmethod
     def from_torch(cls, dtype: torch.dtype) -> EncodingDtype:

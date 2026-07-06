@@ -185,7 +185,6 @@ name = "faultforge"
 version = "0.1.0"
 source = { editable = "packages/faultforge" }
 dependencies = [
-    { name = "matplotlib" },
     { name = "numpy" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -202,7 +201,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "matplotlib", specifier = ">=3.10.5" },
     { name = "numpy", specifier = ">=2.3.1" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "pydantic", specifier = ">=2.12.3" },
@@ -221,12 +219,16 @@ version = "0.1.0"
 source = { editable = "packages/faultforge_cli" }
 dependencies = [
     { name = "faultforge" },
+    { name = "matplotlib" },
+    { name = "numpy" },
     { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "faultforge", editable = "packages/faultforge" },
+    { name = "matplotlib", specifier = ">=3.10.5" },
+    { name = "numpy", specifier = ">=2.3.1" },
     { name = "typer", specifier = ">=0.20.0" },
 ]
 

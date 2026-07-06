@@ -1,12 +1,15 @@
-"""Encoded memory experiments."""
+"""The `encoded-memory` CLI commands (recording and plotting)."""
 
 import enum
 import logging
 from pathlib import Path
 from typing import Annotated
 
+import matplotlib.pyplot as plt
 import torch
 import typer
+from matplotlib.backends.registry import BackendFilter, backend_registry
+from matplotlib.figure import Figure
 from faultforge import DEFAULT_BATCH_SIZE, is_compressed
 from faultforge.encoding import (
     CepEncoder,
@@ -25,6 +28,7 @@ from faultforge.experiment import (
     StopCondition,
 )
 from faultforge.experiments.encoded_memory import (
+    DetailedResult,
     EncodedFaultInjection,
     ReliabilityMetric,
     discard_bitmasks_in_file,
@@ -39,6 +43,16 @@ from faultforge.loading import (
     ModelBundle,
 )
 from faultforge.progress import Progress
+from faultforge_cli.encoded_memory.plots import (
+    GroupBy,
+    build_compare_figure,
+    build_heatmap_figure,
+)
+from faultforge_cli.encoded_memory.results import (
+    build_configurations,
+    discover_result_files,
+    load_results,
+)
 
 app = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]})
 logger = logging.getLogger(__name__)
@@ -450,3 +464,243 @@ def discard_bitmasks(
     reload the model or dataset that produced it.
     """
     discard_bitmasks_in_file(path)
+
+
+def _split_path_argument(raw: str) -> tuple[Path, str | None]:
+    """Splits `raw` on the first literal '=', separating a path from an
+    optional legend-label override. Safe since paths never contain '=' on
+    this project's Linux-first environment."""
+    path_str, sep, label = raw.partition("=")
+    return Path(path_str).expanduser(), (label if sep else None)
+
+
+def _show_or_save(fig: Figure, output: Path | None) -> None:
+    if output is not None:
+        fig.savefig(output)
+        return
+
+    # `plt.show()` silently does nothing on a non-interactive backend (e.g.
+    # the "agg" fallback matplotlib picks when no GUI toolkit like PyQt or
+    # tkinter is importable) - check first so a missing --output doesn't look
+    # like the command did nothing.
+    backend = plt.get_backend()
+    interactive_backends = {
+        name.lower()
+        for name in backend_registry.list_builtin(BackendFilter.INTERACTIVE)
+    }
+    if backend.lower() not in interactive_backends:
+        logger.error(
+            f"no --output given and matplotlib has no interactive backend "
+            f"available (using {backend!r}). Install a GUI toolkit matplotlib "
+            "can use (e.g. PyQt6, or a working tkinter), or pass --output to "
+            "save the figure to a file instead."
+        )
+        raise typer.Exit(1)
+
+    # `fig` was built via the `Figure` OO API directly (see `plots`), so
+    # pyplot never tracked it the way a `plt.figure()`-created figure would
+    # be - `plt.show()` only displays figures pyplot is tracking, so without
+    # this it would silently do nothing. Passing an untracked `Figure` as
+    # `num` makes `plt.figure()` adopt it instead of creating a new one.
+    plt.figure(fig)
+    plt.show()
+
+
+@app.command(no_args_is_help=True)
+def compare(
+    paths: Annotated[
+        list[str],
+        typer.Argument(
+            help="Result file(s) to compare, or director(ies) recursively "
+            "containing them. Results are automatically clustered into "
+            "configurations by matching everything in their fingerprint "
+            "except the bit error rate, so e.g. several bit error rates of "
+            "the same model/encoder/dtype become one line regardless of "
+            "which file or directory they came from. Append '=LABEL' to a "
+            "path to override the legend label for every file found under "
+            "it; otherwise a configuration defaults to the stem of its "
+            "first (sorted) file.",
+        ),
+    ],
+    row_by: Annotated[
+        GroupBy,
+        typer.Option(
+            help="Facet the grid into rows by this fingerprint-derived key.",
+            rich_help_panel="Grouping",
+        ),
+    ] = GroupBy.Ungrouped,
+    col_by: Annotated[
+        GroupBy,
+        typer.Option(
+            help="Facet the grid into columns by this fingerprint-derived key.",
+            rich_help_panel="Grouping",
+        ),
+    ] = GroupBy.Ungrouped,
+    percentile: Annotated[
+        float | None,
+        typer.Option(
+            min=0.0,
+            max=100.0,
+            help="Plot this percentile of scores per point instead of the mean.",
+            rich_help_panel="Display",
+        ),
+    ] = None,
+    log_x: Annotated[
+        bool,
+        typer.Option(
+            "--log-x",
+            help="Use a logarithmic x-axis (bit error rate).",
+            rich_help_panel="Display",
+        ),
+    ] = False,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            help="Save the figure to this path instead of opening an "
+            "interactive window.",
+            rich_help_panel="Output",
+        ),
+    ] = None,
+) -> None:
+    """Plot reliability score vs bit error rate, one line per configuration.
+
+    Each PATH is a result file or a directory of them. Everything found is
+    pooled and automatically clustered into configurations: results that match
+    on every fingerprint field except bit error rate become one line, no matter
+    which file or directory they came from. So the usual workflow is to record
+    several bit error rates of one setup, then point compare at them to get a
+    single line summarizing it.
+
+    Labels: a configuration's legend label defaults to the stem of its first
+    file, which is rarely meaningful. Append '=LABEL' to a PATH to name
+    everything found under it. The reason to keep each configuration's runs in
+    their own directory is so a single 'dir=LABEL' names the whole line at once:
+
+        compare runs/secded=SECDED-8 runs/identity=Identity
+
+    Grid: --row-by / --col-by split the chart into a grid of subplots by a
+    fingerprint key (dtype, model, ...). For example --row-by dtype puts f32
+    results in the top row and f16 in the next, and the remaining differences
+    within a cell become its lines. Omit both for a single chart.
+    """
+    label_overrides: dict[Path, str] = {}
+    source_paths: list[Path] = []
+    for raw in paths:
+        path, label = _split_path_argument(raw)
+        source_paths.append(path)
+        if label is not None:
+            for file in discover_result_files(path):
+                label_overrides[file] = label
+
+    loaded = load_results(source_paths)
+    if not loaded:
+        logger.error("no result files found")
+        raise typer.Exit(1)
+
+    configurations = build_configurations(loaded, label_overrides=label_overrides)
+
+    try:
+        fig = build_compare_figure(
+            configurations,
+            row_by=row_by,
+            col_by=col_by,
+            percentile=percentile,
+            log_x=log_x,
+        )
+    except ValueError as error:
+        logger.error(str(error))
+        raise typer.Exit(1) from None
+
+    _show_or_save(fig, output)
+
+
+@app.command(no_args_is_help=True)
+def heatmap(
+    paths: Annotated[
+        list[Path],
+        typer.Argument(
+            help="Result file(s) to plot, or director(ies) recursively "
+            "containing them. All merged into one figure. Requires results "
+            "recorded with --compare-bitwise.",
+        ),
+    ],
+    bins: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            help="Number of bins along the score axis.",
+            rich_help_panel="Display",
+        ),
+    ] = 50,
+    min_score: Annotated[
+        float | None,
+        typer.Option(
+            help="Discard runs scoring below this value.",
+            rich_help_panel="Filtering",
+        ),
+    ] = None,
+    max_score: Annotated[
+        float | None,
+        typer.Option(
+            help="Discard runs scoring above this value.",
+            rich_help_panel="Filtering",
+        ),
+    ] = None,
+    max_total_faults: Annotated[
+        int | None,
+        typer.Option(
+            min=0,
+            help="Discard runs with more than this many total residual "
+            "(post-decode) faults, before decomposing into bit positions.",
+            rich_help_panel="Filtering",
+        ),
+    ] = None,
+    skip_multi_bit_faults: Annotated[
+        bool,
+        typer.Option(
+            help="Exclude elements with more than one faulty bit.",
+            rich_help_panel="Filtering",
+        ),
+    ] = False,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            help="Save the figure to this path instead of opening an "
+            "interactive window.",
+            rich_help_panel="Output",
+        ),
+    ] = None,
+) -> None:
+    """Plot per-run score density against faulty bit position."""
+    loaded = load_results(paths)
+    if not loaded:
+        logger.error("no result files found")
+        raise typer.Exit(1)
+
+    results = [result for _, result in loaded]
+    if not all(isinstance(result.result, DetailedResult) for result in results):
+        offenders = [
+            str(path)
+            for path, result in loaded
+            if not isinstance(result.result, DetailedResult)
+        ]
+        logger.error(
+            "heatmap requires results recorded with --compare-bitwise; "
+            f"missing bitmasks in: {', '.join(offenders)}"
+        )
+        raise typer.Exit(1) from None
+
+    try:
+        fig = build_heatmap_figure(
+            results,
+            bins=bins,
+            min_score=min_score,
+            max_score=max_score,
+            max_total_faults=max_total_faults,
+            skip_multi_bit_faults=skip_multi_bit_faults,
+        )
+    except ValueError as error:
+        logger.error(str(error))
+        raise typer.Exit(1) from None
+
+    _show_or_save(fig, output)

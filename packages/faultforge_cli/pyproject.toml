@@ -8,6 +8,8 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "faultforge",
+    "matplotlib>=3.10.5",
+    "numpy>=2.3.1",
     "typer>=0.20.0",
 ]
 

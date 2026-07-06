@@ -10,6 +10,7 @@ from faultforge._internal.experiments.encoded_memory import (
     DetailedRunResult,
     EncodedFaultInjection,
     ReliabilityMetric,
+    SavedResult,
     SimpleResult,
     discard_bitmasks_in_file,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "DetailedRunResult",
     "EncodedFaultInjection",
     "ReliabilityMetric",
+    "SavedResult",
     "SimpleResult",
     "discard_bitmasks_in_file",
 ]

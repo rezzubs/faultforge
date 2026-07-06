@@ -15,6 +15,7 @@ from faultforge._internal.experiments.encoded_memory import (
     _batch_accuracy_degradation,
     _batch_critical_sdc,
     _batch_sdc,
+    compute_score,
 )
 from faultforge._internal.loading.abc import ModelBundle
 from faultforge._internal.progress import Progress
@@ -22,6 +23,7 @@ from faultforge.encoding import IdentityEncoder
 from faultforge.experiments.encoded_memory import (
     EncodedFaultInjection,
     ReliabilityMetric,
+    SavedResult,
     discard_bitmasks_in_file,
 )
 from torch import nn
@@ -495,16 +497,31 @@ def _fingerprint_scalars(experiment: EncodedFaultInjection) -> dict:
     return json.loads(experiment.serialize())["fingerprint"]["scalars"]
 
 
-def test_fingerprint_records_int_faults_not_bit_error_rate():
+def test_fingerprint_records_resolved_faults_from_int_input():
     scalars = _fingerprint_scalars(_make_experiment(compare_bitwise=False, faults=3))
     assert scalars["faults"] == 3
     assert "bit_error_rate" not in scalars
 
 
-def test_fingerprint_records_bit_error_rate_not_faults():
+def test_fingerprint_records_resolved_faults_from_bit_error_rate_input():
+    # in_features=4, out_features=3 -> 4*3 weight + 3 bias = 15 float32
+    # elements = 480 bits total, so a bit error rate of 0.5 resolves to 240.
     scalars = _fingerprint_scalars(_make_experiment(compare_bitwise=False, faults=0.5))
-    assert scalars["bit_error_rate"] == 0.5
-    assert "faults" not in scalars
+    assert scalars["faults"] == 240
+    assert "bit_error_rate" not in scalars
+
+
+def test_fingerprint_identical_for_equivalent_faults_and_bit_error_rate():
+    # `faults=240` and `faults=0.5` resolve to the same count on this fixed
+    # fake model (15 float32 elements = 480 bits), so they must produce
+    # identical fingerprints - otherwise resuming a file recorded with one
+    # input style using the other would spuriously fail the fingerprint
+    # check.
+    from_int = _fingerprint_scalars(_make_experiment(compare_bitwise=False, faults=240))
+    from_rate = _fingerprint_scalars(
+        _make_experiment(compare_bitwise=False, faults=0.5)
+    )
+    assert from_int == from_rate
 
 
 def test_fingerprint_records_golden_and_compare_bitwise_and_metric():
@@ -541,3 +558,57 @@ def test_fingerprint_records_test_image_limit_from_batch_limit():
     )
     # batch_size=2 (fixed in `_make_experiment`) * dataset_batch_limit=1
     assert scalars["test_image_limit"] == 2
+
+
+# SECTION compute_score
+
+
+@pytest.mark.parametrize(
+    ("metric", "correct", "total", "expected"),
+    [
+        (ReliabilityMetric.Accuracy, 3, 4, 75.0),
+        (ReliabilityMetric.AccuracyDegradation, 1, 4, 25.0),
+        (ReliabilityMetric.Sdc, 3, 4, 25.0),
+        (ReliabilityMetric.Top1Sdc, 1, 4, 75.0),
+    ],
+)
+def test_compute_score_matches_each_metrics_formula(metric, correct, total, expected):
+    assert compute_score(metric, correct, total) == expected
+
+
+def test_compute_score_matches_live_experiment_score():
+    experiment = _make_experiment(compare_bitwise=False)
+    experiment.run()
+
+    serialized = json.loads(experiment.serialize())
+    correct = serialized["result"]["results"][0]
+    total_items = serialized["total_items"]
+
+    assert (
+        compute_score(ReliabilityMetric.Accuracy, correct, total_items)
+        == experiment.scores()[0]
+    )
+
+
+# SECTION SavedResult - standalone loading
+
+
+def test_saved_result_round_trip_scores_and_bit_error_rate(tmp_path):
+    experiment = _make_experiment(compare_bitwise=True, faults=3)
+    experiment.run()
+    experiment.run()
+
+    path = tmp_path / "result.json"
+    experiment.save(path)
+
+    loaded = SavedResult.load(path)
+    assert loaded.scores() == list(experiment.scores())
+    assert loaded.reliability_metric() == ReliabilityMetric.Accuracy
+    assert loaded.bit_error_rate() == pytest.approx(3 / loaded.total_bits)
+
+
+def test_saved_result_scores_empty_before_first_run():
+    experiment = _make_experiment(compare_bitwise=False)
+    saved = SavedResult.model_validate_json(experiment.serialize())
+    assert saved.total_items is None
+    assert saved.scores() == []
