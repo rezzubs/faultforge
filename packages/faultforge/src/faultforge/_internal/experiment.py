@@ -93,6 +93,11 @@ class ExperimentDisplay:
         """
         return f"[Run {run_count}]"
 
+    def extra(self) -> str | None:
+        """A string to append as-is to the end of the status message, or None
+        to omit it. Include any leading separator/spacing yourself."""
+        return None
+
     def format(
         self,
         *,
@@ -111,41 +116,44 @@ class ExperimentDisplay:
         """
         parts: list[str] = [self.progress_label(run_count), ": "]
 
-        score_name = self.score_name()
-        if score_name is not None:
-            parts.append(score_name)
-            parts.append(" = ")
+        def build() -> None:
+            score_name = self.score_name()
+            if score_name is not None:
+                parts.append(score_name)
+                parts.append(" = ")
 
-        score_unit = self.score_unit()
+            score_unit = self.score_unit()
 
-        parts.append(self.format_score(score))
-        if score_unit is not None:
-            parts.append(score_unit)
+            parts.append(self.format_score(score))
+            if score_unit is not None:
+                parts.append(score_unit)
 
-        if mean is None:
-            return "".join(parts)
+            if mean is None:
+                return
+            parts.append(" | ")
+            parts.append(f"mean {self.format_score(mean)}")
+            if score_unit is not None:
+                parts.append(score_unit)
 
-        parts.append(" | ")
-        parts.append(f"mean {self.format_score(mean)}")
-        if score_unit is not None:
-            parts.append(score_unit)
+            if margin_of_error is None:
+                return
+            parts.append(f" ±{self.format_score(margin_of_error)} (95% CI)")
 
-        if margin_of_error is None:
-            return "".join(parts)
+            has_stability = any(
+                isinstance(condition, Stability) for condition in stop_conditions
+            )
+            if not has_stability:
+                return
 
-        parts.append(f" ±{self.format_score(margin_of_error)} (95% CI)")
+            relative = relative_margin_of_error(mean, margin_of_error)
+            if relative is None:
+                return
+            parts.append(f" | Relative MoE: {relative:.2f}% of mean")
 
-        has_stability = any(
-            isinstance(condition, Stability) for condition in stop_conditions
-        )
-        if not has_stability:
-            return "".join(parts)
+        build()
+        if extra := self.extra():
+            parts.append(extra)
 
-        relative = relative_margin_of_error(mean, margin_of_error)
-        if relative is None:
-            return "".join(parts)
-
-        parts.append(f" | Relative MoE: {relative:.2f}% of mean")
         return "".join(parts)
 
 
