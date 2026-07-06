@@ -226,6 +226,15 @@ def record(
             rich_help_panel="Fault Injection",
         ),
     ] = False,
+    fault_summary: Annotated[
+        bool,
+        typer.Option(
+            help="Print a per-run fault-injection summary (bits flipped, BER, and "
+            "- if --compare-bitwise is also set - affected/masked counts and a "
+            "faulty-bit histogram) after each run.",
+            rich_help_panel="Fault Injection",
+        ),
+    ] = False,
     secded: Annotated[
         int | None,
         typer.Option(
@@ -362,6 +371,7 @@ def record(
         golden_is_encoded=golden_is_encoded,
         faults=faults_,
         compare_bitwise=compare_bitwise,
+        fault_summary=fault_summary,
         preload_dataset=preload_batches,
         dataset_batch_limit=batch_limit,
         batch_size=batch_size,

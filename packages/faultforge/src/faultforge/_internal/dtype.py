@@ -78,3 +78,13 @@ class FiDtype(enum.Enum):
                 return torch.float16
             case FiDtype.U8:
                 return torch.uint8
+
+    def bit_width(self) -> int:
+        """Return the number of bits in the dtype."""
+        match self:
+            case FiDtype.F32:
+                return 32
+            case FiDtype.F16:
+                return 16
+            case FiDtype.U8:
+                return 8

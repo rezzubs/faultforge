@@ -73,6 +73,7 @@ def _make_experiment(
     dataset_batch_limit: int | None = None,
     reliability_metric: ReliabilityMetric = ReliabilityMetric.Accuracy,
     dtype: torch.dtype = torch.float32,
+    fault_summary: bool = False,
 ) -> EncodedFaultInjection:
     bundle = _FakeBundle(in_features=4, out_features=3, batch_size=2, num_batches=2)
     return EncodedFaultInjection(
@@ -82,6 +83,7 @@ def _make_experiment(
         golden_is_encoded=golden_is_encoded,
         faults=faults,
         compare_bitwise=compare_bitwise,
+        fault_summary=fault_summary,
         dataset_batch_limit=dataset_batch_limit,
         batch_size=2,
         dtype=dtype,
@@ -345,10 +347,11 @@ def test_full_bit_error_rate_flips_every_bit():
     # in_features=4, out_features=3 -> 4*3 weight + 3 bias = 15 float32
     # elements. A bit error rate of 1.0 flips every bit in the encoded
     # memory exactly once (Picker is a full permutation), so every
-    # element's bit pattern ends up fully complemented (-1 as a signed
-    # int32 view, i.e. all bits set).
+    # element's bit pattern ends up fully complemented, i.e. all 32 bits
+    # set. Stored as the unsigned bit pattern rather than the signed int32
+    # view's `-1`.
     assert len(bitmask) == 15
-    assert all(value == -1 for value in bitmask)
+    assert all(value == (1 << 32) - 1 for value in bitmask)
 
 
 def test_faults_greater_than_bit_count_raises():
@@ -359,6 +362,66 @@ def test_faults_greater_than_bit_count_raises():
 def test_bit_error_rate_greater_than_one_raises():
     with pytest.raises(ValueError, match="bit error rate"):
         _make_experiment(compare_bitwise=False, faults=1.5)
+
+
+# SECTION Fault-injection summary display
+
+
+def test_fault_summary_off_by_default():
+    experiment = _make_experiment(compare_bitwise=True)
+    experiment.run()
+
+    assert experiment.display().extra() is None
+
+
+def test_fault_summary_without_compare_bitwise_only_shows_ber_line():
+    experiment = _make_experiment(compare_bitwise=False, fault_summary=True, faults=5)
+    experiment.run()
+
+    extra = experiment.display().extra()
+    assert extra is not None
+    assert "Flipped 5/480 bits - BER: 1.04e-02" in extra
+    assert "parameters were affected" not in extra
+    assert "faulty bit" not in extra
+
+
+def test_fault_summary_with_compare_bitwise_includes_histogram():
+    experiment = _make_experiment(compare_bitwise=True, fault_summary=True, faults=1.0)
+    experiment.run()
+
+    extra = experiment.display().extra()
+    assert extra is not None
+    assert "Flipped 480/480 bits - BER: 1.00e+00" in extra
+    assert "15 parameters were affected" in extra
+    assert "480 bits were measured faulty (0.00% masked)" in extra
+    # Every element gets all 32 bits flipped, so the whole histogram is one bucket.
+    assert "15 parameters had 32 faulty bits" in extra
+
+
+def test_fault_summary_histogram_counts_sum_to_bitmask_length():
+    experiment = _make_experiment(compare_bitwise=True, fault_summary=True, faults=200)
+    experiment.run()
+
+    bitmask = _result(experiment)["results"][0]["bitmask"]
+    extra = experiment.display().extra()
+    assert extra is not None
+
+    histogram_lines = [line for line in extra.splitlines() if "faulty bit" in line]
+    total = sum(int(line.split()[0]) for line in histogram_lines)
+    assert total == len(bitmask)
+
+
+def test_fault_summary_updates_after_each_run():
+    experiment = _make_experiment(compare_bitwise=False, fault_summary=True, faults=3)
+    experiment.run()
+    first = experiment.display().extra()
+    experiment.run()
+    second = experiment.display().extra()
+
+    assert first is not None
+    assert second is not None
+    assert "Flipped 3/480 bits" in first
+    assert "Flipped 3/480 bits" in second
 
 
 # --- Fingerprint content ---------------------------------------------------

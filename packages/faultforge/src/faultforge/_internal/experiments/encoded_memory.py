@@ -25,7 +25,7 @@ from faultforge._internal.common import (
     DeviceLike,
 )
 from faultforge._internal.dataset import BatchedDataset
-from faultforge._internal.dtype import EncodingDtype
+from faultforge._internal.dtype import EncodingDtype, FiDtype
 from faultforge._internal.encoding.abc import Encoder
 from faultforge._internal.encoding.nn import EncodedModule
 from faultforge._internal.experiment import (
@@ -186,11 +186,57 @@ def discard_bitmasks_in_file(path: AnyPath) -> None:
     os.replace(temp.name, path)
 
 
+@dataclass(slots=True, frozen=True)
+class _FaultInjectionSummary:
+    """A single run's fault-injection stats, for display via `_Display.extra`.
+
+    Not part of any serialized result - purely a display-time snapshot of the
+    latest run.
+    """
+
+    faults_injected: int
+    total_bits: int
+    bit_histogram: dict[int, int] | None
+    """Maps "faulty bits in one element" -> "how many elements had that many".
+    `None` when bitwise comparison wasn't recorded for this run
+    (`compare_bitwise=False`)."""
+
+    def bit_error_rate(self) -> float:
+        return self.faults_injected / self.total_bits
+
+    @override
+    def __str__(self) -> str:
+        lines = [
+            f"Flipped {self.faults_injected}/{self.total_bits} bits "
+            f"- BER: {self.bit_error_rate():.2e}"
+        ]
+
+        if self.bit_histogram is not None:
+            if self.faults_injected > 0:
+                measured = sum(
+                    bits * count for bits, count in self.bit_histogram.items()
+                )
+                affected = sum(self.bit_histogram.values())
+                masked = (1 - measured / self.faults_injected) * 100
+                lines.append(f"{affected} parameters were affected")
+                lines.append(
+                    f"{measured} bits were measured faulty ({masked:.2f}% masked)"
+                )
+            for bits, count in sorted(self.bit_histogram.items()):
+                plural = "s" if bits != 1 else ""
+                lines.append(f"{count} parameters had {bits} faulty bit{plural}")
+
+        return "\n".join(lines)
+
+
 class _Display(ExperimentDisplay):
     """`EncodedFaultInjection`'s display: names/units the score per metric."""
 
-    def __init__(self, metric: ReliabilityMetric) -> None:
+    def __init__(
+        self, metric: ReliabilityMetric, fault_summary: _FaultInjectionSummary | None
+    ) -> None:
         self._metric = metric
+        self._fault_summary = fault_summary
 
     @override
     def score_name(self) -> str | None:
@@ -199,6 +245,12 @@ class _Display(ExperimentDisplay):
     @override
     def score_unit(self) -> str | None:
         return "%"
+
+    @override
+    def extra(self) -> str | None:
+        if self._fault_summary is None:
+            return None
+        return "\n" + str(self._fault_summary)
 
 
 @final
@@ -213,6 +265,7 @@ class EncodedFaultInjection(Experiment):
     _faulty_bit_count: int
     _progress: Progress | None
     _fingerprint: Fingerprint
+    _show_fault_summary: bool
 
     _unencoded_golden: nn.Module | None
 
@@ -220,6 +273,7 @@ class EncodedFaultInjection(Experiment):
     _golden_results: list[Tensor]
     _total_items: int | None
     _result: SimpleResult | DetailedResult
+    _last_fault_summary: _FaultInjectionSummary | None
 
     def __init__(
         self,
@@ -230,6 +284,7 @@ class EncodedFaultInjection(Experiment):
         golden_is_encoded: bool = False,
         faults: int | float = 1,
         compare_bitwise: bool = False,
+        fault_summary: bool = False,
         preload_dataset: bool = True,
         dataset_batch_limit: int | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
@@ -243,6 +298,8 @@ class EncodedFaultInjection(Experiment):
         self._result = (
             DetailedResult(results=[]) if compare_bitwise else SimpleResult(results=[])
         )
+        self._show_fault_summary = fault_summary
+        self._last_fault_summary = None
 
         model = bundle.load_model(device, dtype=dtype, progress=progress)
         if golden_is_encoded:
@@ -380,7 +437,7 @@ class EncodedFaultInjection(Experiment):
 
     @override
     def display(self) -> ExperimentDisplay:
-        return _Display(self._reliability_metric)
+        return _Display(self._reliability_metric, self._last_fault_summary)
 
     def discard_bitmasks(self) -> None:
         """Drop any recorded bitmasks, converting to the simpler result kind.
@@ -434,14 +491,28 @@ class EncodedFaultInjection(Experiment):
             else:
                 golden_params = list(self._model.decode().parameters())
 
+            # `xor` is a bitcast view of a signed dtype (see `bitwise_xor`), so
+            # e.g. an all-ones 32-bit pattern comes back as `-1`. Masking to the
+            # dtype's bit width recovers the true unsigned bit pattern, relying
+            # on Python's arbitrary-precision two's-complement semantics
+            # (`-1 & 0xFFFFFFFF == 0xFFFFFFFF`).
+            mask = (1 << FiDtype.from_torch(self._dtype).bit_width()) - 1
+
             with stage(
                 self._progress, "Bitwise Comparison", total=len(golden_params)
             ) as s:
                 bitmask = []
                 for faulty, golden in zip(faulty_params, golden_params, strict=True):
                     xor = bitwise_xor(faulty, golden)
-                    bitmask.extend(xor[xor != 0].tolist())
+                    bitmask.extend(value & mask for value in xor[xor != 0].tolist())
                     s.advance()
+
+        bit_histogram: dict[int, int] | None = None
+        if self._show_fault_summary and bitmask is not None:
+            bit_histogram = {}
+            for value in bitmask:
+                ones = value.bit_count()
+                bit_histogram[ones] = bit_histogram.get(ones, 0) + 1
 
         result = BatchReliability(correct=0, total=0)
         with (
@@ -492,6 +563,13 @@ class EncodedFaultInjection(Experiment):
             )
         else:
             self._result.results.append(result.correct)
+
+        if self._show_fault_summary:
+            self._last_fault_summary = _FaultInjectionSummary(
+                faults_injected=self._faulty_bit_count,
+                total_bits=self._model.bit_count(),
+                bit_histogram=bit_histogram,
+            )
 
 
 def _batch_critical_sdc(
