@@ -6,11 +6,17 @@ scores the result according to a `ReliabilityMetric`.
 """
 
 from faultforge._internal.experiments.encoded_memory import (
+    DetailedResult,
+    DetailedRunResult,
     EncodedFaultInjection,
     ReliabilityMetric,
+    SimpleResult,
 )
 
 __all__ = [
+    "DetailedResult",
+    "DetailedRunResult",
     "EncodedFaultInjection",
     "ReliabilityMetric",
+    "SimpleResult",
 ]

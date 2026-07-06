@@ -8,10 +8,10 @@ import enum
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import final, override
+from typing import Annotated, Literal, final, override
 
 import torch
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from torch import Tensor, nn
 
 from faultforge._internal.common import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DeviceLike
@@ -26,6 +26,7 @@ from faultforge._internal.fault import BitFlip
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.loading.abc import ModelBundle
 from faultforge._internal.progress import Progress, stage
+from faultforge._internal.tensor import bitwise_xor
 from faultforge._rust import Picker
 
 logger = logging.getLogger(__name__)
@@ -83,12 +84,52 @@ class BatchReliability:
         )
 
 
+class SimpleResult(BaseModel):
+    """Correct/total accounting only."""
+
+    kind: Literal["simple"] = "simple"
+    results: list[int]
+
+    def correct_counts(self) -> list[int]:
+        return self.results
+
+
+class DetailedRunResult(BaseModel):
+    """A single run's correct/total accounting plus its bitwise-comparison data."""
+
+    correct_count: int
+    bitmask: list[int]
+    """Flat list of nonzero xor values between the faulty and golden parameters,
+    across all parameter tensors."""
+
+
+class DetailedResult(BaseModel):
+    """Correct/total accounting plus per-run bitwise-comparison data.
+
+    Each run contributes a single `DetailedRunResult`, so `correct` and
+    `bitmask` can never drift out of sync the way two parallel lists could.
+    """
+
+    kind: Literal["detailed"] = "detailed"
+    results: list[DetailedRunResult]
+
+    def correct_counts(self) -> list[int]:
+        return [run.correct_count for run in self.results]
+
+    def discard_bitmasks(self) -> SimpleResult:
+        """Drop the recorded bitmasks, keeping only the correct/total accounting."""
+        return SimpleResult(results=self.correct_counts())
+
+
+ExperimentResult = Annotated[SimpleResult | DetailedResult, Field(discriminator="kind")]
+
+
 class _SavedData(BaseModel):
     """The on-disk shape of an `EncodedFaultInjection`'s results."""
 
     fingerprint: Fingerprint
     total_items: int | None
-    results: list[int]
+    result: ExperimentResult
 
 
 class _Display(ExperimentDisplay):
@@ -123,7 +164,7 @@ class EncodedFaultInjection(Experiment):
     # populated during first run
     _golden_results: list[Tensor]
     _total_items: int | None
-    _results: list[int]
+    _result: SimpleResult | DetailedResult
 
     def __init__(
         self,
@@ -133,6 +174,7 @@ class EncodedFaultInjection(Experiment):
         *,
         golden_is_encoded: bool = False,
         faults: int | float = 1,
+        compare_bitwise: bool = False,
         preload_dataset: bool = True,
         dataset_batch_limit: int | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
@@ -142,7 +184,9 @@ class EncodedFaultInjection(Experiment):
         self._progress = progress
         self._golden_results = []
         self._total_items = None
-        self._results = []
+        self._result = (
+            DetailedResult(results=[]) if compare_bitwise else SimpleResult(results=[])
+        )
 
         model = bundle.load_model(device, progress=progress)
         if golden_is_encoded:
@@ -170,6 +214,7 @@ class EncodedFaultInjection(Experiment):
             scalars={
                 "reliability_metric": reliability_metric.value,
                 "golden": "encoded" if golden_is_encoded else "unencoded",
+                "compare_bitwise": compare_bitwise,
             },
             children={
                 "bundle": [bundle.fingerprint()],
@@ -273,18 +318,36 @@ class EncodedFaultInjection(Experiment):
     def scores(self) -> Sequence[float]:
         if self._total_items is None:
             return []
-        return [self._score(correct) for correct in self._results]
+        return [self._score(correct) for correct in self._result.correct_counts()]
 
     @override
     def display(self) -> ExperimentDisplay:
         return _Display(self._reliability_metric)
+
+    def discard_bitmasks(self) -> None:
+        """Drop any recorded bitmasks, converting to the simpler result kind.
+
+        Also flips the fingerprint's `compare_bitwise` scalar to `False`, since
+        otherwise a later `deserialize` of this experiment's saved data against
+        a freshly constructed `EncodedFaultInjection(..., compare_bitwise=False)`
+        would report a spurious fingerprint mismatch even though the result
+        kinds now agree. A no-op if bitmasks weren't being recorded in the
+        first place.
+        """
+        if isinstance(self._result, DetailedResult):
+            self._result = self._result.discard_bitmasks()
+            self._fingerprint = self._fingerprint.model_copy(
+                update={
+                    "scalars": {**self._fingerprint.scalars, "compare_bitwise": False}
+                }
+            )
 
     @override
     def serialize(self) -> str:
         return _SavedData(
             fingerprint=self._fingerprint,
             total_items=self._total_items,
-            results=self._results,
+            result=self._result,
         ).model_dump_json()
 
     @override
@@ -292,7 +355,7 @@ class EncodedFaultInjection(Experiment):
         loaded = _SavedData.model_validate_json(content)
         self._fingerprint.raise_if_differs(loaded.fingerprint)
         self._total_items = loaded.total_items
-        self._results = loaded.results
+        self._result = loaded.result
 
     @override
     def run(self) -> None:
@@ -313,6 +376,23 @@ class EncodedFaultInjection(Experiment):
                 fault_targets.append((BitFlip(), fault_target))
 
             model.apply_faults(fault_targets)
+
+        bitmask: list[int] | None = None
+        if isinstance(self._result, DetailedResult):
+            faulty_params = list(model.decode().parameters())
+            if self._unencoded_golden is not None:
+                golden_params = list(self._unencoded_golden.parameters())
+            else:
+                golden_params = list(self._model.decode().parameters())
+
+            with stage(
+                self._progress, "Bitwise Comparison", total=len(golden_params)
+            ) as s:
+                bitmask = []
+                for faulty, golden in zip(faulty_params, golden_params, strict=True):
+                    xor = bitwise_xor(faulty, golden)
+                    bitmask.extend(xor[xor != 0].tolist())
+                    s.advance()
 
         result = BatchReliability(correct=0, total=0)
         with (
@@ -356,7 +436,13 @@ class EncodedFaultInjection(Experiment):
                 f"model returned {result.total}"
             )
 
-        self._results.append(result.correct)
+        if isinstance(self._result, DetailedResult):
+            assert bitmask is not None
+            self._result.results.append(
+                DetailedRunResult(correct_count=result.correct, bitmask=bitmask)
+            )
+        else:
+            self._result.results.append(result.correct)
 
 
 def _batch_critical_sdc(

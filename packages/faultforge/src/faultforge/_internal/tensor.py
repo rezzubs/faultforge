@@ -2,6 +2,7 @@
 
 import numpy as np
 import torch
+from torch import Tensor
 
 from faultforge import _rust
 from faultforge._internal.dtype import FiDtype
@@ -9,6 +10,27 @@ from faultforge._internal.fault import (
     Fault,
     fault_to_rust,
 )
+
+
+def bitwise_xor(a: Tensor, b: Tensor) -> Tensor:
+    """Elementwise bitwise xor of two tensors.
+
+    Floats are bitcast to same-width integers first, since `torch.bitwise_xor`
+    only supports integer/bool dtypes.
+
+    Raises:
+        ValueError: If the data type is unsupported. See `FiDtype`.
+    """
+    assert a.shape == b.shape
+    assert a.dtype == b.dtype
+
+    match FiDtype.from_torch(a.dtype):
+        case FiDtype.F32:
+            return torch.bitwise_xor(a.view(torch.int32), b.view(torch.int32))
+        case FiDtype.F16:
+            return torch.bitwise_xor(a.view(torch.int16), b.view(torch.int16))
+        case FiDtype.U8:
+            return torch.bitwise_xor(a, b)
 
 
 def tensor_list_dtype(ts: list[torch.Tensor]) -> torch.dtype | None:
