@@ -26,6 +26,7 @@ from faultforge.experiment import (
 from faultforge.experiments.encoded_memory import (
     EncodedFaultInjection,
     ReliabilityMetric,
+    discard_bitmasks_in_file,
 )
 from faultforge.fingerprint import FingerprintError
 from faultforge.loading import (
@@ -203,6 +204,15 @@ def record(
             rich_help_panel="Fault Injection",
         ),
     ] = None,
+    compare_bitwise: Annotated[
+        bool,
+        typer.Option(
+            help="Additionally record a bitwise comparison of each run's faulty "
+            "parameters against the golden model's, keeping the nonzero xor "
+            "results. Increases the size of recorded results.",
+            rich_help_panel="Fault Injection",
+        ),
+    ] = False,
     secded: Annotated[
         int | None,
         typer.Option(
@@ -336,6 +346,7 @@ def record(
         reliability_metric,
         golden_is_encoded=golden_is_encoded,
         faults=faults_,
+        compare_bitwise=compare_bitwise,
         preload_dataset=preload_batches,
         dataset_batch_limit=batch_limit,
         batch_size=batch_size,
@@ -382,3 +393,20 @@ def record(
             )
 
     experiment.run_loop(stop_conditions=stop_conditions, save_config=save_config)
+
+
+@app.command()
+def discard_bitmasks(
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to a result file previously recorded with --compare-bitwise."
+        ),
+    ],
+) -> None:
+    """Discard any recorded bitmasks from a saved result file, shrinking it.
+
+    Operates directly on the saved file; unlike `record`, this doesn't need to
+    reload the model or dataset that produced it.
+    """
+    discard_bitmasks_in_file(path)

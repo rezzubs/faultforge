@@ -11,6 +11,7 @@ from faultforge._internal.experiments.encoded_memory import (
     EncodedFaultInjection,
     ReliabilityMetric,
     SimpleResult,
+    discard_bitmasks_in_file,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "EncodedFaultInjection",
     "ReliabilityMetric",
     "SimpleResult",
+    "discard_bitmasks_in_file",
 ]

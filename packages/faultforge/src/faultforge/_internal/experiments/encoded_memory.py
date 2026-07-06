@@ -6,15 +6,23 @@ See `faultforge.experiments.encoded_memory` for a general overview.
 import copy
 import enum
 import logging
+import os
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Literal, final, override
 
 import torch
 from pydantic import BaseModel, Field
 from torch import Tensor, nn
 
-from faultforge._internal.common import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DeviceLike
+from faultforge._internal.common import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_DEVICE,
+    AnyPath,
+    DeviceLike,
+)
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.encoding.abc import Encoder
 from faultforge._internal.encoding.nn import EncodedModule
@@ -130,6 +138,50 @@ class _SavedData(BaseModel):
     fingerprint: Fingerprint
     total_items: int | None
     result: ExperimentResult
+
+
+def _discard_bitmasks(
+    result: SimpleResult | DetailedResult, fingerprint: Fingerprint
+) -> tuple[SimpleResult | DetailedResult, Fingerprint]:
+    """Drop any recorded bitmasks, converting to the simpler result kind.
+
+    Also flips the fingerprint's `compare_bitwise` scalar to `False`, since
+    otherwise comparing this fingerprint against one from a freshly
+    constructed `EncodedFaultInjection(..., compare_bitwise=False)` would
+    report a spurious mismatch even though the result kinds now agree. A
+    no-op if bitmasks weren't being recorded in the first place.
+    """
+    if not isinstance(result, DetailedResult):
+        return result, fingerprint
+
+    updated_fingerprint = fingerprint.model_copy(
+        update={"scalars": {**fingerprint.scalars, "compare_bitwise": False}}
+    )
+    return result.discard_bitmasks(), updated_fingerprint
+
+
+def discard_bitmasks_in_file(path: AnyPath) -> None:
+    """Discard any recorded bitmasks from a saved `EncodedFaultInjection` result file.
+
+    Unlike `EncodedFaultInjection.discard_bitmasks`, this reads and rewrites a
+    file previously written by `Experiment.save`/`save_atomic` directly, so it
+    doesn't require reconstructing the model/dataset that produced it. Writes
+    back atomically, the same way `Experiment.save_atomic` does. A no-op
+    (besides rewriting the file) if bitmasks weren't recorded in the first
+    place.
+    """
+    path = Path(path).expanduser()
+    loaded = _SavedData.model_validate_json(path.read_text())
+    result, fingerprint = _discard_bitmasks(loaded.result, loaded.fingerprint)
+    updated = _SavedData(
+        fingerprint=fingerprint,
+        total_items=loaded.total_items,
+        result=result,
+    ).model_dump_json()
+
+    with tempfile.NamedTemporaryFile("w", delete=False) as temp:
+        temp.write(updated)
+    os.replace(temp.name, path)
 
 
 class _Display(ExperimentDisplay):
@@ -327,20 +379,11 @@ class EncodedFaultInjection(Experiment):
     def discard_bitmasks(self) -> None:
         """Drop any recorded bitmasks, converting to the simpler result kind.
 
-        Also flips the fingerprint's `compare_bitwise` scalar to `False`, since
-        otherwise a later `deserialize` of this experiment's saved data against
-        a freshly constructed `EncodedFaultInjection(..., compare_bitwise=False)`
-        would report a spurious fingerprint mismatch even though the result
-        kinds now agree. A no-op if bitmasks weren't being recorded in the
-        first place.
+        A no-op if bitmasks weren't being recorded in the first place.
         """
-        if isinstance(self._result, DetailedResult):
-            self._result = self._result.discard_bitmasks()
-            self._fingerprint = self._fingerprint.model_copy(
-                update={
-                    "scalars": {**self._fingerprint.scalars, "compare_bitwise": False}
-                }
-            )
+        self._result, self._fingerprint = _discard_bitmasks(
+            self._result, self._fingerprint
+        )
 
     @override
     def serialize(self) -> str:
