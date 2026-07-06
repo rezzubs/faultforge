@@ -186,6 +186,15 @@ def discard_bitmasks_in_file(path: AnyPath) -> None:
     os.replace(temp.name, path)
 
 
+def _bit_histogram(bitmask: Sequence[int]) -> dict[int, int]:
+    """Count how many `bitmask` elements have each number of set bits."""
+    histogram: dict[int, int] = {}
+    for value in bitmask:
+        ones = value.bit_count()
+        histogram[ones] = histogram.get(ones, 0) + 1
+    return histogram
+
+
 @dataclass(slots=True, frozen=True)
 class _FaultInjectionSummary:
     """A single run's fault-injection stats, for display via `_Display.extra`.
@@ -463,11 +472,8 @@ class EncodedFaultInjection(Experiment):
         self._total_items = loaded.total_items
         self._result = loaded.result
 
-    @override
-    def run(self) -> None:
-        if not self._golden_results and self._reliability_metric.requires_golden():
-            self._populate_golden()
-
+    def _inject_faults(self) -> EncodedModule:
+        """Clone the model and flip `self._faulty_bit_count` unique random bits in it."""
         picker = Picker(self._model.bit_count())
         model = self._model.clone()
         with stage(self._progress, "Fault Injection"):
@@ -482,38 +488,42 @@ class EncodedFaultInjection(Experiment):
                 fault_targets.append((BitFlip(), fault_target))
 
             model.apply_faults(fault_targets)
+        return model
 
-        bitmask: list[int] | None = None
-        if isinstance(self._result, DetailedResult):
-            faulty_params = list(model.decode().parameters())
-            if self._unencoded_golden is not None:
-                golden_params = list(self._unencoded_golden.parameters())
-            else:
-                golden_params = list(self._model.decode().parameters())
+    def _compare_bitwise(self, model: EncodedModule) -> list[int] | None:
+        """Bitwise-compare `model`'s decoded parameters against the golden ones.
 
-            # `xor` is a bitcast view of a signed dtype (see `bitwise_xor`), so
-            # e.g. an all-ones 32-bit pattern comes back as `-1`. Masking to the
-            # dtype's bit width recovers the true unsigned bit pattern, relying
-            # on Python's arbitrary-precision two's-complement semantics
-            # (`-1 & 0xFFFFFFFF == 0xFFFFFFFF`).
-            mask = (1 << FiDtype.from_torch(self._dtype).bit_width()) - 1
+        Returns the flat list of nonzero (unsigned) xor values across all
+        parameter tensors, or `None` when `compare_bitwise=False` (i.e.
+        `self._result` isn't a `DetailedResult`).
+        """
+        if not isinstance(self._result, DetailedResult):
+            return None
 
-            with stage(
-                self._progress, "Bitwise Comparison", total=len(golden_params)
-            ) as s:
-                bitmask = []
-                for faulty, golden in zip(faulty_params, golden_params, strict=True):
-                    xor = bitwise_xor(faulty, golden)
-                    bitmask.extend(value & mask for value in xor[xor != 0].tolist())
-                    s.advance()
+        faulty_params = list(model.decode().parameters())
+        if self._unencoded_golden is not None:
+            golden_params = list(self._unencoded_golden.parameters())
+        else:
+            golden_params = list(self._model.decode().parameters())
 
-        bit_histogram: dict[int, int] | None = None
-        if self._show_fault_summary and bitmask is not None:
-            bit_histogram = {}
-            for value in bitmask:
-                ones = value.bit_count()
-                bit_histogram[ones] = bit_histogram.get(ones, 0) + 1
+        # `xor` is a bitcast view of a signed dtype (see `bitwise_xor`), so
+        # e.g. an all-ones 32-bit pattern comes back as `-1`. Masking to the
+        # dtype's bit width recovers the true unsigned bit pattern, relying
+        # on Python's arbitrary-precision two's-complement semantics
+        # (`-1 & 0xFFFFFFFF == 0xFFFFFFFF`).
+        mask = (1 << FiDtype.from_torch(self._dtype).bit_width()) - 1
 
+        with stage(self._progress, "Bitwise Comparison", total=len(golden_params)) as s:
+            bitmask: list[int] = []
+            for faulty, golden in zip(faulty_params, golden_params, strict=True):
+                xor = bitwise_xor(faulty, golden)
+                bitmask.extend(value & mask for value in xor[xor != 0].tolist())
+                s.advance()
+
+        return bitmask
+
+    def _infer(self, model: EncodedModule) -> BatchReliability:
+        """Run inference on `model` over the dataset, scored by `self._reliability_metric`."""
         result = BatchReliability(correct=0, total=0)
         with (
             stage(self._progress, "Inference", total=self._dataset.batch_count()) as s,
@@ -543,7 +553,12 @@ class EncodedFaultInjection(Experiment):
                 s.advance()
 
         self._dataset.reset()
+        return result
 
+    def _record_result(
+        self, result: BatchReliability, bitmask: list[int] | None
+    ) -> None:
+        """Validate `result`'s totals, then append it (and `bitmask`) to `self._result`."""
         if self._total_items is None:
             self._total_items = result.total
             assert not self._reliability_metric.requires_golden(), (
@@ -568,8 +583,20 @@ class EncodedFaultInjection(Experiment):
             self._last_fault_summary = _FaultInjectionSummary(
                 faults_injected=self._faulty_bit_count,
                 total_bits=self._model.bit_count(),
-                bit_histogram=bit_histogram,
+                bit_histogram=(
+                    _bit_histogram(bitmask) if bitmask is not None else None
+                ),
             )
+
+    @override
+    def run(self) -> None:
+        if not self._golden_results and self._reliability_metric.requires_golden():
+            self._populate_golden()
+
+        model = self._inject_faults()
+        bitmask = self._compare_bitwise(model)
+        result = self._infer(model)
+        self._record_result(result, bitmask)
 
 
 def _batch_critical_sdc(
