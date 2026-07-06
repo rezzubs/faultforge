@@ -2,9 +2,10 @@
 
 import abc
 
+import torch
 from torch import nn
 
-from faultforge._internal.common import DeviceLike
+from faultforge._internal.common import DEFAULT_DTYPE, DeviceLike
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.progress import Progress
@@ -15,9 +16,13 @@ class ModelBundle(abc.ABC):
 
     @abc.abstractmethod
     def load_model(
-        self, device: DeviceLike, *, progress: Progress | None = None
+        self,
+        device: DeviceLike,
+        *,
+        dtype: torch.dtype = DEFAULT_DTYPE,
+        progress: Progress | None = None,
     ) -> nn.Module:
-        """Load the model"""
+        """Load the model, casting its parameters to `dtype`."""
 
     @abc.abstractmethod
     def load_dataset(

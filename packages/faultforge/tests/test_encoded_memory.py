@@ -40,9 +40,15 @@ class _FakeBundle(ModelBundle):
 
     @override
     def load_model(
-        self, device: DeviceLike, *, progress: Progress | None = None
+        self,
+        device: DeviceLike,
+        *,
+        dtype: torch.dtype = torch.float32,
+        progress: Progress | None = None,
     ) -> nn.Module:
-        return nn.Linear(self._in_features, self._out_features)
+        return nn.Linear(self._in_features, self._out_features).to(
+            device=device, dtype=dtype
+        )
 
     @override
     def load_dataset(
@@ -66,6 +72,7 @@ def _make_experiment(
     golden_is_encoded: bool = False,
     dataset_batch_limit: int | None = None,
     reliability_metric: ReliabilityMetric = ReliabilityMetric.Accuracy,
+    dtype: torch.dtype = torch.float32,
 ) -> EncodedFaultInjection:
     bundle = _FakeBundle(in_features=4, out_features=3, batch_size=2, num_batches=2)
     return EncodedFaultInjection(
@@ -77,6 +84,7 @@ def _make_experiment(
         compare_bitwise=compare_bitwise,
         dataset_batch_limit=dataset_batch_limit,
         batch_size=2,
+        dtype=dtype,
     )
 
 
@@ -99,6 +107,19 @@ def test_detailed_result_when_compare_bitwise():
     assert len(result["results"]) == 1
     # A bit flip always changes the underlying bit pattern, so the faulty
     # parameter tensors must disagree with the golden ones somewhere.
+    assert len(result["results"][0]["bitmask"]) > 0
+
+
+def test_detailed_result_when_compare_bitwise_f16():
+    # Regression test: `_populate_golden`/`run` must cast the dataset's
+    # (always-float32) inputs to the model's dtype before calling forward,
+    # otherwise this raises a dtype-mismatch RuntimeError.
+    experiment = _make_experiment(compare_bitwise=True, dtype=torch.float16)
+    experiment.run()
+
+    result = _result(experiment)
+    assert result["kind"] == "detailed"
+    assert len(result["results"]) == 1
     assert len(result["results"][0]["bitmask"]) > 0
 
 
@@ -280,13 +301,15 @@ def test_batch_critical_sdc_counts_matching_top1_predictions():
     ],
 )
 @pytest.mark.parametrize("golden_is_encoded", [False, True])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 def test_all_reliability_metrics_run_end_to_end(
-    metric: ReliabilityMetric, golden_is_encoded: bool
+    metric: ReliabilityMetric, golden_is_encoded: bool, dtype: torch.dtype
 ):
     experiment = _make_experiment(
         compare_bitwise=False,
         golden_is_encoded=golden_is_encoded,
         reliability_metric=metric,
+        dtype=dtype,
     )
     experiment.run()
 
@@ -368,6 +391,16 @@ def test_fingerprint_records_golden_and_compare_bitwise_and_metric():
     assert scalars["golden"] == "encoded"
     assert scalars["compare_bitwise"] is True
     assert scalars["reliability_metric"] == "sdc"
+
+
+def test_fingerprint_records_dtype():
+    scalars = _fingerprint_scalars(_make_experiment(compare_bitwise=False))
+    assert scalars["dtype"] == "f32"
+
+    scalars = _fingerprint_scalars(
+        _make_experiment(compare_bitwise=False, dtype=torch.float16)
+    )
+    assert scalars["dtype"] == "f16"
 
 
 def test_fingerprint_omits_test_image_limit_by_default():

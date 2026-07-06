@@ -12,6 +12,7 @@ from faultforge._internal.common import (
     CACHE_DIRECTORY,
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
+    DEFAULT_DTYPE,
     DeviceLike,
 )
 from faultforge._internal.dataset import BatchedDataset
@@ -117,7 +118,11 @@ class Cifar(ModelBundle):
 
     @override
     def load_model(
-        self, device: DeviceLike, *, progress: Progress | None = None
+        self,
+        device: DeviceLike,
+        *,
+        dtype: torch.dtype = DEFAULT_DTYPE,
+        progress: Progress | None = None,
     ) -> nn.Module:
         """Load the model."""
 
@@ -134,7 +139,7 @@ class Cifar(ModelBundle):
             raise TypeError(
                 f"torch.hub.load returned {type(model)}, expected nn.Module"
             )
-        return model.to(device)
+        return model.to(device=device, dtype=dtype)
 
     @override
     def load_dataset(

@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Annotated
 
+import torch
 import typer
 from faultforge import DEFAULT_BATCH_SIZE
 from faultforge.encoding import (
@@ -178,6 +179,18 @@ def record(
             rich_help_panel="Model Setup",
         ),
     ] = None,
+    f16: Annotated[
+        bool,
+        typer.Option(
+            help="Load and run the model in float16 (half precision) instead of "
+            "float32. Halves the encoded bit-width per parameter, changing what "
+            "--faults/--bit-error-rate mean numerically. Some PyTorch CPU "
+            "kernels have incomplete float16 support for certain architectures; "
+            "if you hit a 'not implemented for Half' error, try a CUDA "
+            "--device instead.",
+            rich_help_panel="Model Setup",
+        ),
+    ] = False,
     reliability_metric: Annotated[
         ReliabilityMetric,
         typer.Option(
@@ -340,6 +353,8 @@ def record(
                 "Only one of --faults or --bit-error-rate can be specified"
             )
 
+    dtype = torch.float16 if f16 else torch.float32
+
     experiment = EncodedFaultInjection(
         bundle,
         encoder,
@@ -351,6 +366,7 @@ def record(
         dataset_batch_limit=batch_limit,
         batch_size=batch_size,
         device=device,
+        dtype=dtype,
         progress=Progress(),
     )
     stop_conditions: list[StopCondition] = []

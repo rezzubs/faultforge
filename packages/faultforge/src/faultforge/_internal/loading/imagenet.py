@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import override
 
 import timm
+import torch
 import torchvision
 from PIL import Image
 from torch import (
@@ -18,7 +19,7 @@ from torch import (
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
-from faultforge._internal.common import AnyPath, DeviceLike
+from faultforge._internal.common import AnyPath, DEFAULT_DTYPE, DeviceLike
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.loading.abc import ModelBundle
@@ -154,9 +155,15 @@ class ImageNet(ModelBundle):
 
     @override
     def load_model(
-        self, device: DeviceLike, *, progress: Progress | None = None
+        self,
+        device: DeviceLike,
+        *,
+        dtype: torch.dtype = DEFAULT_DTYPE,
+        progress: Progress | None = None,
     ) -> nn.Module:
-        return copy.deepcopy(self._cached_model(progress=progress)).to(device)
+        return copy.deepcopy(self._cached_model(progress=progress)).to(
+            device=device, dtype=dtype
+        )
 
     @override
     def load_dataset(

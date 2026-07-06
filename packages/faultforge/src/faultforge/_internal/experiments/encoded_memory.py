@@ -20,10 +20,12 @@ from torch import Tensor, nn
 from faultforge._internal.common import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
+    DEFAULT_DTYPE,
     AnyPath,
     DeviceLike,
 )
 from faultforge._internal.dataset import BatchedDataset
+from faultforge._internal.dtype import EncodingDtype
 from faultforge._internal.encoding.abc import Encoder
 from faultforge._internal.encoding.nn import EncodedModule
 from faultforge._internal.experiment import (
@@ -206,6 +208,7 @@ class EncodedFaultInjection(Experiment):
     _model: EncodedModule
     _dataset: BatchedDataset
     _device: torch.device
+    _dtype: torch.dtype
     _reliability_metric: ReliabilityMetric
     _faulty_bit_count: int
     _progress: Progress | None
@@ -231,6 +234,7 @@ class EncodedFaultInjection(Experiment):
         dataset_batch_limit: int | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
+        dtype: torch.dtype = DEFAULT_DTYPE,
         progress: Progress | None = None,
     ) -> None:
         self._progress = progress
@@ -240,7 +244,7 @@ class EncodedFaultInjection(Experiment):
             DetailedResult(results=[]) if compare_bitwise else SimpleResult(results=[])
         )
 
-        model = bundle.load_model(device, progress=progress)
+        model = bundle.load_model(device, dtype=dtype, progress=progress)
         if golden_is_encoded:
             self._unencoded_golden = None
         else:
@@ -248,6 +252,7 @@ class EncodedFaultInjection(Experiment):
 
         self._model = EncodedModule(model, encoder, progress=progress)
         self._device = torch.device(device)
+        self._dtype = dtype
         self._reliability_metric = reliability_metric
 
         self._dataset = bundle.load_dataset(batch_size, device, progress=progress)
@@ -267,6 +272,7 @@ class EncodedFaultInjection(Experiment):
                 "reliability_metric": reliability_metric.value,
                 "golden": "encoded" if golden_is_encoded else "unencoded",
                 "compare_bitwise": compare_bitwise,
+                "dtype": EncodingDtype.from_torch(dtype).name.lower(),
             },
             children={
                 "bundle": [bundle.fingerprint()],
@@ -341,7 +347,7 @@ class EncodedFaultInjection(Experiment):
                 torch.no_grad(),
             ):
                 for batch in self._dataset:
-                    logits = golden.forward(batch.inputs)
+                    logits = golden.forward(batch.inputs.to(dtype=self._dtype))
                     processed = self._process_golden(logits)
                     total_items += processed.numel()
                     self._golden_results.append(processed)
@@ -444,7 +450,7 @@ class EncodedFaultInjection(Experiment):
         ):
             for batch_index, batch in enumerate(self._dataset):
                 # n_batches x n_classes
-                logits = model.forward(batch.inputs)
+                logits = model.forward(batch.inputs.to(dtype=self._dtype))
 
                 match self._reliability_metric:
                     case ReliabilityMetric.Accuracy:
