@@ -38,7 +38,7 @@ from faultforge.loading import (
 )
 from faultforge.progress import Progress
 
-app = typer.Typer()
+app = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]})
 logger = logging.getLogger(__name__)
 
 
