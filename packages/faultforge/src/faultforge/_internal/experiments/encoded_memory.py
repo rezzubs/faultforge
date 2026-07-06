@@ -235,11 +235,14 @@ class EncodedFaultInjection(Experiment):
         golden: nn.Module = self._unencoded_golden or self._model
 
         try:
-            with stage(
-                self._progress,
-                "Computing golden results",
-                total=self._dataset.batch_count(),
-            ) as s:
+            with (
+                stage(
+                    self._progress,
+                    "Computing golden results",
+                    total=self._dataset.batch_count(),
+                ) as s,
+                torch.no_grad(),
+            ):
                 for batch in self._dataset:
                     logits = golden.forward(batch.inputs)
                     processed = self._process_golden(logits)
@@ -312,7 +315,10 @@ class EncodedFaultInjection(Experiment):
             model.apply_faults(fault_targets)
 
         result = BatchReliability(correct=0, total=0)
-        with stage(self._progress, "Inference", total=self._dataset.batch_count()) as s:
+        with (
+            stage(self._progress, "Inference", total=self._dataset.batch_count()) as s,
+            torch.no_grad(),
+        ):
             for batch_index, batch in enumerate(self._dataset):
                 # n_batches x n_classes
                 logits = model.forward(batch.inputs)
