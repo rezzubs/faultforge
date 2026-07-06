@@ -78,11 +78,3 @@ def list_of_array_faults_u8(
     input: ListOfArray[np.uint8],
     faults: list[tuple[Fault, int]],
 ) -> None: ...
-def compare_array_list_bitwise_f32(
-    a: ListOfArray[np.float32],
-    b: ListOfArray[np.float32],
-) -> list[int]: ...
-def compare_array_list_bitwise_u16(
-    a: ListOfArray[np.float32],
-    b: ListOfArray[np.float32],
-) -> list[int]: ...
