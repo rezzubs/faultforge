@@ -26,9 +26,29 @@ from typing import (
 
 import scipy.stats
 
-from faultforge._internal.common import AnyPath
+from faultforge._internal.common import AnyPath, is_compressed, open_text
 
 logger = logging.getLogger(__name__)
+
+_COMPRESSED_SUFFIXES = (".zst", ".zstd")
+
+
+def _warn_on_extension_mismatch(path: AnyPath, *, compressed: bool) -> None:
+    """Advisory-only: log a warning if `compressed` disagrees with `path`'s name.
+
+    Never changes what path is actually written to - purely a hint that the
+    file's contents and its name disagree about whether it's zstd-compressed,
+    which would otherwise confuse tools like `cat`/`jq` reading it later.
+    """
+    looks_compressed = Path(path).name.endswith(_COMPRESSED_SUFFIXES)
+    if compressed and not looks_compressed:
+        logger.warning(
+            f"Saving compressed data to {path!r}, whose name doesn't end in .zst/.zstd."
+        )
+    elif not compressed and looks_compressed:
+        logger.warning(
+            f"Saving uncompressed data to {path!r}, whose name ends in .zst/.zstd."
+        )
 
 
 @dataclass(slots=True)
@@ -39,6 +59,9 @@ class SaveConfig:
     """Where to save the experiment's results, via `Experiment.save_atomic`."""
     interval_seconds: float | None
     """How many seconds between saves. None means save only at the end."""
+    compressed: bool = False
+    """Whether to save through zstd compression; passed straight through to
+    `Experiment.save_atomic`."""
 
 
 def relative_margin_of_error(
@@ -177,12 +200,13 @@ class Experiment(abc.ABC):
     - `serialize` / `deserialize`: turn your own state into a string and back.
       That's the only shape-specific part of persistence; `save`/`save_file`/
       `save_atomic`/`load_from`/`load_from_file` handle the file mechanics
-      (atomic writes, path expansion, reading a path or an already-open file)
-      generically on top of these two. Fingerprinting isn't part of this
-      contract either: if you want to verify a loaded file against your
-      current configuration, include your own `Fingerprint` in `serialize`'s
-      output and check it in `deserialize` via `Fingerprint.raise_if_differs`,
-      which raises `FingerprintError` on a mismatch.
+      (atomic writes, path expansion, reading a path or an already-open file,
+      optional zstd compression) generically on top of these two.
+      Fingerprinting isn't part of this contract either: if you want to
+      verify a loaded file against your current configuration, include your
+      own `Fingerprint` in `serialize`'s output and check it in `deserialize`
+      via `Fingerprint.raise_if_differs`, which raises `FingerprintError` on
+      a mismatch.
 
     `run_loop` drives the experiment: it calls `run` repeatedly, prints progress
     via `format_status`, and stops once any `StopCondition` fires - including
@@ -231,9 +255,15 @@ class Experiment(abc.ABC):
     def deserialize(self, content: str) -> None:
         """Restore results from a string previously produced by `serialize`."""
 
-    def save(self, path: AnyPath) -> None:
-        """Save current results to `path`."""
-        with open(Path(path).expanduser(), "w") as f:
+    def save(self, path: AnyPath, *, compressed: bool = False) -> None:
+        """Save current results to `path`.
+
+        Pass `compressed=True` to write through zstd (`compression.zstd`,
+        stdlib) instead of plain text - `serialize()`'s output itself never
+        changes, only how it's stored on disk.
+        """
+        _warn_on_extension_mismatch(path, compressed=compressed)
+        with open_text(path, "wt", compressed=compressed) as f:
             self.save_file(f)
 
     def save_file(self, file: IO[str]) -> None:
@@ -243,21 +273,30 @@ class Experiment(abc.ABC):
         """
         file.write(self.serialize())
 
-    def save_atomic(self, path: AnyPath) -> None:
+    def save_atomic(self, path: AnyPath, *, compressed: bool = False) -> None:
         """Save current results to `path`, atomically.
 
-        Will not corrupt existing data if the write fails partway.
+        Will not corrupt existing data if the write fails partway. Pass
+        `compressed=True` to write through zstd instead of plain text, same
+        as `save`.
         """
-        with tempfile.NamedTemporaryFile("w", delete=False) as temp:
+        _warn_on_extension_mismatch(path, compressed=compressed)
+        fd, temp_name = tempfile.mkstemp()
+        os.close(fd)
+        with open_text(temp_name, "wt", compressed=compressed) as temp:
             temp.write(self.serialize())
-        os.replace(temp.name, Path(path).expanduser())
+        os.replace(temp_name, Path(path).expanduser())
 
     def load_from(self, path: AnyPath) -> None:
         """Restore results from `path`, previously written by `save`/`save_atomic`.
 
+        Auto-detects whether `path` is zstd-compressed, so this works on a
+        file saved with either `compressed=True` or `compressed=False`
+        without the caller needing to know which.
+
         See `load_from_file` for a version that takes a file-like object.
         """
-        with open(Path(path).expanduser(), "r") as f:
+        with open_text(path, "rt", compressed=is_compressed(path)) as f:
             self.load_from_file(f)
 
     def load_from_file(self, file: IO[str]) -> None:
@@ -306,11 +345,13 @@ class Experiment(abc.ABC):
                         logger.debug(
                             f"Passed {save_config.interval_seconds}s ({passed_seconds}) since last save"
                         )
-                        self.save_atomic(save_config.path)
+                        self.save_atomic(
+                            save_config.path, compressed=save_config.compressed
+                        )
                         passed_seconds = 0.0
 
         if dirty and save_config is not None:
-            self.save_atomic(save_config.path)
+            self.save_atomic(save_config.path, compressed=save_config.compressed)
 
     def margin_of_error(self) -> float | None:
         """Return the margin of error (half-width of the 95% confidence interval)

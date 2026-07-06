@@ -58,6 +58,7 @@ from faultforge._internal.common import (
     DEFAULT_DEVICE,
     AnyPath,
     DeviceLike,
+    is_compressed,
 )
 from faultforge._internal.fault import BitFlip, Fault, StuckAt
 from faultforge._internal.fingerprint import Fingerprint
@@ -80,6 +81,7 @@ __all__ = [
     "Fingerprint",
     "Picker",
     "StuckAt",
+    "is_compressed",
     "tensor_list_dtype",
     "tensor_list_fault",
     "tensor_list_faults",

@@ -7,7 +7,7 @@ from typing import Annotated
 
 import torch
 import typer
-from faultforge import DEFAULT_BATCH_SIZE
+from faultforge import DEFAULT_BATCH_SIZE, is_compressed
 from faultforge.encoding import (
     CepEncoder,
     CepScheme,
@@ -285,6 +285,15 @@ def record(
             rich_help_panel="Recording Settings",
         ),
     ] = None,
+    compress: Annotated[
+        bool,
+        typer.Option(
+            help="Save --output zstd-compressed. Only controls the format of a "
+            "newly created file; if --output already exists, its existing "
+            "on-disk format (compressed or not) is kept regardless of this flag.",
+            rich_help_panel="Recording Settings",
+        ),
+    ] = False,
     overwrite: Annotated[
         bool,
         typer.Option(
@@ -382,15 +391,20 @@ def record(
     stop_conditions: list[StopCondition] = []
 
     save_config: SaveConfig | None = None
+    output_exists = False
     if output is not None:
         output = Path(output).expanduser()
+        output_exists = output.exists()
         if not output.parent.exists():
             logger.info(f"Creating output parent directory {output.parent}")
             output.parent.mkdir(parents=True)
         else:
             logger.debug(f"Output parent directory {output.parent} already exists")
 
-        save_config = SaveConfig(path=output, interval_seconds=autosave)
+        effective_compressed = is_compressed(output) if output_exists else compress
+        save_config = SaveConfig(
+            path=output, interval_seconds=autosave, compressed=effective_compressed
+        )
 
     if stability_threshold is not None:
         if min_runs is None:
@@ -407,7 +421,7 @@ def record(
     if max_runs is not None:
         stop_conditions.append(MaxRuns(max_runs))
 
-    if output is not None and output.exists():
+    if output is not None and output_exists:
         try:
             experiment.load_from(output)
         except FingerprintError as error:

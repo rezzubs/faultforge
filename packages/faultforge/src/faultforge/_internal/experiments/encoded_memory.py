@@ -23,6 +23,8 @@ from faultforge._internal.common import (
     DEFAULT_DTYPE,
     AnyPath,
     DeviceLike,
+    is_compressed,
+    open_text,
 )
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.dtype import EncodingDtype, FiDtype
@@ -168,12 +170,15 @@ def discard_bitmasks_in_file(path: AnyPath) -> None:
     Unlike `EncodedFaultInjection.discard_bitmasks`, this reads and rewrites a
     file previously written by `Experiment.save`/`save_atomic` directly, so it
     doesn't require reconstructing the model/dataset that produced it. Writes
-    back atomically, the same way `Experiment.save_atomic` does. A no-op
-    (besides rewriting the file) if bitmasks weren't recorded in the first
-    place.
+    back atomically, the same way `Experiment.save_atomic` does. Whichever
+    format (zstd-compressed or not) `path` was already in is preserved on
+    write-back. A no-op (besides rewriting the file) if bitmasks weren't
+    recorded in the first place.
     """
     path = Path(path).expanduser()
-    loaded = _SavedData.model_validate_json(path.read_text())
+    compressed = is_compressed(path)
+    with open_text(path, "rt", compressed=compressed) as f:
+        loaded = _SavedData.model_validate_json(f.read())
     result, fingerprint = _discard_bitmasks(loaded.result, loaded.fingerprint)
     updated = _SavedData(
         fingerprint=fingerprint,
@@ -181,9 +186,11 @@ def discard_bitmasks_in_file(path: AnyPath) -> None:
         result=result,
     ).model_dump_json()
 
-    with tempfile.NamedTemporaryFile("w", delete=False) as temp:
+    fd, temp_name = tempfile.mkstemp()
+    os.close(fd)
+    with open_text(temp_name, "wt", compressed=compressed) as temp:
         temp.write(updated)
-    os.replace(temp.name, path)
+    os.replace(temp_name, path)
 
 
 def _bit_histogram(bitmask: Sequence[int]) -> dict[int, int]:
