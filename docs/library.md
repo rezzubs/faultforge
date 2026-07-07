@@ -1,7 +1,7 @@
 # Library usage
 
 This is a tutorial-oriented tour of FaultForge's building blocks and how they
-compose. See [`doc/experiments/encoded_memory.md`](experiments/encoded_memory.md)
+compose. See [`docs/experiments/encoded_memory.md`](experiments/encoded_memory.md)
 for the built-in experiment that ties all of this together, or the
 `faultforge` package's module docstrings for API-level detail.
 
@@ -72,7 +72,7 @@ decoded_model = encoded.decode()  # a copy of `model` with decoded parameters
 
 This is the piece the `encoded_memory` experiment builds its fault injection
 around - see
-[`doc/experiments/encoded_memory.md`](experiments/encoded_memory.md#library-usage).
+[`docs/experiments/encoded_memory.md`](experiments/encoded_memory.md#library-usage).
 
 ## Fault injection primitives
 
@@ -194,5 +194,5 @@ experiment.run_loop(
 
 `EncodedFaultInjection` is the one built-in `Experiment`, and it's meant to
 be read as a reference for writing your own - see
-[`doc/experiments/encoded_memory.md`](experiments/encoded_memory.md) for how
+[`docs/experiments/encoded_memory.md`](experiments/encoded_memory.md) for how
 it uses everything above.

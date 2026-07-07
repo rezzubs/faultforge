@@ -9,14 +9,14 @@ its first experiment.
 
 ## Highlights
 
-- A reusable experiment framework ([`Experiment`](doc/library.md#experiment)):
+- A reusable experiment framework ([`Experiment`](docs/library.md#experiment)):
   automatic run loops, statistical stop conditions (run until a stable mean,
   a fixed count, or Ctrl+C), and atomic, resumable, optionally
   zstd-compressed saving.
-- [`Fingerprint`](doc/library.md#fingerprint)-based verification: resuming or
+- [`Fingerprint`](docs/library.md#fingerprint)-based verification: resuming or
   comparing a saved result against a changed configuration fails loudly with
   a precise diff, instead of silently mixing incompatible data.
-- A composable [encoding framework](doc/experiments/encoded_memory.md#encoding-techniques)
+- A composable [encoding framework](docs/experiments/encoded_memory.md#encoding-techniques)
   (`Encoder`/`Encoding`, chainable via `EncoderSequence`) with three built-in
   ECC-style techniques - SECDED (Hamming codes), MSET, and CEP - usable
   standalone or combined.
@@ -24,7 +24,7 @@ its first experiment.
   repeat-free fault-location sampler, and a batched injection API built for
   performance.
 - One ready-made experiment today,
-  [`encoded_memory`](doc/experiments/encoded_memory.md): fault injection into
+  [`encoded_memory`](docs/experiments/encoded_memory.md): fault injection into
   ECC-protected model parameters, with built-in CIFAR-10/100 and ImageNet
   model/dataset loading and a CLI for recording and plotting results. It
   doubles as the reference implementation to follow when adding a new
@@ -102,7 +102,7 @@ experiment.run_loop(stop_conditions=[MaxRuns(total=20)])
 print("Mean accuracy:", experiment.mean_score())
 ```
 
-See [`doc/library.md`](doc/library.md) for a full walkthrough of the
+See [`docs/library.md`](docs/library.md) for a full walkthrough of the
 framework's pieces and how they compose.
 
 ## Experiments
@@ -110,7 +110,7 @@ framework's pieces and how they compose.
 FaultForge ships one ready-made experiment today, built as the reference
 implementation for adding your own:
 
-- [Encoded Memory](doc/experiments/encoded_memory.md) - fault injection into
+- [Encoded Memory](docs/experiments/encoded_memory.md) - fault injection into
   ECC-protected model parameters, covering the available encoding techniques,
   the `faultforge encoded-memory` CLI, and using the experiment directly as a
   library.
