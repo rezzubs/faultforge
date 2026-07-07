@@ -100,8 +100,8 @@ where
     }
 
     /// Applies many faults, looking up each target item via a single
-    /// precomputed offset table instead of the O(item count) linear scan
-    /// [`Self::inner_bit_index`] would otherwise repeat for every fault.
+    /// precomputed offset table instead of an O(item count) linear scan
+    /// per fault.
     fn apply_faults<It>(&mut self, faults: It)
     where
         It: Iterator<Item = (Fault, usize)>,
