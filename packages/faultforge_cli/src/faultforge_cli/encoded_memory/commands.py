@@ -143,7 +143,14 @@ def list_models(
     ] = DatasetChoice.ImageNet,
 ) -> None:
     """List all available models for the given dataset."""
-    pass
+    match dataset:
+        case DatasetChoice.Cifar10 | DatasetChoice.Cifar100:
+            models = [model.value for model in CifarModel]
+        case DatasetChoice.ImageNet:
+            models = [model.value for model in ImageNetModel]
+
+    for model in models:
+        typer.echo(model)
 
 
 @app.command(
