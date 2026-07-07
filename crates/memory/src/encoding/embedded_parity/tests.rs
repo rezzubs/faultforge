@@ -252,7 +252,7 @@ mod u16_tests {
 proptest! {
     #[test]
     fn encode_decode_roundtrip(
-        (mut buffer, (source_bits, target_bit)) in prop::collection::vec(any::<u8>(), 1..1024)
+        (mut buffer, (source_bits, target_bit)) in prop::collection::vec(any::<u8>(), 2..1024)
         .prop_flat_map(|buffer| (
             Just(buffer.clone()),
             prop::collection::hash_set(0usize..buffer.len(), 1..buffer.len())
