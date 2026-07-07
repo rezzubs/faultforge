@@ -281,11 +281,12 @@ class Experiment(abc.ABC):
         as `save`.
         """
         _warn_on_extension_mismatch(path, compressed=compressed)
-        fd, temp_name = tempfile.mkstemp()
+        destination = Path(path).expanduser()
+        fd, temp_name = tempfile.mkstemp(dir=destination.parent)
         os.close(fd)
         with open_text(temp_name, "wt", compressed=compressed) as temp:
             temp.write(self.serialize())
-        os.replace(temp_name, Path(path).expanduser())
+        os.replace(temp_name, destination)
 
     def load_from(self, path: AnyPath) -> None:
         """Restore results from `path`, previously written by `save`/`save_atomic`.
