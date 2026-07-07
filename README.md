@@ -5,7 +5,7 @@ PyTorch models - with error-corrected memory reliability testing built in as
 its first experiment.
 
 > [!NOTE]
-> `main` is the active development branch. For the latest stable release, see the [`stable`](https://github.com/rezzubs/faultforge/tree/stable) branch.
+> `main` is the active development branch. For the latest release, see the [`latest`](https://github.com/rezzubs/faultforge/tree/latest) branch.
 
 ## Highlights
 
@@ -61,8 +61,8 @@ you want:
 # latest (main is kept in sync with the newest code going forward)
 pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git#subdirectory=packages/faultforge'
 
-# latest release (the stable branch tracks the most recent tagged release)
-pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@stable#subdirectory=packages/faultforge'
+# latest release (the latest branch tracks the most recent tagged release)
+pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@latest#subdirectory=packages/faultforge'
 
 # a specific released version
 pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@v0.2#subdirectory=packages/faultforge'
