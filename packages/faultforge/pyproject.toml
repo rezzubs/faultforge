@@ -1,7 +1,8 @@
 [project]
 name = "faultforge"
 version = "0.1.0"
-description = "Fault mitigation simulations for PyTorch models"
+description = "A framework for reproducible hardware fault-injection experiments on PyTorch models"
+readme = "../../README.md"
 authors = [
     { name = "Marten Roots", email = "marten.roots@gmail.com" }
 ]
