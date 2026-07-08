@@ -115,6 +115,45 @@ implementation for adding your own:
   the `faultforge encoded-memory` CLI, and using the experiment directly as a
   library.
 
+## Citation
+
+### [Encoded Memory](docs/experiments/encoded_memory.md)
+
+There are two papers related to the encoded memory experiment.
+
+
+#### Paper in DATE 2026
+
+Introduced the MSET technique as a zero cost alternative to ECCs.
+
+```bibtex
+@inproceedings{ahmadilivani2026late,
+  title={Late Breaking Results: Uncovering the Limits of ECCs in Vision Transformers and a Zero-Cost Reliability Enhancement},
+  author={Ahmadilivani, Mohammad Hasan and Roots, Marten and Restifo, Marco and Loorits, Sven-Markus and Di Mauro, Luca and Raik, Jaan},
+  booktitle={2026 Design, Automation \& Test in Europe Conference (DATE)},
+  pages={1--3},
+  year={2026},
+  organization={IEEE},
+  link={https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=11539549}
+}
+```
+
+
+#### Paper in IOLTS 2026
+
+Introduced the CEP technique:
+
+```bitext
+@article{ahmadilivani2026effective,
+  title={Effective and Memory-Efficient Alternatives to ECC for Reliable Large-Scale DNNs},
+  author={Ahmadilivani, Mohammad Hasan and Roots, Marten and Restifo, Marco and Loorits, Sven-Markus and Di Mauro, Luca and Raik, Jaan},
+  booktitle={The 32nd IEEE International Symposium on On-Line Testing and Robust System Design (IOLTS)},
+  year={2026},
+  organization={IEEE},
+  link={arXiv preprint arXiv:2605.07417}
+}
+```
+
 ## License
 
 [UPL-1.0](LICENSE)
