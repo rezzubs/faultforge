@@ -182,7 +182,7 @@ wheels = [
 
 [[package]]
 name = "faultforge"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/faultforge" }
 dependencies = [
     { name = "numpy" },
@@ -215,7 +215,7 @@ dev = [{ name = "maturin", specifier = ">=1.14.0" }]
 
 [[package]]
 name = "faultforge-cli"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/faultforge_cli" }
 dependencies = [
     { name = "faultforge" },

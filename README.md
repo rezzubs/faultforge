@@ -65,7 +65,7 @@ pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git#subdirec
 pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@latest#subdirectory=packages/faultforge'
 
 # a specific released version
-pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@v0.2#subdirectory=packages/faultforge'
+pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@v0.2.0#subdirectory=packages/faultforge'
 
 # a specific commit
 pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@<commit-sha>#subdirectory=packages/faultforge'

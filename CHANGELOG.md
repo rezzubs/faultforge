@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-08
+
 0.2 is a more or less full rewrite of both the Rust and Python layers. If you
 used 0.1's `System`-based API (`faultforge.system.System`,
 `faultforge.cifar.system`, `faultforge.imagenet.system`, `EncodedSystem`), none
