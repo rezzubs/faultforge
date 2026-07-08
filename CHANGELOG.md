@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-08
+
+`0.2.0`'s release pipeline failed to publish `faultforge` and never
+completed, so it's a dead/uninstallable version - `faultforge-cli==0.2.0`'s
+`faultforge` dependency was also left unconstrained instead of pinned to a
+matching version. `0.2.1` is the first fully published, correctly paired
+release.
+
 ## [0.2.0] - 2026-07-08
 
 0.2 is a more or less full rewrite of both the Rust and Python layers. If you

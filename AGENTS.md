@@ -85,7 +85,12 @@ tagged release. To cut a release, on `main`:
 2. Bump `version` in `packages/faultforge/pyproject.toml` and
    `packages/faultforge_cli/pyproject.toml` to `X.Y.Z` (kept in lockstep;
    `Cargo.toml`'s `workspace.package.version` stays `0.0.0`, since the Rust
-   crates aren't independently versioned or published).
+   crates aren't independently versioned or published). Also update the
+   `faultforge==X.Y.Z` pin in `faultforge_cli`'s `dependencies` to match -
+   `[tool.uv.sources]`'s `workspace = true` override only applies locally and
+   is stripped from the published package, so an unpinned `faultforge`
+   dependency would let `pip install faultforge-cli` pull in any future,
+   potentially incompatible `faultforge` release.
 3. Commit, tag the commit `vX.Y.Z`, and push both the commit and the tag.
 
 Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which builds

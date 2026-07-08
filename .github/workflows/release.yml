@@ -22,12 +22,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
       - name: Build wheel
         uses: PyO3/maturin-action@v1
         with:
           working-directory: packages/faultforge
           command: build
-          args: --release --out dist
+          args: --release --out dist --find-interpreter
 
       - uses: actions/upload-artifact@v4
         with:
@@ -89,9 +93,10 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+          skip-existing: true
 
   publish-faultforge-cli:
-    needs: build-faultforge-cli
+    needs: [build-faultforge-cli, publish-faultforge]
     runs-on: ubuntu-latest
     environment: pypi-faultforge-cli
     permissions:
@@ -105,6 +110,7 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+          skip-existing: true
 
   github-release:
     needs: [publish-faultforge, publish-faultforge-cli]
