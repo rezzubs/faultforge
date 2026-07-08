@@ -73,3 +73,23 @@ CI (`.github/workflows/python.yml`) runs the equivalent via `uv run`.
 
 - Rust: `proptest` for property-based tests.
 - Python: `hypothesis` for property-based tests.
+
+## Releasing
+
+`main` is the development branch. The `latest` branch tracks the most recent
+tagged release. To cut a release, on `main`:
+
+1. Move the `CHANGELOG.md` `## [Unreleased]` section to a new
+   `## [X.Y.Z] - YYYY-MM-DD` heading, leaving a fresh empty `[Unreleased]`
+   above it.
+2. Bump `version` in `packages/faultforge/pyproject.toml` and
+   `packages/faultforge_cli/pyproject.toml` to `X.Y.Z` (kept in lockstep;
+   `Cargo.toml`'s `workspace.package.version` stays `0.0.0`, since the Rust
+   crates aren't independently versioned or published).
+3. Commit, tag the commit `vX.Y.Z`, and push both the commit and the tag.
+
+Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which builds
+wheels/sdists for `faultforge` and `faultforge-cli`, publishes both to PyPI
+via Trusted Publishing, creates the GitHub release (using the matching
+`CHANGELOG.md` section as the release body), and fast-forwards `latest` to
+the new tag.

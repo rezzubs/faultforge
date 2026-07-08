@@ -2,7 +2,7 @@
 name = "faultforge-cli"
 version = "0.1.0"
 description = "CLI for FaultForge"
-readme = "../../README.md"
+readme = "README.md"
 authors = [
     { name = "Marten Roots", email = "marten.roots@gmail.com" }
 ]
