@@ -147,6 +147,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Fast-forward latest branch to this tag
         run: git push origin "$GITHUB_REF_NAME:refs/heads/latest"
