@@ -22,6 +22,11 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
+[project.urls]
+Repository = "https://github.com/rezzubs/faultforge"
+Issues = "https://github.com/rezzubs/faultforge/issues"
+Changelog = "https://github.com/rezzubs/faultforge/blob/main/CHANGELOG.md"
+
 [dependency-groups]
 dev = [
     "maturin>=1.14.0",

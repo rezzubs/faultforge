@@ -17,6 +17,11 @@ dependencies = [
 [project.scripts]
 faultforge = "faultforge_cli.main:main"
 
+[project.urls]
+Repository = "https://github.com/rezzubs/faultforge"
+Issues = "https://github.com/rezzubs/faultforge/issues"
+Changelog = "https://github.com/rezzubs/faultforge/blob/main/CHANGELOG.md"
+
 [tool.uv.sources]
 faultforge = { workspace = true }
 
