@@ -6,21 +6,20 @@ scores the result according to a `ReliabilityMetric`.
 """
 
 from encoded_memory.experiment import (
-    DetailedResult,
+    DetailedResults,
     DetailedRunResult,
     EncodedFaultInjection,
-    ReliabilityMetric,
     SavedResult,
-    SimpleResult,
+    SimpleResults,
     discard_bitmasks_in_file,
 )
 
 __all__ = [
-    "DetailedResult",
+    "DetailedResults",
     "DetailedRunResult",
     "EncodedFaultInjection",
     "ReliabilityMetric",
     "SavedResult",
-    "SimpleResult",
+    "SimpleResults",
     "discard_bitmasks_in_file",
 ]

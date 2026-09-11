@@ -4,7 +4,6 @@ See `encoded_memory` for a general overview.
 """
 
 import copy
-import enum
 import logging
 import os
 import tempfile
@@ -14,6 +13,9 @@ from pathlib import Path
 from typing import Annotated, Literal, final, override
 
 import torch
+from pydantic import BaseModel, Field
+from torch import Tensor, nn
+
 from faultforge import BitFlip, Fingerprint, Picker, bitwise_xor
 from faultforge.dataset import (
     DEFAULT_BATCH_SIZE,
@@ -26,99 +28,33 @@ from faultforge.encoding import EncodedModule, Encoder
 from faultforge.experiment import Experiment, ExperimentDisplay
 from faultforge.io import AnyPath, is_compressed, open_text
 from faultforge.loading import DEFAULT_DTYPE, ModelBundle
+from faultforge.metric import Metric
 from faultforge.progress import Progress, stage
-from pydantic import BaseModel, Field
-from torch import Tensor, nn
 
 logger = logging.getLogger(__name__)
 
 
-class ReliabilityMetric(enum.StrEnum):
-    """Ways to measure the reliability of a fault-injected model."""
-
-    Accuracy = "accuracy"
-    """Correct predictions / total predictions.
-
-    Whether or not a prediction is "correct" is defined by the dataset's
-    ground-truth labels (targets).
-    """
-    AccuracyDegradation = "accuracy_degradation"
-    """Golden model accuracy - faulty model accuracy."""
-    Sdc = "sdc"
-    """Silent Data Corruption. Change in any output logit vs the golden model."""
-    Top1Sdc = "top1_sdc"
-    """Critical Silent Data Corruption. Change in top-1 logit (the prediction) vs the golden model."""
-
-    def requires_golden(self) -> bool:
-        """Whether this metric also requires evaluating results on a golden model."""
-
-        return self.value in {
-            ReliabilityMetric.AccuracyDegradation.value,
-            ReliabilityMetric.Sdc.value,
-            ReliabilityMetric.Top1Sdc.value,
-        }
-
-    def score_name(self) -> str:
-        """The name of the score for this metric."""
-        match self:
-            case ReliabilityMetric.Accuracy:
-                return "Accuracy"
-            case ReliabilityMetric.AccuracyDegradation:
-                return "Accuracy Degradation"
-            case ReliabilityMetric.Sdc:
-                return "SDC"
-            case ReliabilityMetric.Top1Sdc:
-                return "Top-1 SDC"
-
-
-def compute_score(metric: ReliabilityMetric, correct: int, total: int) -> float:
-    """Score a single run's correct/total accounting under `metric`.
-
-    Pure so it can be reused both by a live `EncodedFaultInjection` (via
-    `_score`) and by `SavedResult.scores`, which recomputes scores from a
-    saved file without reconstructing a model/dataset.
-    """
-    match metric:
-        case ReliabilityMetric.Sdc | ReliabilityMetric.Top1Sdc:
-            return 100 - float(correct) / float(total) * 100
-        case ReliabilityMetric.Accuracy | ReliabilityMetric.AccuracyDegradation:
-            return float(correct) / float(total) * 100
-
-
-@final
-@dataclass(slots=True)
-class BatchReliability:
-    correct: int
-    """Number of correct results as defined by the metric."""
-    total: int
-    """Total number of "items" in the batch. Metric dependent."""
-
-    def __add__(self, other: BatchReliability) -> BatchReliability:
-        return BatchReliability(
-            correct=self.correct + other.correct, total=self.total + other.total
-        )
-
-
-class SimpleResult(BaseModel):
+class SimpleResults(BaseModel):
     """Correct/total accounting only."""
 
     kind: Literal["simple"] = "simple"
-    results: list[int]
+    results: list[float]
 
-    def correct_counts(self) -> list[int]:
+    def scores(self) -> list[float]:
         return self.results
 
 
 class DetailedRunResult(BaseModel):
     """A single run's correct/total accounting plus its bitwise-comparison data."""
 
-    correct_count: int
+    score: float
+    """The `score` as determined by the `Metric`."""
     bitmask: list[int]
     """Flat list of nonzero xor values between the faulty and golden parameters,
     across all parameter tensors."""
 
 
-class DetailedResult(BaseModel):
+class DetailedResults(BaseModel):
     """Correct/total accounting plus per-run bitwise-comparison data.
 
     Each run contributes a single `DetailedRunResult`, so `correct` and
@@ -128,15 +64,17 @@ class DetailedResult(BaseModel):
     kind: Literal["detailed"] = "detailed"
     results: list[DetailedRunResult]
 
-    def correct_counts(self) -> list[int]:
-        return [run.correct_count for run in self.results]
-
-    def discard_bitmasks(self) -> SimpleResult:
+    def discard_bitmasks(self) -> SimpleResults:
         """Drop the recorded bitmasks, keeping only the correct/total accounting."""
-        return SimpleResult(results=self.correct_counts())
+        return SimpleResults(results=self.scores())
+
+    def scores(self) -> list[float]:
+        return [r.score for r in self.results]
 
 
-ExperimentResult = Annotated[SimpleResult | DetailedResult, Field(discriminator="kind")]
+ExperimentResult = Annotated[
+    SimpleResults | DetailedResults, Field(discriminator="kind")
+]
 
 
 class SavedResult(BaseModel):
@@ -148,16 +86,17 @@ class SavedResult(BaseModel):
     """
 
     fingerprint: Fingerprint
-    total_items: int | None
     total_bits: int
     """The size (in bits) of the encoded memory faults were injected into.
 
     Recorded directly rather than left as part of `Fingerprint.scalars`,
     since it's already fully determined by the model/encoder/dtype
     fingerprints that *are* part of identity - this just avoids recomputing
-    it, the same rationale as `total_items`.
+    it.
     """
     result: ExperimentResult
+    metric_display_name: str
+    """The display name of the metric, used for plotting."""
 
     @classmethod
     def load(cls, path: AnyPath) -> SavedResult:
@@ -171,22 +110,9 @@ class SavedResult(BaseModel):
         with open_text(path, "rt", compressed=is_compressed(path)) as f:
             return cls.model_validate_json(f.read())
 
-    def reliability_metric(self) -> ReliabilityMetric:
-        return ReliabilityMetric(self.fingerprint.scalars["reliability_metric"])
-
     def scores(self) -> list[float]:
-        """Every recorded run's score, in run order.
-
-        Empty if `total_items` is `None` (no run has completed yet),
-        mirroring `EncodedFaultInjection.scores()`.
-        """
-        if self.total_items is None:
-            return []
-        metric = self.reliability_metric()
-        return [
-            compute_score(metric, correct, self.total_items)
-            for correct in self.result.correct_counts()
-        ]
+        """Every recorded run's score, in run order."""
+        return self.result.scores()
 
     def bit_error_rate(self) -> float:
         """The realized fraction of encoded bits flipped, `faults / total_bits`."""
@@ -196,8 +122,8 @@ class SavedResult(BaseModel):
 
 
 def _discard_bitmasks(
-    result: SimpleResult | DetailedResult, fingerprint: Fingerprint
-) -> tuple[SimpleResult | DetailedResult, Fingerprint]:
+    result: SimpleResults | DetailedResults, fingerprint: Fingerprint
+) -> tuple[SimpleResults | DetailedResults, Fingerprint]:
     """Drop any recorded bitmasks, converting to the simpler result kind.
 
     Also flips the fingerprint's `compare_bitwise` scalar to `False`, since
@@ -206,7 +132,7 @@ def _discard_bitmasks(
     report a spurious mismatch even though the result kinds now agree. A
     no-op if bitmasks weren't being recorded in the first place.
     """
-    if not isinstance(result, DetailedResult):
+    if not isinstance(result, DetailedResults):
         return result, fingerprint
 
     updated_fingerprint = fingerprint.model_copy(
@@ -232,9 +158,9 @@ def discard_bitmasks_in_file(path: AnyPath) -> None:
     result, fingerprint = _discard_bitmasks(loaded.result, loaded.fingerprint)
     updated = SavedResult(
         fingerprint=fingerprint,
-        total_items=loaded.total_items,
         total_bits=loaded.total_bits,
         result=result,
+        metric_display_name=loaded.metric_display_name,
     ).model_dump_json()
 
     fd, temp_name = tempfile.mkstemp()
@@ -300,18 +226,18 @@ class _Display(ExperimentDisplay):
     """`EncodedFaultInjection`'s display: names/units the score per metric."""
 
     def __init__(
-        self, metric: ReliabilityMetric, fault_summary: _FaultInjectionSummary | None
+        self, metric: Metric, fault_summary: _FaultInjectionSummary | None
     ) -> None:
         self._metric = metric
         self._fault_summary = fault_summary
 
     @override
     def score_name(self) -> str | None:
-        return self._metric.score_name()
+        return self._metric.display_name()
 
     @override
     def score_unit(self) -> str | None:
-        return "%"
+        return self._metric.display_unit()
 
     @override
     def extra(self) -> str | None:
@@ -321,33 +247,32 @@ class _Display(ExperimentDisplay):
 
 
 @final
-class EncodedFaultInjection(Experiment):
+class EncodedFaultInjection[R](Experiment):
     """An experiment which emulates single-event upsets in the encoded memory that stores model parameters."""
 
     _model: EncodedModule
     _dataset: BatchedDataset
     _device: torch.device
     _dtype: torch.dtype
-    _reliability_metric: ReliabilityMetric
+    _reliability_metric: Metric[R]
     _faulty_bit_count: int
     _total_bits: int
     _progress: Progress | None
     _fingerprint: Fingerprint
     _show_fault_summary: bool
+    _results: SimpleResults | DetailedResults
 
     _unencoded_golden: nn.Module | None
 
     # populated during first run
     _golden_results: list[Tensor]
-    _total_items: int | None
-    _result: SimpleResult | DetailedResult
     _last_fault_summary: _FaultInjectionSummary | None
 
     def __init__(
         self,
         bundle: ModelBundle,
         encoder: Encoder,
-        reliability_metric: ReliabilityMetric,
+        reliability_metric: Metric[R],
         *,
         golden_is_encoded: bool = False,
         faults: int | float = 1,
@@ -362,9 +287,10 @@ class EncodedFaultInjection(Experiment):
     ) -> None:
         self._progress = progress
         self._golden_results = []
-        self._total_items = None
-        self._result = (
-            DetailedResult(results=[]) if compare_bitwise else SimpleResult(results=[])
+        self._results = (
+            DetailedResults(results=[])
+            if compare_bitwise
+            else SimpleResults(results=[])
         )
         self._show_fault_summary = fault_summary
         self._last_fault_summary = None
@@ -394,12 +320,12 @@ class EncodedFaultInjection(Experiment):
         fingerprint = Fingerprint(
             kind="encoded_memory_fault_injection",
             scalars={
-                "reliability_metric": reliability_metric.value,
                 "golden": "encoded" if golden_is_encoded else "unencoded",
                 "compare_bitwise": compare_bitwise,
                 "dtype": EncodingDtype.from_torch(dtype).value,
             },
             children={
+                "reliability_metric": [reliability_metric.fingerprint()],
                 "bundle": [bundle.fingerprint()],
                 "encoder": [encoder.fingerprint()],
             },
@@ -443,22 +369,6 @@ class EncodedFaultInjection(Experiment):
 
         self._fingerprint = fingerprint
 
-    def _process_golden(self, golden_result: Tensor) -> Tensor:
-        """Run a function on the golden result after computing it.
-
-        This enables processing the results only once. The result will be given to
-        the batch reliability functions.
-        """
-        match self._reliability_metric:
-            case (
-                ReliabilityMetric.Top1Sdc
-                | ReliabilityMetric.Accuracy
-                | ReliabilityMetric.AccuracyDegradation
-            ):
-                return golden_result.argmax(dim=1)
-            case ReliabilityMetric.Sdc:
-                return golden_result
-
     def _populate_golden(self):
         """Populate the golden results.
 
@@ -466,8 +376,6 @@ class EncodedFaultInjection(Experiment):
         this is used for computing SDC scores as well as the number of
         injected faults.
         """
-        total_items = 0
-
         golden: nn.Module = self._unencoded_golden or self._model
 
         try:
@@ -481,31 +389,15 @@ class EncodedFaultInjection(Experiment):
             ):
                 for batch in self._dataset:
                     logits = golden.forward(batch.inputs.to(dtype=self._dtype))
-                    processed = self._process_golden(logits)
-                    total_items += processed.numel()
+                    processed = self._reliability_metric.preprocess_golden(logits)
                     self._golden_results.append(processed)
                     s.advance()
         finally:
             self._dataset.reset()
 
-        if self._total_items is None:
-            self._total_items = total_items
-        else:
-            assert self._total_items == total_items, (
-                "_total_items mismatch vs previous run"
-            )
-
-    def _score(self, correct: int) -> float:
-        if self._total_items is None:
-            raise RuntimeError("Unable to score a result before the first run")
-
-        return compute_score(self._reliability_metric, correct, self._total_items)
-
     @override
     def scores(self) -> Sequence[float]:
-        if self._total_items is None:
-            return []
-        return [self._score(correct) for correct in self._result.correct_counts()]
+        return self._results.scores()
 
     @override
     def display(self) -> ExperimentDisplay:
@@ -516,26 +408,25 @@ class EncodedFaultInjection(Experiment):
 
         A no-op if bitmasks weren't being recorded in the first place.
         """
-        self._result, self._fingerprint = _discard_bitmasks(
-            self._result, self._fingerprint
+        self._results, self._fingerprint = _discard_bitmasks(
+            self._results, self._fingerprint
         )
 
     @override
     def serialize(self) -> str:
         return SavedResult(
             fingerprint=self._fingerprint,
-            total_items=self._total_items,
             total_bits=self._total_bits,
-            result=self._result,
+            result=self._results,
+            metric_display_name=self._reliability_metric.display_name() or "",
         ).model_dump_json()
 
     @override
     def deserialize(self, content: str) -> None:
         loaded = SavedResult.model_validate_json(content)
         self._fingerprint.raise_if_differs(loaded.fingerprint)
-        self._total_items = loaded.total_items
         self._total_bits = loaded.total_bits
-        self._result = loaded.result
+        self._results = loaded.result
 
     def _inject_faults(self) -> EncodedModule:
         """Clone the model and flip `self._faulty_bit_count` unique random bits in it."""
@@ -562,7 +453,7 @@ class EncodedFaultInjection(Experiment):
         parameter tensors, or `None` when `compare_bitwise=False` (i.e.
         `self._result` isn't a `DetailedResult`).
         """
-        if not isinstance(self._result, DetailedResult):
+        if not isinstance(self._results, DetailedResults):
             return None
 
         faulty_params = list(model.decode().parameters())
@@ -587,9 +478,10 @@ class EncodedFaultInjection(Experiment):
 
         return bitmask
 
-    def _infer(self, model: EncodedModule) -> BatchReliability:
+    def _infer(self, model: EncodedModule) -> R:
         """Run inference on `model` over the dataset, scored by `self._reliability_metric`."""
-        result = BatchReliability(correct=0, total=0)
+        result = None
+
         with (
             stage(self._progress, "Inference", total=self._dataset.batch_count()) as s,
             torch.no_grad(),
@@ -598,51 +490,33 @@ class EncodedFaultInjection(Experiment):
                 # n_batches x n_classes
                 logits = model.forward(batch.inputs.to(dtype=self._dtype))
 
-                match self._reliability_metric:
-                    case ReliabilityMetric.Accuracy:
-                        batch_result = _batch_accuracy(logits, batch.targets)
-                    case ReliabilityMetric.AccuracyDegradation:
-                        batch_result = _batch_accuracy_degradation(
-                            logits, self._golden_results[batch_index], batch.targets
-                        )
-                    case ReliabilityMetric.Sdc:
-                        batch_result = _batch_sdc(
-                            logits, self._golden_results[batch_index]
-                        )
-                    case ReliabilityMetric.Top1Sdc:
-                        batch_result = _batch_critical_sdc(
-                            logits, self._golden_results[batch_index]
-                        )
+                result = self._reliability_metric.evaluate_and_accumulate(
+                    logits,
+                    self._golden_results[batch_index],
+                    batch.targets,
+                    result,
+                )
 
-                result += batch_result
                 s.advance()
 
         self._dataset.reset()
+
+        if result is None:
+            raise RuntimeError("dataset didn't produce any data")
+
         return result
 
-    def _record_result(
-        self, result: BatchReliability, bitmask: list[int] | None
-    ) -> None:
+    def _record_result(self, result: R, bitmask: list[int] | None) -> None:
         """Validate `result`'s totals, then append it (and `bitmask`) to `self._result`."""
-        if self._total_items is None:
-            self._total_items = result.total
-            assert not self._reliability_metric.requires_golden(), (
-                "_total_items should be set by _populate_golden"
-            )
 
-        if result.total != self._total_items:
-            raise RuntimeError(
-                f"Computed {self._total_items} elements from the golden results, "
-                f"model returned {result.total}"
-            )
-
-        if isinstance(self._result, DetailedResult):
+        score = self._reliability_metric.score(result)
+        if isinstance(self._results, DetailedResults):
             assert bitmask is not None
-            self._result.results.append(
-                DetailedRunResult(correct_count=result.correct, bitmask=bitmask)
+            self._results.results.append(
+                DetailedRunResult(score=score, bitmask=bitmask)
             )
         else:
-            self._result.results.append(result.correct)
+            self._results.results.append(score)
 
         if self._show_fault_summary:
             self._last_fault_summary = _FaultInjectionSummary(
@@ -662,56 +536,3 @@ class EncodedFaultInjection(Experiment):
         bitmask = self._compare_bitwise(model)
         result = self._infer(model)
         self._record_result(result, bitmask)
-
-
-def _batch_critical_sdc(
-    logits: Tensor, golden_classifications: Tensor
-) -> BatchReliability:
-    """Compute the critical SDC of a result. Used for ReliabilityMetric.CriticalSdc."""
-
-    classifications = logits.argmax(dim=1)
-
-    assert golden_classifications.shape == classifications.shape
-    # bool is a subclass of int, so sum converts bools to ints.
-    correct = int((classifications == golden_classifications).sum().item())
-    total = golden_classifications.numel()
-
-    return BatchReliability(correct=correct, total=total)
-
-
-def _batch_sdc(logits: Tensor, golden_logits: Tensor) -> BatchReliability:
-    """Compute the SDC of a result. Used for ReliabilityMetric.Sdc."""
-
-    assert golden_logits.shape == logits.shape
-    # bool is a subclass of int, so sum converts bools to ints.
-    correct = int((logits == golden_logits).sum().item())
-    total = golden_logits.numel()
-
-    return BatchReliability(correct=correct, total=total)
-
-
-def _batch_accuracy_degradation(
-    logits: Tensor,
-    golden_classifications: Tensor,
-    targets: Tensor,
-) -> BatchReliability:
-    """Compute the accuracy degradation of a result. Used for ReliabilityMetric.AccuracyDegradation."""
-
-    classifications = logits.argmax(dim=1)
-    assert golden_classifications.shape == classifications.shape
-
-    correct = int((classifications == targets).sum().item())
-    golden_correct = int((golden_classifications == targets).sum().item())
-    total = classifications.numel()
-
-    return BatchReliability(correct=golden_correct - correct, total=total)
-
-
-def _batch_accuracy(logits: Tensor, targets: Tensor) -> BatchReliability:
-    """Compute the accuracy of a result. Used for ReliabilityMetric.Accuracy."""
-    classifications = logits.argmax(dim=1)
-
-    correct = int((classifications == targets).sum().item())
-    total = classifications.numel()
-
-    return BatchReliability(correct=correct, total=total)
