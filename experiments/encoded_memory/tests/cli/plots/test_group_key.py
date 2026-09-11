@@ -12,7 +12,9 @@ def test_group_key_ungrouped_is_none():
 
 def test_group_key_dtype_and_metric():
     fingerprint = Fingerprint(
-        kind="k", scalars={"dtype": "f16", "reliability_metric": "sdc"}
+        kind="k",
+        scalars={"dtype": "f16"},
+        children={"reliability_metric": [Fingerprint(kind="sdc")]},
     )
     assert group_key(GroupBy.Dtype, fingerprint) == "f16"
     assert group_key(GroupBy.Metric, fingerprint) == "sdc"

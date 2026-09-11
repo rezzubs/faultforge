@@ -118,6 +118,27 @@ class Metric[R](abc.ABC):
         """The unit of the metric used for display purposes. Override to set"""
         return None
 
+    def init_or_accumulate(self, existing: R | None, new: R) -> R:
+        """Helper for `accumulate` given an initial non-existing result."""
+        if existing is None:
+            return new
+        else:
+            return self.accumulate(existing, new)
+
+    def evaluate_and_accumulate(
+        self,
+        batch_model_output: Tensor,
+        batch_golden: Tensor,
+        batch_targets: Tensor,
+        existing_result: R | None,
+    ) -> R:
+        """Helper for running `evaluate_batch` and `init_or_accumulate` in sequence."""
+        batch_result = self.evaluate_batch(
+            batch_model_output, batch_golden, batch_targets
+        )
+
+        return self.init_or_accumulate(existing_result, batch_result)
+
 
 @final
 @dataclass(frozen=True, slots=True)

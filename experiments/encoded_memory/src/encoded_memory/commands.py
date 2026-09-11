@@ -10,6 +10,23 @@ import torch
 import typer
 from matplotlib.backends.registry import BackendFilter, backend_registry
 from matplotlib.figure import Figure
+
+import faultforge.metric as m
+from encoded_memory import (
+    DetailedResults,
+    EncodedFaultInjection,
+    discard_bitmasks_in_file,
+)
+from encoded_memory.plots import (
+    GroupBy,
+    build_compare_figure,
+    build_heatmap_figure,
+)
+from encoded_memory.results import (
+    build_configurations,
+    discover_result_files,
+    load_results,
+)
 from faultforge.dataset import DEFAULT_BATCH_SIZE
 from faultforge.encoding import (
     CepEncoder,
@@ -27,12 +44,6 @@ from faultforge.experiment import (
     Stability,
     StopCondition,
 )
-from encoded_memory import (
-    DetailedResult,
-    EncodedFaultInjection,
-    ReliabilityMetric,
-    discard_bitmasks_in_file,
-)
 from faultforge.fingerprint import FingerprintError
 from faultforge.io import is_compressed
 from faultforge.loading import (
@@ -43,17 +54,8 @@ from faultforge.loading import (
     ImageNetModel,
     ModelBundle,
 )
+from faultforge.metric import Metric
 from faultforge.progress import Progress
-from encoded_memory.plots import (
-    GroupBy,
-    build_compare_figure,
-    build_heatmap_figure,
-)
-from encoded_memory.results import (
-    build_configurations,
-    discover_result_files,
-    load_results,
-)
 
 app = typer.Typer(
     pretty_exceptions_enable=False,
@@ -68,13 +70,28 @@ class DatasetChoice(enum.StrEnum):
     ImageNet = "imagenet"
 
 
+class MetricChoice(enum.StrEnum):
+    Accuracy = "accuracy"
+    AccuracyDegradation = "accuracy-degradation"
+    Sdc = "sdc"
+    Top1Sdc = "top1-sdc"
+
+    def into_metric(self) -> Metric:
+        match self:
+            case MetricChoice.Accuracy:
+                return m.Accuracy()
+            case MetricChoice.AccuracyDegradation:
+                return m.AccuracyDegradation()
+            case MetricChoice.Sdc:
+                return m.Sdc()
+            case MetricChoice.Top1Sdc:
+                return m.Top1Sdc()
+
+
 def _init_model_bundle(
     dataset: DatasetChoice,
     model: str | None,
     imagenet_root: str | None,
-    batch_size: int,
-    preload_batches: bool,
-    device: str,
 ) -> ModelBundle:
     """Build the `ModelBundle` for the given CLI choices and load the model/dataset from it."""
     if model is None:
@@ -217,12 +234,12 @@ def record(
         ),
     ] = False,
     reliability_metric: Annotated[
-        ReliabilityMetric,
+        MetricChoice,
         typer.Option(
             help="Which metric to use for reliability measurements",
             rich_help_panel="Model Setup",
         ),
-    ] = ReliabilityMetric.Accuracy,
+    ] = MetricChoice.Accuracy,
     bit_error_rate: Annotated[
         float | None,
         typer.Option(
@@ -366,7 +383,9 @@ def record(
 ) -> None:
     """Run an encoded memory fault injection experiment and record the results."""
     bundle = _init_model_bundle(
-        dataset, model, imagenet_root, batch_size, preload_batches, device
+        dataset,
+        model,
+        imagenet_root,
     )
 
     encoder = _resolve_encoder(
@@ -401,7 +420,7 @@ def record(
     experiment = EncodedFaultInjection(
         bundle,
         encoder,
-        reliability_metric,
+        reliability_metric=reliability_metric.into_metric(),
         golden_is_encoded=golden_is_encoded,
         faults=faults_,
         compare_bitwise=compare_bitwise,
@@ -689,11 +708,11 @@ def heatmap(
         raise typer.Exit(1)
 
     results = [result for _, result in loaded]
-    if not all(isinstance(result.result, DetailedResult) for result in results):
+    if not all(isinstance(result.result, DetailedResults) for result in results):
         offenders = [
             str(path)
             for path, result in loaded
-            if not isinstance(result.result, DetailedResult)
+            if not isinstance(result.result, DetailedResults)
         ]
         logger.error(
             "heatmap requires results recorded with --compare-bitwise; "

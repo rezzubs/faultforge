@@ -11,14 +11,12 @@ from typing import override
 
 import pytest
 import torch
-from encoded_memory import (
-    EncodedFaultInjection,
-    ReliabilityMetric,
-)
+from encoded_memory import EncodedFaultInjection
 from faultforge import Fingerprint
 from faultforge.dataset import BatchedDataset, DeviceLike
 from faultforge.encoding import IdentityEncoder
 from faultforge.loading import ModelBundle
+from faultforge.metric import Accuracy, Metric
 from encoded_memory.results import (
     Configuration,
     build_configurations,
@@ -98,7 +96,7 @@ def save_result():
         model: str = "toynet",
         dataset: str | None = None,
         dtype: torch.dtype = torch.float32,
-        metric: ReliabilityMetric = ReliabilityMetric.Accuracy,
+        metric: Metric = Accuracy(),
         compare_bitwise: bool = True,
     ) -> Path:
         bundle = _FakeBundle(8, 4, 4, 4, model=model, dataset=dataset)

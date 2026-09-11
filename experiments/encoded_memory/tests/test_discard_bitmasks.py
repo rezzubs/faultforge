@@ -19,7 +19,7 @@ def test_discard_bitmasks_converts_to_simple():
     after = _result(experiment)
 
     assert after["kind"] == "simple"
-    assert after["results"] == [run["correct_count"] for run in before["results"]]
+    assert after["results"] == [run["score"] for run in before["results"]]
 
 
 def test_discard_bitmasks_is_noop_for_simple():
@@ -66,9 +66,7 @@ def test_discard_bitmasks_in_file(tmp_path):
 
     saved = json.loads(path.read_text())
     assert saved["result"]["kind"] == "simple"
-    assert saved["result"]["results"] == [
-        run["correct_count"] for run in before["results"]
-    ]
+    assert saved["result"]["results"] == [run["score"] for run in before["results"]]
     assert saved["fingerprint"]["scalars"]["compare_bitwise"] is False
 
 
@@ -114,9 +112,7 @@ def test_discard_bitmasks_in_file_preserves_compressed_format(tmp_path):
     with zstd.open(path, "rt") as f:
         saved = json.loads(f.read())
     assert saved["result"]["kind"] == "simple"
-    assert saved["result"]["results"] == [
-        run["correct_count"] for run in before["results"]
-    ]
+    assert saved["result"]["results"] == [run["score"] for run in before["results"]]
     assert saved["fingerprint"]["scalars"]["compare_bitwise"] is False
 
 
