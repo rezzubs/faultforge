@@ -21,20 +21,19 @@ from faultforge import (
     tensor_list_dtype,
 )
 from pydantic import BaseModel, Field
-from torch import Tensor, nn
+from torch import nn
 
 from faultforge.dataset import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
-    BatchedDataset,
     DeviceLike,
 )
 from faultforge.dtype import FiDtype
 from faultforge.encoding import EncodedModule, Encoder
 from faultforge.experiment import Experiment, ExperimentDisplay
 from faultforge.io import AnyPath, is_compressed, open_text
+from faultforge.metric import GoldenCache, Metric
 from faultforge.loading import ModelBundle
-from faultforge.metric import Metric
 from faultforge.progress import Progress, stage
 
 logger = logging.getLogger(__name__)
@@ -257,7 +256,6 @@ class EncodedFaultInjection[R](Experiment):
     """An experiment which emulates single-event upsets in the encoded memory that stores model parameters."""
 
     _model: EncodedModule
-    _dataset: BatchedDataset
     _device: torch.device
     _reliability_metric: Metric[R]
     _faulty_bit_count: int
@@ -270,7 +268,6 @@ class EncodedFaultInjection[R](Experiment):
     _unencoded_golden: nn.Module | None
 
     # populated during first run
-    _golden_results: list[Tensor]
     _last_fault_summary: _FaultInjectionSummary | None
 
     def __init__(
@@ -290,7 +287,6 @@ class EncodedFaultInjection[R](Experiment):
         progress: Progress | None = None,
     ) -> None:
         self._progress = progress
-        self._golden_results = []
         self._results = (
             DetailedResults(results=[])
             if compare_bitwise
@@ -309,16 +305,22 @@ class EncodedFaultInjection[R](Experiment):
         self._device = torch.device(device)
         self._reliability_metric = reliability_metric
 
-        self._dataset = bundle.load_dataset(batch_size, device, progress=progress)
+        dataset = bundle.load_dataset(batch_size, device, progress=progress)
+
         if dataset_batch_limit is not None and not preload_dataset:
             logger.warning(
                 "preload_dataset is set to False but dataset_limit forces a preload anyway"
             )
             preload_dataset = True
         if preload_dataset:
-            self._dataset = self._dataset.precompute(
-                dataset_batch_limit, progress=progress
-            )
+            dataset = dataset.precompute(dataset_batch_limit, progress=progress)
+
+        self._golden_cache: GoldenCache = GoldenCache(
+            metric=reliability_metric,
+            golden_model=self._unencoded_golden or self._model,
+            dataset=dataset,
+            progress=progress,
+        )
 
         fingerprint = Fingerprint(
             kind="encoded_memory_fault_injection",
@@ -370,29 +372,6 @@ class EncodedFaultInjection[R](Experiment):
         fingerprint.scalars["faults"] = self._faulty_bit_count
 
         self._fingerprint = fingerprint
-
-    def _populate_golden(self):
-        """Populate the golden results.
-
-        Additionally sets `_total_items` to the total number of predictions;
-        this is used for computing SDC scores as well as the number of
-        injected faults.
-        """
-        golden: nn.Module = self._unencoded_golden or self._model
-
-        with (
-            stage(
-                self._progress,
-                "Computing golden results",
-                total=self._dataset.batch_count(),
-            ) as s,
-            torch.no_grad(),
-        ):
-            for batch in self._dataset:
-                logits = golden.forward(batch.inputs)
-                processed = self._reliability_metric.preprocess_golden(logits)
-                self._golden_results.append(processed)
-                s.advance()
 
     @override
     def scores(self) -> Sequence[float]:
@@ -485,17 +464,19 @@ class EncodedFaultInjection[R](Experiment):
         result = None
 
         with (
-            stage(self._progress, "Inference", total=self._dataset.batch_count()) as s,
+            stage(
+                self._progress, "Inference", total=self._golden_cache.batch_count()
+            ) as s,
             torch.no_grad(),
         ):
-            for batch_index, batch in enumerate(self._dataset):
-                # n_batches x n_classes
-                logits = model.forward(batch.inputs)
+            for golden, data_batch in self._golden_cache:
+                # batch_size x n_classes
+                logits = model.forward(data_batch.inputs)
 
                 result = self._reliability_metric.evaluate_and_accumulate(
                     logits,
-                    self._golden_results[batch_index],
-                    batch.targets,
+                    golden,
+                    data_batch.targets,
                     result,
                 )
 
@@ -529,9 +510,6 @@ class EncodedFaultInjection[R](Experiment):
 
     @override
     def run(self) -> None:
-        if not self._golden_results and self._reliability_metric.requires_golden():
-            self._populate_golden()
-
         model = self._inject_faults()
         bitmask = self._compare_bitwise(model)
         result = self._infer(model)
