@@ -2,6 +2,7 @@ import abc
 from dataclasses import dataclass
 from typing import final, override
 
+from faultforge._internal.fingerprint import Fingerprint
 from torch import Tensor
 
 
@@ -105,6 +106,18 @@ class Metric[R](abc.ABC):
     def score(self, result: R) -> float:
         """Give a numeric "score" for the result."""
 
+    @abc.abstractmethod
+    def fingerprint(self) -> Fingerprint:
+        """Return a structural identity for the metric"""
+
+    def display_name(self) -> str | None:
+        """The name of the metric used for display purposes. Override to set"""
+        return None
+
+    def display_unit(self) -> str | None:
+        """The unit of the metric used for display purposes. Override to set"""
+        return None
+
 
 @final
 @dataclass(frozen=True, slots=True)
@@ -165,6 +178,18 @@ class Accuracy(Metric[AccuracyResult]):
     @override
     def score(self, result: AccuracyResult) -> float:
         return ratio_to_percent(result.correct_count / result.total_count)
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="accuracy")
+
+    @override
+    def display_name(self) -> str | None:
+        return "Accuracy"
+
+    @override
+    def display_unit(self) -> str | None:
+        return "%"
 
 
 @final
@@ -245,6 +270,18 @@ class AccuracyDegradation(Metric[AccuracyDegradationResult]):
             / result.total_count
         )
 
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="accuracy_degredation")
+
+    @override
+    def display_name(self) -> str | None:
+        return "Accuracy Degredation"
+
+    @override
+    def display_unit(self) -> str | None:
+        return "%"
+
 
 @final
 @dataclass(slots=True, frozen=True)
@@ -304,6 +341,18 @@ class Sdc(Metric[SdcResult]):
     def score(self, result: SdcResult) -> float:
         return ratio_to_percent(result.non_matching_count / result.total_count)
 
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="sdc")
+
+    @override
+    def display_name(self) -> str | None:
+        return "SDC"
+
+    @override
+    def display_unit(self) -> str | None:
+        return "%"
+
 
 class Top1Sdc(Metric[SdcResult]):
     """Silent Data Corruption for the prediction (top-1 logit).
@@ -343,6 +392,18 @@ class Top1Sdc(Metric[SdcResult]):
     @override
     def score(self, result: SdcResult) -> float:
         return Sdc().score(result)
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="top1-sdc")
+
+    @override
+    def display_name(self) -> str | None:
+        return "Top-1 SDC"
+
+    @override
+    def display_unit(self) -> str | None:
+        return "%"
 
 
 def ratio_to_percent(ratio: float) -> float:
