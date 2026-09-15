@@ -370,17 +370,7 @@ where
                 continue;
             };
 
-            let target_link = self.fault_targets()[target];
-
-            let output = self.components[target_link.component_id.0]
-                .nth_output(target_link.output_index)
-                .expect("invalid fault target");
-
-            let Some(wire_id) = output.wire_id else {
-                return Ok(());
-            };
-
-            self.wire_updates.insert(wire_id);
+            self.schedule_fault_target_update(target);
         }
 
         Ok(())
@@ -388,7 +378,26 @@ where
 
     /// Remove a fault.
     pub fn remove_fault(&mut self) {
-        self.fault = None;
+        let Some(previous) = self.fault.take() else {
+            return;
+        };
+
+        // The wire keeps the faulty value until it's updated, so schedule
+        // that update the same way a new fault would.
+        self.schedule_fault_target_update(previous.target);
+    }
+
+    /// Queue an update for the wire driven by a fault target.
+    fn schedule_fault_target_update(&mut self, target: usize) {
+        let target_link = self.fault_targets()[target];
+
+        let output = self.components[target_link.component_id.0]
+            .nth_output(target_link.output_index)
+            .expect("invalid fault target");
+
+        if let Some(wire_id) = output.wire_id {
+            self.wire_updates.insert(wire_id);
+        }
     }
 
     /// Returns the total number of possible faults.

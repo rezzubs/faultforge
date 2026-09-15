@@ -29,6 +29,28 @@ proptest! {
 
 
     #[test]
+    fn removed_fault_restores_output(a: Signal, b: Signal) {
+        let mut sim = Simulation::builder()
+            .with_io_many([input("a"), input("b"), output("z")])
+            .with_component("and", and2(["a", "b"], "z"))
+            .build().unwrap();
+
+        sim.write_wire("a", a).unwrap();
+        sim.write_wire("b", b).unwrap();
+        sim.settle();
+        let expected = sim.read_wire("z").unwrap();
+
+        sim.make_faulty(0, StuckAtFault::High).unwrap();
+        sim.settle();
+        assert_eq!(sim.read_wire("z").unwrap(), Signal::High);
+
+        // No input changes in between: only the removal may restore the wire.
+        sim.remove_fault();
+        sim.settle();
+        assert_eq!(sim.read_wire("z").unwrap(), expected);
+    }
+
+    #[test]
     fn faulty_and_flip(a: Signal, b: Signal, cin: Signal) {
         let mut sim = Simulation::builder()
             .with_io_many([input("a"), input("b"), output("z")])
