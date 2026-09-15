@@ -247,14 +247,38 @@ one axis rather than competing implementations:
 | per-PE | 1024 | finest; only if the above prove insufficient |
 
 Do **not** build these as separate classes. What actually differs is a group-by
-key at generation time (`key(pe) -> ()` / `(y,)` / `(x,)` / `(y,x)`), whether
-the row and column axes in the file are present or broadcast, and an array
-index at lookup. The hook and the sampled lift consume an already-resolved
-distribution and never learn which keying produced it. So design the syndrome
-file format with **optional / broadcastable row and column axes**, and per-array
-falls out as the degenerate case where both are broadcast - not a separate code
-path. That is a handful of lines standing against a large cost difference,
-which is the whole reason to keep the seam.
+key at generation time (`key(pe) -> ()` / `(y,)` / `(x,)` / `(y,x)`) and a
+lookup at the consumer. The hook and the sampled lift consume an already-resolved
+distribution and never learn which keying produced it. Per-array is the
+degenerate case, not a separate code path. That is a handful of lines standing
+against a large cost difference, which is the whole reason to keep the seam.
+
+**Provenance and binding are separate.** A generated distribution carries two
+facts that are easy to conflate: how it was made ("all PEs in column 7 pooled,
+ACTIVE regime") and where it gets applied ("the fault at PE (3,7)"). The Phase 3
+artifact records only the first. The second is a choice the consumer makes
+explicitly and the artifact never makes for it. Concretely:
+
+- A distribution is just a value: a set of `(mask, count)` pairs. It has no
+  opinion about where it is used.
+- The artifact is a collection of such values, each tagged with the regime and
+  keying group it was generated from. The tag is for humans, plots and the
+  analysis tooling. Nothing at runtime reads it to make a decision.
+- Binding is `SyndromeModel`: a function from `(pe, regime)` to a distribution
+  that the consumer constructs. The simplest constructor ignores both arguments
+  and returns one distribution for everything. The finest is a per-PE,
+  per-regime table. Per-row and per-column sit in between. All produce the same
+  type, so the hook and lift are unchanged across all of them.
+
+This makes the easy case ("one global distribution is fine") one line, keeps
+the maximum-granularity case possible without a different code path, and lets
+a usage site pick a distribution generated at one granularity and apply it at
+another if that turns out to be useful. Considered and rejected: an automatic
+fallback chain at lookup time (most specific available key wins, or most
+specific *converged* key wins). It makes a campaign's behaviour depend on what
+happens to be in the file rather than on what the user declared, which is
+exactly the kind of implicit behaviour that is hard to explain later. If a site
+wants a coarser distribution than the file has, it says so.
 
 Row and column are not symmetric, and the asymmetry has structure worth
 exploiting. Within ACTIVE, the activation at PE `(y,x)` is independent of `x` -
@@ -264,15 +288,26 @@ across a trained layer. Row dependence is real: band depth sets how many
 products the partial sum accumulates. DRAIN inverts this: all drain PEs in a column
 see the identical partial sum for a given pass, so its natural keying is per-column.
 
-**Why the default should be the coarsest keying that validates.** Generation
-cost for one fault case is `K` netlist evaluations per distribution, so per-PE
-costs `nrows x ncols` times more than per-array - 1024x on a 32x32 array. That
-is not a storage concern, it is the fault-case budget: at `K = 1000` and a
-budget of a few million evaluations, per-array characterizes thousands of fault
-cases and per-PE characterizes a handful. Storage follows the same ratio.
+**Why the default should be the coarsest keying that validates.** A syndrome
+distribution has to be generated until it is converged, not for a fixed number
+of evaluations. So the cost driver is `groups x N`, where `N` is however many
+netlist evaluations one distribution needs before it stops moving. Per-PE
+means converging 1024 separate distributions instead of one - 1024x the cost
+on a 32x32 array. That is not a storage concern, it is the evaluation budget:
+`N` is expected to be large because the mask tail is long (see the convergence
+criterion in the generator's design document), so 1024 of them may simply not
+be affordable.
+
+The cost is asymmetric. Coarsening a finer artifact is free and exact: mask
+histograms stored as counts simply add, so a per-PE artifact can be pooled
+into per-row, per-column or per-array without touching the netlist. Refining a
+coarser one is not: there is no way to get a converged per-PE distribution out
+of a per-array one. So "generate at the finest keying and pool later" only
+works if the finest keying was affordable in the first place, which is the
+thing in question. It is not a way around the cost.
 
 Finer keying is also not automatically more accurate. At a *fixed* evaluation
-budget `M` per fault case, per-PE estimates 1024 distributions from `M/1024`
+budget `M`, per-PE estimates 1024 distributions from `M/1024`
 samples each - a 32x larger standard error per distribution. Per-PE only wins
 if the true between-PE difference exceeds roughly 32x the per-array sampling
 noise. Below that bar it adds variance without removing bias. Per-row sits at a
@@ -324,6 +359,19 @@ cheaper and less conclusive than the next:
 Retaining per-PE keys and raw (non-aggregated) values in the Phase 2 artifact
 is what makes all three tiers possible after the fact; pooling or aggregating
 during profiling would throw away exactly the information they need.
+
+**Look before designing.** Tier 1 on ResNet20 / CIFAR-10 at `K = 10000`
+already suggests the answer is "pooling is fine": per-PE input distributions
+look alike across PEs for every input, and the one visible structure is the
+partial sum differing between ACTIVE and DRAIN, which the regime split already
+captures. If the syndrome distributions come out the same way, then none of
+the keying machinery matters and `SyndromeModel`'s one-global-distribution
+constructor is the product. So the first thing Phase 3 does after the netlist
+evaluation function exists is the tier 2 check at three keyings (one PE, that
+PE's column pooled, the whole array pooled), and look at the result before
+deciding anything about the artifact's final shape.
+Whatever holds those three histograms for the comparison is already the
+artifact's content, so the format gets discovered rather than designed.
 
 ### Phase 2/3 artifacts: content hash, not a fingerprinted recipe
 
@@ -513,6 +561,9 @@ feeds directly into Phase 3 (syndrome generation) as a hard dependency - that
 phase cannot start without it. The sampled-path wiring (Phase 4) can still be
 developed in parallel with both, since it only needs *a* distribution in the
 agreed file format to build and unit-test against, not real profiled data.
+
+**Status: done.** `systolic profile` produces the artifact; the keying
+divergence analysis lives in `profiling_similarity.py` / `profiling_plots.py`.
 
 - **Rust.**
   - A recording hook implementing the existing `PeHook<T>` trait
@@ -804,9 +855,10 @@ chunk 3 as its future validation target), the syndrome-model keying choice
     directions: post-ReLU activations are exactly `0.0` very often and those
     are genuine ACTIVE observations, and it would also swallow all of DRAIN.
     The filter has to be structural (pass, index, cycle).
-  - The reservoir cap directly bounds Phase 3's netlist-evaluation cost
-    (`O(PEs x cap x fault_cases)`), so it isn't just a Phase 2 storage
-    decision - pick it with Phase 3's cost in mind.
+  - The reservoir cap bounds the input diversity Phase 3 can draw from, not
+    Phase 3's cost (generation runs to convergence and draws from the
+    reservoir with replacement). A cap much smaller than Phase 3's evaluation
+    count means the same inputs get replayed, so pick it with that in mind.
 
 ### Phase 3: Syndrome generation from sampled inputs
 
@@ -832,17 +884,49 @@ distribution anywhere downstream of this phase.
     syndrome itself is the mask).
   - Syndrome generator: an offline routine that consumes the Phase 2 per-PE
     profiling artifact and calls the evaluation function above over the
-    observed logic inputs (per fault case) to build the sampled syndrome
-    distribution (mask -> occurrence weight). Per-array aggregation (pool all
-    PEs' observations) first; per-PE (only if needed, see `SyndromeModel`
-    seam) is the same routine keyed by PE. Exports into the syndrome file
-    format Phase 4 consumes.
+    observed logic inputs to build the sampled syndrome distribution. Every
+    evaluation draws a fresh input and a fresh stuck-at case, so one
+    distribution is pooled over all gates of the netlist (see "Watch out"
+    below for what that means). Per-array aggregation (pool all PEs'
+    observations) first; per-PE (only if needed, see `SyndromeModel` seam) is
+    the same routine keyed by PE. Exports into the syndrome file format Phase
+    4 consumes. Lives in its own crate with its own design document.
+  - **Generation runs to convergence, not to a fixed count.** The number of
+    netlist evaluations one distribution gets is its own knob, separate from
+    Phase 2's reservoir cap `K`. The reservoir is a pool to draw from, not a
+    quota to exhaust. What "converged" means needs pinning down early, because
+    the two things Phase 4 consumes settle at very different rates: the
+    fraction of inputs on which the fault does nothing (a proportion, cheap,
+    a few hundred evaluations) versus the multiset of distinct nonzero masks
+    (potentially a long tail, may never settle in a strict sense). The first
+    real measurement of the phase is how many evaluations until the quantity
+    that actually drives campaign accuracy stops moving. That number decides
+    which keyings are affordable at all.
+  - **What a distribution is.** A set of `(mask, count)` pairs, where mask is
+    the XOR syndrome above. Three details that are wrong by default if not
+    stated:
+    - Store counts, not normalized probabilities. Counts add, so pooling
+      finer distributions into coarser ones stays exact. Probabilities don't.
+    - The zero mask is an entry, not an absence. On most inputs a stuck gate
+      has no observable effect, and that fraction is the single most
+      important number in the file. Dropping zero-mask samples and
+      renormalizing would make every fault always-effective.
+    - Each distribution says whether it is sampled or exact. ZERO's
+      `(0, 0, 0)` input gives one deterministic syndrome per stuck-at case,
+      so enumerating the cases once yields an exact distribution; without the
+      flag that is indistinguishable from a badly undersampled one.
   - **One distribution per input regime**, mirroring Phase 2's artifact: an
     ACTIVE distribution from the sampled triples, a DRAIN distribution from the
-    sampled `(0, 0, partial_sum)` inputs, and for ZERO a single syndrome per fault
-    case from the one deterministic `(0, 0, 0)` input - no sampling, no
-    reservoir. Keeping them separate is what lets Phase 4 condition on the
-    regime instead of marginalizing over it.
+    sampled `(0, 0, partial_sum)` inputs, and for ZERO the exact enumeration
+    over the one deterministic `(0, 0, 0)` input - no sampling, no reservoir.
+    Keeping them separate is what lets Phase 4 condition on the regime instead
+    of marginalizing over it.
+  - **The artifact is a collection of tagged distributions, not a lookup
+    structure.** Each distribution is tagged with the regime and keying group
+    it was generated from (see "Provenance and binding are separate" under the
+    `SyndromeModel` seam). Which distribution gets applied where is Phase 4's
+    `SyndromeModel`, chosen explicitly by the consumer. The exact file layout
+    is settled after the first look at real distributions, not before.
 - **Python.** A path to export a generated distribution into the syndrome
   file format; a `systolic generate` (or similar) CLI command that runs
   generation from a cached Phase 2 artifact.
@@ -858,10 +942,24 @@ distribution anywhere downstream of this phase.
 - **Done when.** Given a Phase 2 profiling artifact and a real PE netlist, a
   `systolic` command produces a syndrome file that Phase 4 can load and
   sample from.
-- **Watch out.** The netlist simulator is expected to be much slower than the
-  array simulator; this is exactly why the Phase 2 reservoir cap matters -
-  generation cost is `O(PEs x reservoir_cap x fault_cases)`, not
-  `O(PEs x dataset_size x fault_cases)`.
+- **Watch out.**
+  - The netlist simulator is expected to be much slower than the array
+    simulator. Generation cost is `O(groups x evaluations_to_converge)`, not
+    `O(PEs x dataset_size)`.
+  - A distribution is pooled over all stuck-at cases: each evaluation draws a
+    uniformly random gate and polarity. So Phase 4's sampled path models "some
+    unknown gate in this PE is stuck", averaged over gates, not any one
+    physical fault. A single real fault looks nothing like that average (a
+    gate in the sign path always flips the same bit). Considered and
+    rejected: one distribution per gate. It multiplies the cost by the fault
+    radix (thousands) and contradicts the point of a probabilistic model.
+    Consequence for Phase 5: validating the sampled path against the netlist
+    oracle means running the oracle over many random gates and comparing
+    aggregate accuracy, never a single gate against the model.
+  - `logic_simulation` can produce unknown (`X`) bits, and a plain XOR mask
+    cannot express one. The netlists are combinational with every input
+    driven, so an `X` on an output is a netlist bug, not a fault effect:
+    generation stops with an error naming the input and case that produced it.
 
 ### Phase 4: Logic faults, sampled path (workhorse)
 
@@ -909,8 +1007,10 @@ real syndrome distribution Phase 3 generates.
     `_rust.Fault`, so the hook and lift only ever see a resolved distribution.
   - New arms in `SimulatedBackend` / `LiftedBackend` dispatch and in the torch
     applier. Register code untouched.
-  - Load the syndrome file format Phase 3 produces (optional/broadcastable PE
-    axis, per the `SyndromeModel` seam).
+  - Load the syndrome file format Phase 3 produces and build a
+    `SyndromeModel` from it at the keying the user asks for (per the
+    `SyndromeModel` seam: binding is the consumer's explicit choice, never
+    inferred from the file).
   - `SystolicFaultInjection`'s `Fingerprint` includes a content hash of the
     loaded syndrome artifact (see "Phase 2/3 artifacts: content hash, not a
     fingerprinted recipe" in Cross-cutting concerns) - this is the one place
@@ -992,18 +1092,31 @@ match arm. This is the whole surface that grows as features land.
 
 ## Open questions / deferred
 
-- Exact syndrome file format (broadcastable row/column axis representation, how
-  masks + weights are stored). Settle at the start of Phase 3.
+- Exact syndrome file format (how tagged distributions are laid out on disk).
+  Settled *after* the first tier 2 comparison in Phase 3 produces real
+  distributions to look at, not before. What is already decided: a
+  distribution is `(mask, count)` pairs with the zero mask retained and an
+  exact/sampled flag, and each carries a regime and keying-group tag.
 - How finely the syndrome model needs to be keyed (per-array / per-row /
   per-column / per-PE). See the `SyndromeModel` seam section for the full
   three-tier methodology: a cheap early signal from Phase 2 (input
   distributions, no netlist needed), a stronger signal from Phase 3 (syndrome
   distributions, no array oracle needed), and the real practical answer from
   Phase 5's model-level agreement measurement (sampled vs netlist oracle).
-  Default to the coarsest keying until evidence says otherwise - finer keying
-  costs a factor of the group count in generation *and* raises per-group
-  variance at fixed budget. Keep the seam and record per-PE data in Phase 2 so
-  every option stays free.
+  Tier 1 on ResNet20 / CIFAR-10 points at "pooling is fine". Default to the
+  coarsest keying until evidence says otherwise - finer keying costs a factor
+  of the group count in generation, and coarsening a fine artifact is free
+  while refining a coarse one is not. Keep the seam and record per-PE data in
+  Phase 2 so every option stays open.
+- Whether syndromes should be conditioned on something other than position.
+  The syndrome is a deterministic function of the input triple, so the
+  "distribution" is the input distribution pushed through the netlist, and
+  `XorMaskHook` draws a mask without looking at the value the PE is actually
+  computing. If a fault only bites on certain magnitudes, that correlation is
+  lost. Conditioning on a coarse function of the input (sign or exponent
+  range of the partial sum, say) would recover it, and both backends have the
+  value available at apply time. Deliberately not pursued until there is
+  evidence from Phase 5 that the unconditioned model is too crude.
 - The exact netlist lift technique (Phase 6). Deferred until the netlist oracle
   exists to validate against.
 - **Should idle columns contribute to the accumulated result?** Today `matmul`

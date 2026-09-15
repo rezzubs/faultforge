@@ -3810,6 +3810,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "syndromes"
+version = "0.0.0"
+
+[[package]]
 name = "synstructure"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
