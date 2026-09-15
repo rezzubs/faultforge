@@ -38,6 +38,8 @@ library.
   (#30)
 - The `BatchedDataset` API now supports shuffling (#32)
 - The `Progress` API now properly handles nested stages (#33)
+- `BatchedDataset` is now an iterable rather than an iterator. Not possible to
+  forget to call `reset` anymore. (#35)
 
 ### Removed
 
