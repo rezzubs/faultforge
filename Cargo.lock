@@ -3812,6 +3812,12 @@ dependencies = [
 [[package]]
 name = "syndromes"
 version = "0.0.0"
+dependencies = [
+ "ariadne",
+ "logic_simulation",
+ "rand 0.10.1",
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "synstructure"
