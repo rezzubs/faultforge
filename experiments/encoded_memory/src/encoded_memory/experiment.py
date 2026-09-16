@@ -470,23 +470,20 @@ class EncodedFaultInjection(Experiment):
 
         golden: nn.Module = self._unencoded_golden or self._model
 
-        try:
-            with (
-                stage(
-                    self._progress,
-                    "Computing golden results",
-                    total=self._dataset.batch_count(),
-                ) as s,
-                torch.no_grad(),
-            ):
-                for batch in self._dataset:
-                    logits = golden.forward(batch.inputs.to(dtype=self._dtype))
-                    processed = self._process_golden(logits)
-                    total_items += processed.numel()
-                    self._golden_results.append(processed)
-                    s.advance()
-        finally:
-            self._dataset.reset()
+        with (
+            stage(
+                self._progress,
+                "Computing golden results",
+                total=self._dataset.batch_count(),
+            ) as s,
+            torch.no_grad(),
+        ):
+            for batch in self._dataset:
+                logits = golden.forward(batch.inputs.to(dtype=self._dtype))
+                processed = self._process_golden(logits)
+                total_items += processed.numel()
+                self._golden_results.append(processed)
+                s.advance()
 
         if self._total_items is None:
             self._total_items = total_items
@@ -617,7 +614,6 @@ class EncodedFaultInjection(Experiment):
                 result += batch_result
                 s.advance()
 
-        self._dataset.reset()
         return result
 
     def _record_result(
