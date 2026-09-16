@@ -10,16 +10,24 @@
     pkgs = import nixpkgs {inherit system;};
 
     # Libraries that prebuilt (non-nix-built) binaries need but won't find
-    # on NixOS, e.g. libstdc++.so.6 for torch/numpy wheels, and libc/the
-    # dynamic linker itself for uv's own downloaded CPython builds. Used for
-    # both LD_LIBRARY_PATH (already-running nix-native processes, e.g.
-    # Python dlopen()-ing a wheel's compiled extension) and
-    # NIX_LD_LIBRARY_PATH (nix-ld resolving a prebuilt binary's own
-    # dependencies at startup, e.g. uv's downloaded Python interpreter, or
-    # uv-installed ruff/ty). Same libraries are needed in both cases, so
-    # both variables share this one list. Requires `programs.nix-ld.enable`
-    # in your NixOS system configuration.
-    foreignLibraryPath = pkgs.lib.makeLibraryPath [pkgs.stdenv.cc.cc.lib];
+    # on NixOS.
+    #
+    # Used for
+    # - LD_LIBRARY_PATH - dlopen()-ing a wheel's compiled extension (even for
+    #   nix-native binaries).
+    # - NIX_LD_LIBRARY_PATH - nix-ld resolving a prebuilt binary's own
+    #   dependencies at startup.
+    #
+    # Same libraries are needed in both cases, so both variables share
+    # this one list. Requires `programs.nix-ld.enable` in your NixOS system
+    # configuration.
+    foreignLibraryPath = pkgs.lib.makeLibraryPath [
+      # libstdc++ for torch/numpy
+      # libc for cPython binaries downloaded by `uv`.
+      pkgs.stdenv.cc.cc.lib
+      # for numpy 
+      pkgs.zlib
+    ];
   in {
     devShells.${system}.default = pkgs.mkShell {
       packages = [

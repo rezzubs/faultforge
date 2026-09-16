@@ -99,12 +99,25 @@ def test_shuffle_reorders_with_same_seed_deterministically() -> None:
     assert sorted(order_a) == list(range(20))
 
 
-def test_shuffle_reset_reproduces_same_order() -> None:
+def test_reiteration_starts_from_the_first_batch() -> None:
+    dataset = BatchedDataset.from_dataset(_SizedDataset(10), batch_size=1)
+
+    assert _collect_indices(dataset) == list(range(10))
+    assert _collect_indices(dataset) == list(range(10))
+
+
+def test_cached_dataset_reiteration_starts_from_the_first_batch() -> None:
+    cached = BatchedDataset.from_dataset(_SizedDataset(10), batch_size=1).precompute()
+
+    assert _collect_indices(cached) == list(range(10))
+    assert _collect_indices(cached) == list(range(10))
+
+
+def test_shuffle_reiteration_reproduces_same_order() -> None:
     dataset = BatchedDataset.from_dataset(
         _SizedDataset(20), batch_size=1, shuffle=True, seed=0
     )
     first_pass = _collect_indices(dataset)
-    dataset.reset()
     second_pass = _collect_indices(dataset)
 
     assert first_pass == second_pass

@@ -45,16 +45,19 @@ class DataBatch:
 
 
 class BatchedDataset(abc.ABC):
-    """An iterator over batches of image data.
+    """An iterable over batched data.
 
     Provides a type safe API over `torch.utils.data.DataLoader`.
+
+    Every iteration starts from the first batch, so a dataset can be looped
+    over any number of times.
 
     Use `from_dataset` to create a `BatchedDataset` from any existing dataset.
     """
 
     @abc.abstractmethod
-    def __next__(self) -> DataBatch:
-        """Returns the next batch of data."""
+    def __iter__(self) -> Iterator[DataBatch]:
+        """Start a new iteration from the first batch."""
 
     @abc.abstractmethod
     def batch_size(self) -> int:
@@ -64,16 +67,9 @@ class BatchedDataset(abc.ABC):
     def to(self, device: DeviceLike) -> Self:
         """Maps all future batches to the specified device."""
 
-    @abc.abstractmethod
-    def reset(self) -> None:
-        """Start iteration from the beginning."""
-
     def batch_count(self) -> int | None:
         """Return the total number of batches, or `None` if unknowable ahead of time."""
         return None
-
-    def __iter__(self) -> Self:
-        return self
 
     @staticmethod
     def from_dataset(
@@ -112,7 +108,6 @@ class BatchedDataset(abc.ABC):
 @dataclass(slots=True)
 class _BatchedDataset(BatchedDataset):
     _dataset: Dataset[Any]
-    _loader: Iterator[Any]
     _device: torch.device
     _batch_size: int
     _shuffle: bool
@@ -131,29 +126,28 @@ class _BatchedDataset(BatchedDataset):
         self._batch_size = batch_size
         self._shuffle = shuffle
         self._seed = seed
-        self._loader = self._get_loader()
-        self.reset()
 
-    def _get_loader(self) -> Iterator[Any]:
+    @override
+    def __iter__(self) -> Iterator[DataBatch]:
+        # A fresh generator seeded identically each time makes every
+        # iteration produce the same shuffled order.
         generator = None
         if self._seed is not None:
             generator = torch.Generator().manual_seed(self._seed)
-        return iter(
-            DataLoader(
-                self._dataset,
-                batch_size=self._batch_size,
-                shuffle=self._shuffle,
-                generator=generator,
-            )
+        loader = DataLoader(
+            self._dataset,
+            batch_size=self._batch_size,
+            shuffle=self._shuffle,
+            generator=generator,
         )
 
-    @override
-    def __next__(self) -> DataBatch:
-        batch = next(self._loader)
+        for batch in loader:
+            yield self._validate_batch(batch)
 
+    def _validate_batch(self, batch: object) -> DataBatch:
         if not isinstance(batch, Iterable):
             raise TypeError(
-                f"Expected next(dataloader) to return an instance of `Iterable`, got {type(batch)}"
+                f"Expected the dataloader to yield an instance of `Iterable`, got {type(batch)}"
             )
 
         batch = list(batch)
@@ -181,10 +175,6 @@ class _BatchedDataset(BatchedDataset):
         return self._batch_size
 
     @override
-    def reset(self) -> None:
-        self._loader = self._get_loader()
-
-    @override
     def batch_count(self) -> int | None:
         if not isinstance(self._dataset, Sized):
             return None
@@ -202,7 +192,6 @@ class CachedDataset(BatchedDataset):
     feasible to store the full data in memory.
     """
 
-    cursor: int
     _items: list[DataBatch]
     _batch_size: int
 
@@ -227,12 +216,9 @@ class CachedDataset(BatchedDataset):
                 self._items.append(batch)
                 s.advance()
 
-        self.cursor = 0
-
     @override
-    def reset(self) -> None:
-        """Enables iteration from the beginning"""
-        self.cursor = 0
+    def __iter__(self) -> Iterator[DataBatch]:
+        return iter(self._items)
 
     @override
     def batch_size(self) -> int:
@@ -247,11 +233,3 @@ class CachedDataset(BatchedDataset):
         for item in self._items:
             item.to(device)
         return self
-
-    @override
-    def __next__(self) -> DataBatch:
-        if self.cursor >= len(self._items):
-            raise StopIteration
-        batch = self._items[self.cursor]
-        self.cursor += 1
-        return batch

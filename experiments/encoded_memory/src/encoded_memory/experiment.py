@@ -378,22 +378,19 @@ class EncodedFaultInjection[R](Experiment):
         """
         golden: nn.Module = self._unencoded_golden or self._model
 
-        try:
-            with (
-                stage(
-                    self._progress,
-                    "Computing golden results",
-                    total=self._dataset.batch_count(),
-                ) as s,
-                torch.no_grad(),
-            ):
-                for batch in self._dataset:
-                    logits = golden.forward(batch.inputs.to(dtype=self._dtype))
-                    processed = self._reliability_metric.preprocess_golden(logits)
-                    self._golden_results.append(processed)
-                    s.advance()
-        finally:
-            self._dataset.reset()
+        with (
+            stage(
+                self._progress,
+                "Computing golden results",
+                total=self._dataset.batch_count(),
+            ) as s,
+            torch.no_grad(),
+        ):
+            for batch in self._dataset:
+                logits = golden.forward(batch.inputs.to(dtype=self._dtype))
+                processed = self._reliability_metric.preprocess_golden(logits)
+                self._golden_results.append(processed)
+                s.advance()
 
     @override
     def scores(self) -> Sequence[float]:
@@ -498,8 +495,6 @@ class EncodedFaultInjection[R](Experiment):
                 )
 
                 s.advance()
-
-        self._dataset.reset()
 
         if result is None:
             raise RuntimeError("dataset didn't produce any data")
