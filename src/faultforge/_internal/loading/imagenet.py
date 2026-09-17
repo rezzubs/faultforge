@@ -20,9 +20,11 @@ from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
 from faultforge._internal.dataset import BatchedDataset, DeviceLike
+from faultforge._internal.dtype import dtype_name
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.io import AnyPath
-from faultforge._internal.loading.abc import DEFAULT_DTYPE, ModelBundle
+from faultforge._internal.loading.abc import ModelBundle
+from faultforge._internal.loading.transform import dtype_transforms
 from faultforge._internal.progress import Progress, stage
 
 type Transform = Callable[[Image.Image], Tensor]
@@ -82,7 +84,13 @@ class ImageNet(ModelBundle):
     Needs to be cached to load the dataset. See _get_tim_transform.
     """
 
-    def __init__(self, kind: ImageNetModel, root: AnyPath):
+    def __init__(
+        self,
+        kind: ImageNetModel,
+        root: AnyPath,
+        *,
+        dtype: torch.dtype = torch.float32,
+    ):
         """Describe an ImageNet model/dataset pair.
 
         `root` should point at a local ImageNet directory that stores the files:
@@ -92,9 +100,13 @@ class ImageNet(ModelBundle):
 
         which can be downloaded from
         https://image-net.org/challenges/LSVRC/2012/2012-downloads.php
+
+        `dtype` is the parameter dtype the model is cast to. Input images are
+        cast to match.
         """
         self._root = root
         self._kind = kind
+        self._dtype = dtype
         self._model = None
 
     def _load_model(self, *, progress: Progress | None = None) -> nn.Module:
@@ -151,18 +163,23 @@ class ImageNet(ModelBundle):
 
     @override
     def fingerprint(self) -> Fingerprint:
-        return Fingerprint(kind="imagenet", scalars={"model": self._kind.value})
+        return Fingerprint(
+            kind="imagenet",
+            scalars={
+                "model": self._kind.value,
+                "dtype": dtype_name(self._dtype),
+            },
+        )
 
     @override
     def load_model(
         self,
         device: DeviceLike,
         *,
-        dtype: torch.dtype = DEFAULT_DTYPE,
         progress: Progress | None = None,
     ) -> nn.Module:
         return copy.deepcopy(self._cached_model(progress=progress)).to(
-            device=device, dtype=dtype
+            device=device, dtype=self._dtype
         )
 
     @override
@@ -176,10 +193,16 @@ class ImageNet(ModelBundle):
         progress: Progress | None = None,
     ) -> BatchedDataset:
         with stage(progress, "Loading ImageNet dataset"):
+            transform = transforms.Compose(
+                [
+                    self.get_transform(progress=progress),
+                    *dtype_transforms(self._dtype),
+                ]
+            )
             dataset = datasets.ImageNet(
                 Path(self._root),
                 split="val",
-                transform=self.get_transform(progress=progress),
+                transform=transform,
             )
             assert isinstance(dataset, Dataset)
         return BatchedDataset.from_dataset(

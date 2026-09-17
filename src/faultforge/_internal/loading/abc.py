@@ -2,28 +2,28 @@
 
 import abc
 
-import torch
 from torch import nn
 
 from faultforge._internal.dataset import BatchedDataset, DeviceLike
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.progress import Progress
 
-DEFAULT_DTYPE: torch.dtype = torch.float32
-
 
 class ModelBundle(abc.ABC):
-    """A type which can load a model and its associated dataset"""
+    """A type which can load a model and its associated dataset.
+
+    Anything that changes what gets loaded, such as the parameter dtype, is
+    configuration of the concrete bundle and part of its `fingerprint`.
+    """
 
     @abc.abstractmethod
     def load_model(
         self,
         device: DeviceLike,
         *,
-        dtype: torch.dtype = DEFAULT_DTYPE,
         progress: Progress | None = None,
     ) -> nn.Module:
-        """Load the model, casting its parameters to `dtype`."""
+        """Load the model."""
 
     @abc.abstractmethod
     def load_dataset(

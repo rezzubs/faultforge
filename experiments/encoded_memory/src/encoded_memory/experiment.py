@@ -14,18 +14,24 @@ from pathlib import Path
 from typing import Annotated, Literal, final, override
 
 import torch
-from faultforge import BitFlip, Fingerprint, Picker, bitwise_xor
+from faultforge import (
+    BitFlip,
+    Fingerprint,
+    Picker,
+    bitwise_xor,
+    tensor_list_dtype,
+)
 from faultforge.dataset import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
     BatchedDataset,
     DeviceLike,
 )
-from faultforge.dtype import EncodingDtype, FiDtype
+from faultforge.dtype import FiDtype
 from faultforge.encoding import EncodedModule, Encoder
 from faultforge.experiment import Experiment, ExperimentDisplay
 from faultforge.io import AnyPath, is_compressed, open_text
-from faultforge.loading import DEFAULT_DTYPE, ModelBundle
+from faultforge.loading import ModelBundle
 from faultforge.progress import Progress, stage
 from pydantic import BaseModel, Field
 from torch import Tensor, nn
@@ -327,7 +333,6 @@ class EncodedFaultInjection(Experiment):
     _model: EncodedModule
     _dataset: BatchedDataset
     _device: torch.device
-    _dtype: torch.dtype
     _reliability_metric: ReliabilityMetric
     _faulty_bit_count: int
     _total_bits: int
@@ -357,7 +362,6 @@ class EncodedFaultInjection(Experiment):
         dataset_batch_limit: int | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
-        dtype: torch.dtype = DEFAULT_DTYPE,
         progress: Progress | None = None,
     ) -> None:
         self._progress = progress
@@ -369,7 +373,7 @@ class EncodedFaultInjection(Experiment):
         self._show_fault_summary = fault_summary
         self._last_fault_summary = None
 
-        model = bundle.load_model(device, dtype=dtype, progress=progress)
+        model = bundle.load_model(device, progress=progress)
         if golden_is_encoded:
             self._unencoded_golden = None
         else:
@@ -377,7 +381,6 @@ class EncodedFaultInjection(Experiment):
 
         self._model = EncodedModule(model, encoder, progress=progress)
         self._device = torch.device(device)
-        self._dtype = dtype
         self._reliability_metric = reliability_metric
 
         self._dataset = bundle.load_dataset(batch_size, device, progress=progress)
@@ -397,7 +400,6 @@ class EncodedFaultInjection(Experiment):
                 "reliability_metric": reliability_metric.value,
                 "golden": "encoded" if golden_is_encoded else "unencoded",
                 "compare_bitwise": compare_bitwise,
-                "dtype": EncodingDtype.from_torch(dtype).value,
             },
             children={
                 "bundle": [bundle.fingerprint()],
@@ -479,7 +481,7 @@ class EncodedFaultInjection(Experiment):
             torch.no_grad(),
         ):
             for batch in self._dataset:
-                logits = golden.forward(batch.inputs.to(dtype=self._dtype))
+                logits = golden.forward(batch.inputs)
                 processed = self._process_golden(logits)
                 total_items += processed.numel()
                 self._golden_results.append(processed)
@@ -573,7 +575,10 @@ class EncodedFaultInjection(Experiment):
         # dtype's bit width recovers the true unsigned bit pattern, relying
         # on Python's arbitrary-precision two's-complement semantics
         # (`-1 & 0xFFFFFFFF == 0xFFFFFFFF`).
-        mask = (1 << FiDtype.from_torch(self._dtype).bit_width()) - 1
+        dtype = tensor_list_dtype(golden_params)
+        # `EncodedModule` refuses a parameterless model at construction.
+        assert dtype is not None
+        mask = (1 << FiDtype.from_torch(dtype).bit_width()) - 1
 
         with stage(self._progress, "Bitwise Comparison", total=len(golden_params)) as s:
             bitmask: list[int] = []
@@ -593,7 +598,7 @@ class EncodedFaultInjection(Experiment):
         ):
             for batch_index, batch in enumerate(self._dataset):
                 # n_batches x n_classes
-                logits = model.forward(batch.inputs.to(dtype=self._dtype))
+                logits = model.forward(batch.inputs)
 
                 match self._reliability_metric:
                     case ReliabilityMetric.Accuracy:

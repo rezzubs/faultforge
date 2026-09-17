@@ -6,16 +6,21 @@ from encoded_memory.plots import GroupBy, group_key
 
 
 def test_group_key_ungrouped_is_none():
-    fingerprint = Fingerprint(kind="k", scalars={"dtype": "f32"})
+    fingerprint = Fingerprint(kind="k", scalars={"reliability_metric": "sdc"})
     assert group_key(GroupBy.Ungrouped, fingerprint) is None
 
 
-def test_group_key_dtype_and_metric():
-    fingerprint = Fingerprint(
-        kind="k", scalars={"dtype": "f16", "reliability_metric": "sdc"}
-    )
-    assert group_key(GroupBy.Dtype, fingerprint) == "f16"
+def test_group_key_metric():
+    fingerprint = Fingerprint(kind="k", scalars={"reliability_metric": "sdc"})
     assert group_key(GroupBy.Metric, fingerprint) == "sdc"
+
+
+def test_group_key_dtype_comes_from_bundle():
+    fingerprint = Fingerprint(
+        kind="k",
+        children={"bundle": [Fingerprint(kind="cifar", scalars={"dtype": "float16"})]},
+    )
+    assert group_key(GroupBy.Dtype, fingerprint) == "float16"
 
 
 def test_group_key_model_and_dataset():

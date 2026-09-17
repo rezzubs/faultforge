@@ -29,7 +29,7 @@ from encoded_memory.results import (
     configuration_points,
 )
 from faultforge import Fingerprint
-from faultforge.dtype import EncodingDtype
+from faultforge.dtype import FiDtype, dtype_from_name
 from matplotlib.axes import Axes
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
@@ -101,7 +101,7 @@ def group_key(group_by: GroupBy, fingerprint: Fingerprint) -> str | None:
         case GroupBy.Ungrouped:
             return None
         case GroupBy.Dtype:
-            return str(fingerprint.scalars["dtype"])
+            return str(fingerprint.children["bundle"][0].scalars["dtype"])
         case GroupBy.Metric:
             return str(fingerprint.scalars["reliability_metric"])
         case GroupBy.Model:
@@ -320,10 +320,13 @@ def build_heatmap_figure(
         raise ValueError(f"all results must share a reliability metric, got {names}")
     metric = next(iter(metrics))
 
-    dtypes = {result.fingerprint.scalars["dtype"] for result in results}
+    dtypes = {
+        result.fingerprint.children["bundle"][0].scalars["dtype"] for result in results
+    }
     if len(dtypes) > 1:
         raise ValueError(f"all results must share a dtype, got {sorted(dtypes)}")
-    bit_width = EncodingDtype(next(iter(dtypes))).bit_count()
+    dtype = dtype_from_name(str(next(iter(dtypes))))
+    bit_width = FiDtype.from_torch(dtype).bit_width()
 
     scores: list[float] = []
     positions: list[int] = []

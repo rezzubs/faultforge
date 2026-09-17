@@ -75,6 +75,7 @@ def _init_model_bundle(
     batch_size: int,
     preload_batches: bool,
     device: str,
+    dtype: torch.dtype,
 ) -> ModelBundle:
     """Build the `ModelBundle` for the given CLI choices and load the model/dataset from it."""
     if model is None:
@@ -91,7 +92,9 @@ def _init_model_bundle(
                     f"Unknown model {model!r} for dataset {dataset.value}. Choices: {choices}",
                     param_hint="--model",
                 ) from error
-            bundle = Cifar(model=cifar_model, dataset=CifarDataset(dataset.value))
+            bundle = Cifar(
+                model=cifar_model, dataset=CifarDataset(dataset.value), dtype=dtype
+            )
         case DatasetChoice.ImageNet:
             if imagenet_root is None:
                 raise typer.BadParameter(
@@ -106,7 +109,7 @@ def _init_model_bundle(
                     f"Unknown model {model!r} for dataset imagenet. Choices: {choices}",
                     param_hint="--model",
                 ) from error
-            bundle = ImageNet(kind=imagenet_model, root=imagenet_root)
+            bundle = ImageNet(kind=imagenet_model, root=imagenet_root, dtype=dtype)
 
     return bundle
 
@@ -365,8 +368,9 @@ def record(
     ] = "cpu",
 ) -> None:
     """Run an encoded memory fault injection experiment and record the results."""
+    dtype = torch.float16 if f16 else torch.float32
     bundle = _init_model_bundle(
-        dataset, model, imagenet_root, batch_size, preload_batches, device
+        dataset, model, imagenet_root, batch_size, preload_batches, device, dtype
     )
 
     encoder = _resolve_encoder(
@@ -396,8 +400,6 @@ def record(
                 "Only one of --faults or --bit-error-rate can be specified"
             )
 
-    dtype = torch.float16 if f16 else torch.float32
-
     experiment = EncodedFaultInjection(
         bundle,
         encoder,
@@ -410,7 +412,6 @@ def record(
         dataset_batch_limit=batch_limit,
         batch_size=batch_size,
         device=device,
-        dtype=dtype,
         progress=Progress(),
     )
     stop_conditions: list[StopCondition] = []
@@ -590,8 +591,8 @@ def compare(
         compare runs/secded=SECDED-8 runs/identity=Identity
 
     Grid: --row-by / --col-by split the chart into a grid of subplots by a
-    fingerprint key (dtype, model, ...). For example --row-by dtype puts f32
-    results in the top row and f16 in the next, and the remaining differences
+    fingerprint key (dtype, model, ...). For example --row-by dtype puts float32
+    results in the top row and float16 in the next, and the remaining differences
     within a cell become its lines. Omit both for a single chart.
     """
     label_overrides: dict[Path, str] = {}
