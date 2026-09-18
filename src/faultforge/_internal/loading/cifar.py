@@ -15,8 +15,10 @@ from faultforge._internal.dataset import (
     BatchedDataset,
     DeviceLike,
 )
+from faultforge._internal.dtype import dtype_name
 from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.loading.abc import DEFAULT_DTYPE, ModelBundle
+from faultforge._internal.loading.abc import ModelBundle
+from faultforge._internal.loading.transform import dtype_transforms
 from faultforge._internal.progress import Progress, stage
 
 CACHE_DIRECTORY = Path("~/.cache/faultforge/").expanduser()
@@ -63,11 +65,16 @@ class CifarDataset(enum.StrEnum):
         batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
         *,
+        dtype: torch.dtype | None = None,
         shuffle: bool = False,
         seed: int | None = None,
         progress: Progress | None = None,
     ) -> BatchedDataset:
-        """Download (if needed) and load the validation split."""
+        """Download (if needed) and load the validation split.
+
+        `dtype` casts the normalized image tensors; `None` leaves them as
+        `float32`.
+        """
         with stage(progress, f"Loading dataset {self._name()}"):
             match self:
                 case CifarDataset.Cifar10:
@@ -77,6 +84,7 @@ class CifarDataset(enum.StrEnum):
                         [
                             torchvision.transforms.ToTensor(),
                             torchvision.transforms.Normalize(mean, std),
+                            *dtype_transforms(dtype),
                         ]
                     )
                     dataset = torchvision.datasets.CIFAR10(
@@ -92,6 +100,7 @@ class CifarDataset(enum.StrEnum):
                         [
                             torchvision.transforms.ToTensor(),
                             torchvision.transforms.Normalize(mean, std),
+                            *dtype_transforms(dtype),
                         ]
                     )
 
@@ -113,12 +122,18 @@ class Cifar(ModelBundle):
 
     model: CifarModel
     dataset: CifarDataset
+    dtype: torch.dtype = torch.float32
+    """Parameter dtype the model is cast to. Input images are cast to match."""
 
     @override
     def fingerprint(self) -> Fingerprint:
         return Fingerprint(
             kind="cifar",
-            scalars={"model": self.model.value, "dataset": self.dataset.value},
+            scalars={
+                "model": self.model.value,
+                "dataset": self.dataset.value,
+                "dtype": dtype_name(self.dtype),
+            },
         )
 
     @override
@@ -126,7 +141,6 @@ class Cifar(ModelBundle):
         self,
         device: DeviceLike,
         *,
-        dtype: torch.dtype = DEFAULT_DTYPE,
         progress: Progress | None = None,
     ) -> nn.Module:
         """Load the model."""
@@ -144,7 +158,7 @@ class Cifar(ModelBundle):
             raise TypeError(
                 f"torch.hub.load returned {type(model)}, expected nn.Module"
             )
-        return model.to(device=device, dtype=dtype)
+        return model.to(device=device, dtype=self.dtype)
 
     @override
     def load_dataset(
@@ -158,5 +172,10 @@ class Cifar(ModelBundle):
     ) -> BatchedDataset:
         """Load the dataset."""
         return self.dataset.load(
-            batch_size, device, shuffle=shuffle, seed=seed, progress=progress
+            batch_size,
+            device,
+            dtype=self.dtype,
+            shuffle=shuffle,
+            seed=seed,
+            progress=progress,
         )

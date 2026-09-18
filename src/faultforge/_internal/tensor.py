@@ -1,5 +1,7 @@
 """Operations on tensors."""
 
+from collections.abc import Sequence
+
 import numpy as np
 import torch
 from torch import Tensor
@@ -33,7 +35,7 @@ def bitwise_xor(a: Tensor, b: Tensor) -> Tensor:
             return torch.bitwise_xor(a, b)
 
 
-def tensor_list_dtype(ts: list[torch.Tensor]) -> torch.dtype | None:
+def tensor_list_dtype(ts: Sequence[torch.Tensor]) -> torch.dtype | None:
     """Confirms that all tensors in `ts` have the same datatype.
 
     Returns:

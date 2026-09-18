@@ -10,6 +10,7 @@ from encoded_memory import (
 )
 from faultforge import Fingerprint
 from faultforge.dataset import BatchedDataset, DeviceLike
+from faultforge.dtype import dtype_name
 from faultforge.encoding import IdentityEncoder
 from faultforge.loading import ModelBundle
 from faultforge.progress import Progress
@@ -23,23 +24,29 @@ class _FakeBundle(ModelBundle):
     """A tiny in-memory model/dataset bundle, just enough to drive `EncodedFaultInjection`."""
 
     def __init__(
-        self, in_features: int, out_features: int, batch_size: int, num_batches: int
+        self,
+        in_features: int,
+        out_features: int,
+        batch_size: int,
+        num_batches: int,
+        *,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         self._in_features = in_features
         self._out_features = out_features
         self._batch_size = batch_size
         self._num_batches = num_batches
+        self._dtype = dtype
 
     @override
     def load_model(
         self,
         device: DeviceLike,
         *,
-        dtype: torch.dtype = torch.float32,
         progress: Progress | None = None,
     ) -> nn.Module:
         return nn.Linear(self._in_features, self._out_features).to(
-            device=device, dtype=dtype
+            device=device, dtype=self._dtype
         )
 
     @override
@@ -53,7 +60,7 @@ class _FakeBundle(ModelBundle):
         progress: Progress | None = None,
     ) -> BatchedDataset:
         n = self._batch_size * self._num_batches
-        inputs = torch.randn(n, self._in_features)
+        inputs = torch.randn(n, self._in_features, dtype=self._dtype)
         targets = torch.randint(0, self._out_features, (n,))
         dataset = TensorDataset(inputs, targets)
         return BatchedDataset.from_dataset(
@@ -62,7 +69,10 @@ class _FakeBundle(ModelBundle):
 
     @override
     def fingerprint(self) -> Fingerprint:
-        return Fingerprint(kind="fake_bundle")
+        return Fingerprint(
+            kind="fake_bundle",
+            scalars={"dtype": dtype_name(self._dtype)},
+        )
 
 
 def _make_experiment(
@@ -75,7 +85,9 @@ def _make_experiment(
     dtype: torch.dtype = torch.float32,
     fault_summary: bool = False,
 ) -> EncodedFaultInjection:
-    bundle = _FakeBundle(in_features=4, out_features=3, batch_size=2, num_batches=2)
+    bundle = _FakeBundle(
+        in_features=4, out_features=3, batch_size=2, num_batches=2, dtype=dtype
+    )
     return EncodedFaultInjection(
         bundle,
         IdentityEncoder(),
@@ -86,7 +98,6 @@ def _make_experiment(
         fault_summary=fault_summary,
         dataset_batch_limit=dataset_batch_limit,
         batch_size=2,
-        dtype=dtype,
     )
 
 

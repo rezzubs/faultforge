@@ -7,6 +7,26 @@ import enum
 import torch
 
 
+def dtype_name(dtype: torch.dtype) -> str:
+    """The name of a torch dtype without the `torch.` prefix, e.g. `"float16"`.
+
+    The inverse of `dtype_from_name`.
+    """
+    return str(dtype).removeprefix("torch.")
+
+
+def dtype_from_name(name: str) -> torch.dtype:
+    """Look up a torch dtype by the name `dtype_name` gives it.
+
+    Raises:
+        ValueError: If `name` doesn't name a torch dtype.
+    """
+    dtype = getattr(torch, name, None)
+    if not isinstance(dtype, torch.dtype):
+        raise ValueError(f"{name!r} is not the name of a torch dtype")
+    return dtype
+
+
 class EncodingDtype(enum.StrEnum):
     """Data types that support encoding."""
 

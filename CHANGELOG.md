@@ -40,11 +40,13 @@ library.
 - The `Progress` API now properly handles nested stages (#33)
 - `BatchedDataset` is now an iterable rather than an iterator. Not possible to
   forget to call `reset` anymore. (#35)
+- Model/dataset dtype is bundle configuration, not a loading parameter. (#36)
 
 ### Removed
 
 - **`faultforge-cli`** is no longer published to PyPI or maintained as a
   separate package - see `encoded-memory` above. (#30)
+- `faultforge.loading.DEFAULT_DTYPE` (#36)
 
 ## [0.2.1] - 2026-07-08
 

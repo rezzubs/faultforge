@@ -55,14 +55,15 @@ def test_fingerprint_records_golden_and_compare_bitwise_and_metric():
     assert scalars["reliability_metric"] == "sdc"
 
 
-def test_fingerprint_records_dtype():
-    scalars = _fingerprint_scalars(_make_experiment(compare_bitwise=False))
-    assert scalars["dtype"] == "f32"
+def test_fingerprint_leaves_dtype_to_the_bundle():
+    # The bundle owns the dtype, so it's recorded in the bundle's fingerprint
+    # rather than duplicated in the experiment's own scalars.
+    fingerprint = json.loads(
+        _make_experiment(compare_bitwise=False, dtype=torch.float16).serialize()
+    )["fingerprint"]
 
-    scalars = _fingerprint_scalars(
-        _make_experiment(compare_bitwise=False, dtype=torch.float16)
-    )
-    assert scalars["dtype"] == "f16"
+    assert "dtype" not in fingerprint["scalars"]
+    assert fingerprint["children"]["bundle"][0]["scalars"]["dtype"] == "float16"
 
 
 def test_fingerprint_omits_test_image_limit_by_default():

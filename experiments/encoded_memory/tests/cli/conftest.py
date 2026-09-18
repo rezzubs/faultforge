@@ -17,6 +17,7 @@ from encoded_memory import (
 )
 from faultforge import Fingerprint
 from faultforge.dataset import BatchedDataset, DeviceLike
+from faultforge.dtype import dtype_name
 from faultforge.encoding import IdentityEncoder
 from faultforge.loading import ModelBundle
 from encoded_memory.results import (
@@ -40,6 +41,7 @@ class _FakeBundle(ModelBundle):
         *,
         model: str = "toynet",
         dataset: str | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         self._in_features = in_features
         self._out_features = out_features
@@ -47,17 +49,17 @@ class _FakeBundle(ModelBundle):
         self._num_batches = num_batches
         self._model = model
         self._dataset = dataset
+        self._dtype = dtype
 
     @override
     def load_model(
         self,
         device: DeviceLike,
         *,
-        dtype: torch.dtype = torch.float32,
         progress=None,
     ) -> nn.Module:
         return nn.Linear(self._in_features, self._out_features).to(
-            device=device, dtype=dtype
+            device=device, dtype=self._dtype
         )
 
     @override
@@ -71,7 +73,7 @@ class _FakeBundle(ModelBundle):
         progress=None,
     ) -> BatchedDataset:
         n = self._batch_size * self._num_batches
-        inputs = torch.randn(n, self._in_features)
+        inputs = torch.randn(n, self._in_features, dtype=self._dtype)
         targets = torch.randint(0, self._out_features, (n,))
         dataset = TensorDataset(inputs, targets)
         return BatchedDataset.from_dataset(
@@ -80,7 +82,10 @@ class _FakeBundle(ModelBundle):
 
     @override
     def fingerprint(self) -> Fingerprint:
-        scalars = {"model": self._model}
+        scalars = {
+            "model": self._model,
+            "dtype": dtype_name(self._dtype),
+        }
         if self._dataset is not None:
             scalars["dataset"] = self._dataset
         return Fingerprint(kind="fake_bundle", scalars=scalars)
@@ -101,7 +106,7 @@ def save_result():
         metric: ReliabilityMetric = ReliabilityMetric.Accuracy,
         compare_bitwise: bool = True,
     ) -> Path:
-        bundle = _FakeBundle(8, 4, 4, 4, model=model, dataset=dataset)
+        bundle = _FakeBundle(8, 4, 4, 4, model=model, dataset=dataset, dtype=dtype)
         experiment = EncodedFaultInjection(
             bundle,
             IdentityEncoder(),
@@ -109,7 +114,6 @@ def save_result():
             faults=faults,
             compare_bitwise=compare_bitwise,
             batch_size=4,
-            dtype=dtype,
         )
         for _ in range(runs):
             experiment.run()
