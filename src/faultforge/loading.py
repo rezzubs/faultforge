@@ -3,6 +3,7 @@
 from faultforge._internal.loading.abc import ModelBundle
 from faultforge._internal.loading.cifar import Cifar, CifarDataset, CifarModel
 from faultforge._internal.loading.imagenet import ImageNet, ImageNetModel, Transform
+from faultforge._internal.loading.wikitext import WikiTextBundle
 
 __all__ = [
     "Cifar",
@@ -12,4 +13,5 @@ __all__ = [
     "ImageNetModel",
     "ModelBundle",
     "Transform",
+    "WikiTextBundle",
 ]
