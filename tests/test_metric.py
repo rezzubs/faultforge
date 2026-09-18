@@ -1,5 +1,7 @@
 """Tests for the Metric implementations (faultforge.metric)."""
 
+import math
+
 import pytest
 import torch
 
@@ -8,6 +10,8 @@ from faultforge.metric import (
     AccuracyDegradation,
     AccuracyDegradationResult,
     AccuracyResult,
+    Perplexity,
+    PerplexityResult,
     Sdc,
     SdcResult,
     Top1Sdc,
@@ -168,3 +172,73 @@ def test_top1_sdc_evaluate_batch_prediction_changed():
 
 def test_top1_sdc_score():
     assert Top1Sdc().score(SdcResult(non_matching_count=1, total_count=4)) == 25.0
+
+
+def test_perplexity_evaluate_batch_uniform_logits():
+    # Uniform logits give every class equal probability (1/vocab), so the
+    # cross-entropy of any valid position is exactly -log(1/vocab) = log(vocab).
+    vocab = 3
+    logits = torch.zeros(1, 3, vocab)
+    targets = torch.tensor([[0, 1, -100]])  # last position masked out
+
+    result = Perplexity().evaluate_batch(logits, torch.empty(0), targets)
+
+    assert result.token_count == 2
+    assert result.cross_entropy_sums == pytest.approx(2 * math.log(vocab))
+
+
+def test_perplexity_evaluate_batch_all_masked():
+    logits = torch.zeros(1, 2, 3)
+    targets = torch.tensor([[-100, -100]])
+
+    result = Perplexity().evaluate_batch(logits, torch.empty(0), targets)
+
+    assert result.token_count == 0
+    assert result.cross_entropy_sums == pytest.approx(0.0)
+
+
+def test_perplexity_accumulate():
+    first = PerplexityResult(cross_entropy_sums=1.0, token_count=2)
+    second = PerplexityResult(cross_entropy_sums=2.0, token_count=3)
+
+    result = Perplexity().accumulate(first, second)
+
+    assert result == PerplexityResult(cross_entropy_sums=3.0, token_count=5)
+
+
+def test_perplexity_score():
+    result = PerplexityResult(cross_entropy_sums=2 * math.log(2), token_count=2)
+
+    assert Perplexity().score(result) == pytest.approx(2.0)
+
+
+def test_perplexity_score_perfect_prediction():
+    # log(1) == 0 total surprise -> perplexity of 1 (best possible).
+    result = PerplexityResult(cross_entropy_sums=0.0, token_count=5)
+
+    assert Perplexity().score(result) == pytest.approx(1.0)
+
+
+def test_perplexity_score_no_tokens_raises():
+    result = PerplexityResult(cross_entropy_sums=0.0, token_count=0)
+
+    with pytest.raises(ValueError):
+        Perplexity().score(result)
+
+
+def test_perplexity_score_overflow_is_inf():
+    # exp(1000) overflows a float; a fault can make the model this wrong.
+    result = PerplexityResult(cross_entropy_sums=1000.0, token_count=1)
+
+    assert Perplexity().score(result) == math.inf
+
+
+def test_perplexity_end_to_end_uniform_logits_gives_vocab_size():
+    vocab = 5
+    logits = torch.zeros(1, 4, vocab)
+    targets = torch.tensor([[0, 1, 2, 3]])
+
+    result = Perplexity().evaluate_batch(logits, torch.empty(0), targets)
+    perplexity = Perplexity().score(result)
+
+    assert perplexity == pytest.approx(float(vocab))
