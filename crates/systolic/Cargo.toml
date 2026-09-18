@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-ndarray = "0.17.2"
+ndarray.workspace = true
 num-traits = "0.2.19"
 rand.workspace = true
 thiserror.workspace = true

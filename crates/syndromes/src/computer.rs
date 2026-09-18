@@ -1,24 +1,13 @@
 //! The computer seam: something that turns a triple into an output word.
 
 use crate::{
-    Syndrome,
+    Syndrome, Triple,
     bit::UnknownBitError,
     netlist::{FaultCase, Netlist},
 };
 use std::path::PathBuf;
 
 pub use crate::netlist::{ConstantAssignment, LoadError};
-
-/// One multiply-add input: `activation * weight + partial_sum`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Triple {
-    /// The activation operand of the multiplication.
-    pub activation: f32,
-    /// The weight operand of the multiplication.
-    pub weight: f32,
-    /// The value added to the product.
-    pub partial_sum: f32,
-}
 
 /// The outputs of one evaluation, as bit patterns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

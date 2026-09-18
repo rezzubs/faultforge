@@ -9,6 +9,7 @@ authors = ["Marten Roots"]
 
 
 [workspace.dependencies]
+ndarray = "0.17.2"
 numpy = "0.29.0"
 proptest = "1.11.0"
 pyo3 = "0.29.0"

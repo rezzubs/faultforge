@@ -271,28 +271,12 @@ pub mod test_netlists {
     //! Verilog sources for small netlists, written to temporary files.
 
     use super::*;
+    pub use crate::test_files::TemporaryFile;
     use std::fmt::Write;
 
-    /// A file that is deleted when dropped.
-    pub struct TemporaryFile(pub PathBuf);
-
-    impl Drop for TemporaryFile {
-        fn drop(&mut self) {
-            _ = fs::remove_file(&self.0);
-        }
-    }
-
-    /// Writes `source` to a fresh file in the system temporary directory.
+    /// Writes a Verilog source to a fresh temporary file.
     pub fn write_temporary(name: &str, source: &str) -> TemporaryFile {
-        let path = std::env::temp_dir().join(format!(
-            "syndromes-{}-{}-{name}.v",
-            std::process::id(),
-            // Tests run in parallel inside one process, so the thread
-            // distinguishes files with the same name.
-            format!("{:?}", std::thread::current().id()).replace(['(', ')'], "")
-        ));
-        fs::write(&path, source).expect("temporary directory is writable");
-        TemporaryFile(path)
+        crate::test_files::write_temporary(name, "v", source)
     }
 
     fn header(name: &str, ports: &[(&str, &str)]) -> String {
