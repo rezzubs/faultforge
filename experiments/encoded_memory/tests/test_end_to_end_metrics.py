@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-from encoded_memory import ReliabilityMetric
+from faultforge.metric import Accuracy, AccuracyDegradation, Metric, Sdc, Top1Sdc
 
 from .conftest import _make_experiment, _result
 
@@ -10,16 +10,16 @@ from .conftest import _make_experiment, _result
 @pytest.mark.parametrize(
     "metric",
     [
-        ReliabilityMetric.Accuracy,
-        ReliabilityMetric.AccuracyDegradation,
-        ReliabilityMetric.Sdc,
-        ReliabilityMetric.Top1Sdc,
+        Accuracy(),
+        AccuracyDegradation(),
+        Sdc(),
+        Top1Sdc(),
     ],
 )
 @pytest.mark.parametrize("golden_is_encoded", [False, True])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 def test_all_reliability_metrics_run_end_to_end(
-    metric: ReliabilityMetric, golden_is_encoded: bool, dtype: torch.dtype
+    metric: Metric, golden_is_encoded: bool, dtype: torch.dtype
 ):
     experiment = _make_experiment(
         compare_bitwise=False,
@@ -31,7 +31,7 @@ def test_all_reliability_metrics_run_end_to_end(
 
     scores = experiment.scores()
     assert len(scores) == 1
-    if metric == ReliabilityMetric.AccuracyDegradation:
+    if isinstance(metric, AccuracyDegradation):
         # Signed: the faulty model can outscore golden on a tiny random
         # dataset, which shows up as a negative "degradation".
         assert -100.0 <= scores[0] <= 100.0
