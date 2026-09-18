@@ -1,6 +1,7 @@
 """See [`faultforge.metric`]"""
 
 import abc
+import math
 from collections.abc import Generator
 from dataclasses import dataclass
 from typing import final, override
@@ -500,6 +501,106 @@ class Top1Sdc(Metric[SdcResult]):
     @override
     def display_unit(self) -> str | None:
         return "%"
+
+
+@final
+@dataclass(slots=True, frozen=True)
+class PerplexityResult:
+    cross_entropy_sums: float
+    """The cross-entropy loss summations of the model's predictions, over all
+    accumulated batches"""
+    token_count: int
+    """The number of valid tokens over all accumulated batches"""
+
+
+@final
+class Perplexity(Metric[PerplexityResult]):
+    """Perplexity metric for evaluating LLMs
+
+    Perplexity shows how surprised the model is by the correct next tokens in
+    real text. It calculates the cross-entropy between the model's probability
+    distribution and the ideal target distribution and takes the exponent of
+    its average over every scored token in the dataset.
+
+    This project takes [huggingface's perplexity calculation] as a reference.
+
+    - Perplexity can be categorized as a next-token prediction metric like
+      default cross-entropy loss and next-token prediction accuracy
+
+    example usage:
+    - Decoder based large language models
+
+    [huggingface's perplexity calculation]: https://huggingface.co/docs/transformers/perplexity
+    """
+
+    @override
+    def evaluate_batch(
+        self,
+        batch_model_output: Tensor,
+        batch_golden: Tensor,
+        batch_targets: Tensor,
+    ) -> PerplexityResult:
+        mask = batch_targets != -100
+        vocabulary = batch_model_output.shape[-1]
+
+        if not batch_model_output.is_floating_point():
+            raise ValueError("expected a floating point tensor")
+
+        # Upcast so the summed loss doesn't lose precision or overflow in
+        # fp16/bf16.
+        logits = batch_model_output.float()
+
+        # literally: how different the probability distribution of the model
+        # is compared to the ideal, summed over every valid token in the batch
+        # Modeled after huggingface's causal `ForCausalLMLoss`:
+        # https://github.com/huggingface/transformers/blob/main/src/transformers/loss/loss_utils.py
+        cross_entropy_sums = nn.functional.cross_entropy(
+            logits.view(-1, vocabulary),
+            batch_targets.view(-1),
+            ignore_index=-100,
+            reduction="sum",
+        )
+
+        return PerplexityResult(
+            cross_entropy_sums=cross_entropy_sums.item(),
+            token_count=int(mask.sum().item()),
+        )
+
+    @override
+    def requires_golden(self) -> bool:
+        return False
+
+    @override
+    def accumulate(
+        self, existing: PerplexityResult, new: PerplexityResult
+    ) -> PerplexityResult:
+        return PerplexityResult(
+            cross_entropy_sums=existing.cross_entropy_sums + new.cross_entropy_sums,
+            token_count=existing.token_count + new.token_count,
+        )
+
+    @override
+    def score(self, result: PerplexityResult) -> float:
+        if result.token_count == 0:
+            raise ValueError(
+                "cannot compute perplexity: no valid (non -100) target tokens"
+            )
+        try:
+            return math.exp(result.cross_entropy_sums / result.token_count)
+        except OverflowError:
+            return math.inf
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="perplexity")
+
+    @override
+    def display_name(self) -> str:
+        return "Perplexity"
+
+    @override
+    def display_unit(self) -> str | None:
+        return None
 
 
 def ratio_to_percent(ratio: float) -> float:
