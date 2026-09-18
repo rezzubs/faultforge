@@ -12,6 +12,7 @@ on:
       - "Cargo.lock"
       - "pyproject.toml"
       - "uv.lock"
+      - "justfile"
       - ".github/workflows/python.yml"
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - "Cargo.lock"
       - "pyproject.toml"
       - "uv.lock"
+      - "justfile"
       - ".github/workflows/python.yml"
 
 jobs:
@@ -39,17 +41,19 @@ jobs:
         with:
           enable-cache: true
 
+      - uses: extractions/setup-just@v3
+
       - name: Install
         run: uv sync --locked --all-packages
 
       - name: Type check
-        run: uv run ty check
+        run: just typecheck-python
 
       - name: Lint
-        run: uv run ruff check .
+        run: just lint-python
 
       - name: Format
-        run: uv run ruff format --check .
+        run: just fmt-check-python
 
       - name: Test
-        run: uv run pytest
+        run: just test-python
