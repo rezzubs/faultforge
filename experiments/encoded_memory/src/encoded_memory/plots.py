@@ -18,9 +18,13 @@ from typing import Any
 
 import matplotlib
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.colors import LogNorm
+from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
+
 from encoded_memory import (
-    DetailedResult,
-    ReliabilityMetric,
+    DetailedResults,
     SavedResult,
 )
 from encoded_memory.results import (
@@ -30,10 +34,6 @@ from encoded_memory.results import (
 )
 from faultforge import Fingerprint
 from faultforge.dtype import FiDtype, dtype_from_name
-from matplotlib.axes import Axes
-from matplotlib.colors import LogNorm
-from matplotlib.figure import Figure
-from matplotlib.lines import Line2D
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ def group_key(group_by: GroupBy, fingerprint: Fingerprint) -> str | None:
         case GroupBy.Dtype:
             return str(fingerprint.children["bundle"][0].scalars["dtype"])
         case GroupBy.Metric:
-            return str(fingerprint.scalars["reliability_metric"])
+            return fingerprint.children["reliability_metric"][0].kind
         case GroupBy.Model:
             return str(fingerprint.children["bundle"][0].scalars["model"])
         case GroupBy.Dataset:
@@ -114,11 +114,6 @@ def group_key(group_by: GroupBy, fingerprint: Fingerprint) -> str | None:
                     f"{bundle.kind!r} bundle has no 'dataset' scalar to group by"
                 )
             return str(dataset)
-
-
-def _reliability_metric(configuration: Configuration) -> ReliabilityMetric:
-    _, first = configuration.results[0]
-    return first.reliability_metric()
 
 
 def _cell(axes: Any, row: int, col: int) -> Axes:
@@ -154,14 +149,16 @@ def build_compare_figure(
     if not configurations:
         raise ValueError("no configurations to plot")
 
-    metrics = {_reliability_metric(config) for config in configurations}
-    if len(metrics) > 1:
-        names = sorted(metric.value for metric in metrics)
+    metric_names = {
+        config.results[0][1].metric_display_name for config in configurations
+    }
+    if len(metric_names) > 1:
+        names = sorted(metric_names)
         raise ValueError(
             f"all configurations must share a reliability metric to be "
             f"compared, got {names}"
         )
-    metric = next(iter(metrics))
+    metric_display_name = next(iter(metric_names))
 
     row_values: list[str | None] = []
     col_values: list[str | None] = []
@@ -228,7 +225,7 @@ def build_compare_figure(
 
     score_label = "Mean" if percentile is None else f"{percentile:g}th Percentile"
     fig.supxlabel("Bit Error Rate")
-    fig.supylabel(f"{score_label} {metric.score_name()} [%]")
+    fig.supylabel(f"{score_label} {metric_display_name} [%]")
 
     fig.legend(
         handles_by_label.values(),
@@ -308,17 +305,17 @@ def build_heatmap_figure(
         raise ValueError("no results to plot")
 
     for result in results:
-        if not isinstance(result.result, DetailedResult):
+        if not isinstance(result.result, DetailedResults):
             raise ValueError(
                 "heatmap requires results recorded with --compare-bitwise "
                 "(a per-run bitmask)"
             )
 
-    metrics = {result.reliability_metric() for result in results}
-    if len(metrics) > 1:
-        names = sorted(metric.value for metric in metrics)
+    metric_names = {result.metric_display_name for result in results}
+    if len(metric_names) > 1:
+        names = sorted(metric_names)
         raise ValueError(f"all results must share a reliability metric, got {names}")
-    metric = next(iter(metrics))
+    metric_name = next(iter(metric_names))
 
     dtypes = {
         result.fingerprint.children["bundle"][0].scalars["dtype"] for result in results
@@ -333,7 +330,7 @@ def build_heatmap_figure(
     weights: list[int] = []
 
     for result in results:
-        assert isinstance(result.result, DetailedResult)
+        assert isinstance(result.result, DetailedResults)
         for run, score in zip(result.result.results, result.scores(), strict=True):
             if min_score is not None and score < min_score:
                 continue
@@ -385,7 +382,7 @@ def build_heatmap_figure(
     ax.set_facecolor(background)
 
     image = ax.pcolormesh(x_edges, y_edges, counts.T, cmap=cmap, norm=norm)
-    ax.set_xlabel(f"{metric.score_name()} [%]")
+    ax.set_xlabel(f"{metric_name} [%]")
     ax.set_ylabel("Bit Position")
 
     colorbar = fig.colorbar(image, cax=colorbar_ax, ticks=_colorbar_ticks(counts.max()))

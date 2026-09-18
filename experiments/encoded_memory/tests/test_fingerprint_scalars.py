@@ -3,16 +3,18 @@
 import json
 
 import torch
-from encoded_memory import (
-    EncodedFaultInjection,
-    ReliabilityMetric,
-)
+from encoded_memory import EncodedFaultInjection
+from faultforge.metric import Sdc
 
 from .conftest import _make_experiment
 
 
 def _fingerprint_scalars(experiment: EncodedFaultInjection) -> dict:
     return json.loads(experiment.serialize())["fingerprint"]["scalars"]
+
+
+def _fingerprint_children(experiment: EncodedFaultInjection) -> dict:
+    return json.loads(experiment.serialize())["fingerprint"]["children"]
 
 
 def test_fingerprint_records_resolved_faults_from_int_input():
@@ -43,16 +45,17 @@ def test_fingerprint_identical_for_equivalent_faults_and_bit_error_rate():
 
 
 def test_fingerprint_records_golden_and_compare_bitwise_and_metric():
-    scalars = _fingerprint_scalars(
-        _make_experiment(
-            compare_bitwise=True,
-            golden_is_encoded=True,
-            reliability_metric=ReliabilityMetric.Sdc,
-        )
+    experiment = _make_experiment(
+        compare_bitwise=True,
+        golden_is_encoded=True,
+        reliability_metric=Sdc(),
     )
+    scalars = _fingerprint_scalars(experiment)
     assert scalars["golden"] == "encoded"
     assert scalars["compare_bitwise"] is True
-    assert scalars["reliability_metric"] == "sdc"
+
+    children = _fingerprint_children(experiment)
+    assert children["reliability_metric"][0]["kind"] == "sdc"
 
 
 def test_fingerprint_leaves_dtype_to_the_bundle():

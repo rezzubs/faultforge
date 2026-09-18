@@ -11,7 +11,10 @@ def test_group_key_ungrouped_is_none():
 
 
 def test_group_key_metric():
-    fingerprint = Fingerprint(kind="k", scalars={"reliability_metric": "sdc"})
+    fingerprint = Fingerprint(
+        kind="k",
+        children={"reliability_metric": [Fingerprint(kind="sdc")]},
+    )
     assert group_key(GroupBy.Metric, fingerprint) == "sdc"
 
 

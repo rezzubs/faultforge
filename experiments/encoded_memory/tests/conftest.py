@@ -4,15 +4,13 @@ import json
 from typing import override
 
 import torch
-from encoded_memory import (
-    EncodedFaultInjection,
-    ReliabilityMetric,
-)
+from encoded_memory import EncodedFaultInjection
 from faultforge import Fingerprint
 from faultforge.dataset import BatchedDataset, DeviceLike
 from faultforge.dtype import dtype_name
 from faultforge.encoding import IdentityEncoder
 from faultforge.loading import ModelBundle
+from faultforge.metric import Accuracy, Metric
 from faultforge.progress import Progress
 from torch import nn
 from torch.utils.data import TensorDataset
@@ -81,7 +79,7 @@ def _make_experiment(
     faults: int | float = 1,
     golden_is_encoded: bool = False,
     dataset_batch_limit: int | None = None,
-    reliability_metric: ReliabilityMetric = ReliabilityMetric.Accuracy,
+    reliability_metric: Metric = Accuracy(),
     dtype: torch.dtype = torch.float32,
     fault_summary: bool = False,
 ) -> EncodedFaultInjection:
