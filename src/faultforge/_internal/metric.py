@@ -1,3 +1,5 @@
+"""See [`faultforge.metric`]"""
+
 import abc
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -52,6 +54,8 @@ class Metric[R](abc.ABC):
     expected to pass the golden outputs through [`preprocess_golden`], the
     default implementation just returns the values without altering them.
 
+    The [`GoldenCache`] type exists to simplify common workflows with golden
+    outputs.
 
     [`accumulate`]: Metric.accumulate
     [`evaluate_batch`]: Metric.evaluate_batch
