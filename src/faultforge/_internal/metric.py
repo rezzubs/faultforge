@@ -300,6 +300,7 @@ class AccuracyDegradationResult:
     """Total number of predictions made."""
 
 
+@final
 class AccuracyDegradation(Metric[AccuracyDegradationResult]):
     """The difference of [`Accuracy`] between faulty and golden runs.
 
@@ -384,6 +385,7 @@ class SdcResult:
     """Number of total elements"""
 
 
+@final
 class Sdc(Metric[SdcResult]):
     """Silent Data Corruption.
 
@@ -446,6 +448,7 @@ class Sdc(Metric[SdcResult]):
         return "%"
 
 
+@final
 class Top1Sdc(Metric[SdcResult]):
     """Silent Data Corruption for the prediction (top-1 logit).
 
