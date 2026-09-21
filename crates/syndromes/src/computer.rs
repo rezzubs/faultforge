@@ -53,16 +53,38 @@ impl std::fmt::Display for EvaluationError {
 
 /// Computes `activation * weight + partial_sum` with an optional stuck-at
 /// fault.
-pub trait Computer {
+#[derive(Debug, Clone)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one computer exists per worker thread and is never moved in bulk"
+)]
+pub enum Computer {
+    /// One netlist computing the whole multiply-add.
+    Fused(Fused),
+    /// A multiplier netlist feeding an adder netlist.
+    Separate(Separate),
+}
+
+impl Computer {
     /// The number of fault cases. Valid cases are `0..count`.
-    fn fault_case_count(&self) -> usize;
+    pub fn fault_case_count(&self) -> usize {
+        match self {
+            Self::Fused(fused) => fused.fault_case_count(),
+            Self::Separate(separate) => separate.fault_case_count(),
+        }
+    }
 
     /// Computes the output with no fault and with `fault_case` applied.
-    fn evaluate(
+    pub fn evaluate(
         &mut self,
         triple: Triple,
         fault_case: usize,
-    ) -> Result<Evaluation, EvaluationError>;
+    ) -> Result<Evaluation, EvaluationError> {
+        match self {
+            Self::Fused(fused) => fused.evaluate(triple, fault_case),
+            Self::Separate(separate) => separate.evaluate(triple, fault_case),
+        }
+    }
 }
 
 /// The netlist and bus names of a fused multiply-add.
@@ -111,14 +133,14 @@ impl Fused {
             partial_sum: description.partial_sum.clone(),
         })
     }
-}
 
-impl Computer for Fused {
-    fn fault_case_count(&self) -> usize {
+    /// The number of fault cases. Valid cases are `0..count`.
+    pub fn fault_case_count(&self) -> usize {
         self.netlist.fault_case_count()
     }
 
-    fn evaluate(
+    /// Computes the output with no fault and with `fault_case` applied.
+    pub fn evaluate(
         &mut self,
         triple: Triple,
         fault_case: usize,
@@ -234,14 +256,14 @@ impl Separate {
             partial_sum: adder.partial_sum.clone(),
         })
     }
-}
 
-impl Computer for Separate {
-    fn fault_case_count(&self) -> usize {
+    /// The number of fault cases. Valid cases are `0..count`.
+    pub fn fault_case_count(&self) -> usize {
         self.multiplier.fault_case_count() + self.adder.fault_case_count()
     }
 
-    fn evaluate(
+    /// Computes the output with no fault and with `fault_case` applied.
+    pub fn evaluate(
         &mut self,
         triple: Triple,
         fault_case: usize,
@@ -326,14 +348,14 @@ mod tests {
         }
     }
 
-    fn separate() -> (Separate, TemporaryFile, TemporaryFile) {
+    fn separate() -> (Computer, TemporaryFile, TemporaryFile) {
         let multiplier = write_temporary("separate-mul", &bitwise_xor());
         let adder = write_temporary("separate-add", &bitwise_and());
         let computer = Separate::load(&separate_description(&multiplier.0, &adder.0)).unwrap();
-        (computer, multiplier, adder)
+        (Computer::Separate(computer), multiplier, adder)
     }
 
-    fn fused() -> (Fused, TemporaryFile) {
+    fn fused() -> (Computer, TemporaryFile) {
         let file = write_temporary("fused", &bitwise_xor3());
         let computer = Fused::load(&FusedDescription {
             path: file.0.clone(),
@@ -344,7 +366,7 @@ mod tests {
             constants: Vec::new(),
         })
         .unwrap();
-        (computer, file)
+        (Computer::Fused(computer), file)
     }
 
     /// `(a ^ b) & c` and `a ^ b ^ c` on the bit patterns.
@@ -356,7 +378,7 @@ mod tests {
         triple.activation.to_bits() ^ triple.weight.to_bits() ^ triple.partial_sum.to_bits()
     }
 
-    fn check_correct_outputs(computer: &mut impl Computer, expected: fn(Triple) -> u32) {
+    fn check_correct_outputs(computer: &mut Computer, expected: fn(Triple) -> u32) {
         let mut rng = StdRng::seed_from_u64(1);
         for _ in 0..50 {
             let triple = random_triple(&mut rng);
@@ -368,7 +390,7 @@ mod tests {
 
     /// Every gate in the test netlists drives one output bit, so a syndrome
     /// has at most one bit set, and together the cases reach every bit.
-    fn check_single_bit_syndromes(computer: &mut impl Computer) {
+    fn check_single_bit_syndromes(computer: &mut Computer) {
         let mut rng = StdRng::seed_from_u64(2);
         let mut seen = 0;
         for fault_case in 0..computer.fault_case_count() {

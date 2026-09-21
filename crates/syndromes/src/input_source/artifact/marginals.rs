@@ -1,7 +1,7 @@
 //! The artifact with each field sampled on its own.
 
 use super::Pool;
-use crate::{Triple, input_source::InputSource};
+use crate::Triple;
 use rand::Rng;
 
 /// Each field drawn from its own marginal, independently of the others.
@@ -19,8 +19,9 @@ impl Marginals {
     }
 }
 
-impl InputSource for Marginals {
-    fn triple(&self, rng: &mut dyn Rng) -> Triple {
+impl Marginals {
+    /// Draws each field from its own recorded triple.
+    pub fn triple(&self, rng: &mut impl Rng) -> Triple {
         Triple {
             activation: self.0.pick(rng).activation,
             weight: self.0.pick(rng).weight,

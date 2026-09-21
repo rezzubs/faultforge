@@ -85,7 +85,7 @@ impl Pool {
     }
 
     /// A uniformly chosen triple.
-    pub fn pick(&self, rng: &mut dyn Rng) -> &Triple {
+    pub fn pick(&self, rng: &mut impl Rng) -> &Triple {
         &self.triples[rng.random_range(0..self.triples.len())]
     }
 }

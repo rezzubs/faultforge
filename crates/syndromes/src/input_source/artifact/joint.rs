@@ -1,7 +1,7 @@
 //! The artifact sampled with replacement.
 
 use super::Pool;
-use crate::{Triple, input_source::InputSource};
+use crate::Triple;
 use rand::Rng;
 
 /// Recorded triples drawn whole, with replacement.
@@ -15,8 +15,9 @@ impl Joint {
     }
 }
 
-impl InputSource for Joint {
-    fn triple(&self, rng: &mut dyn Rng) -> Triple {
+impl Joint {
+    /// Draws one recorded triple.
+    pub fn triple(&self, rng: &mut impl Rng) -> Triple {
         *self.0.pick(rng)
     }
 }

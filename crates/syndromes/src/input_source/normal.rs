@@ -1,6 +1,6 @@
 //! Independent normal draws per field.
 
-use crate::{Triple, input_source::InputSource};
+use crate::Triple;
 use rand::Rng;
 use rand_distr::Distribution;
 
@@ -70,8 +70,9 @@ impl Normal {
     }
 }
 
-impl InputSource for Normal {
-    fn triple(&self, rng: &mut dyn Rng) -> Triple {
+impl Normal {
+    /// Draws one triple.
+    pub fn triple(&self, rng: &mut impl Rng) -> Triple {
         Triple {
             activation: self.activation.sample(rng),
             weight: self.weight.sample(rng),
@@ -83,7 +84,7 @@ impl InputSource for Normal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input_source::test_draws::draws;
+    use crate::input_source::{InputSource, test_draws::draws};
 
     fn scale(value: f32) -> StandardDeviation {
         StandardDeviation::try_from(value).expect("valid scale")
@@ -96,7 +97,7 @@ mod tests {
             weight: StandardDeviation::ZERO,
             partial_sum: scale(4.0),
         });
-        let samples = draws(&source, 7, 4000);
+        let samples = draws(&InputSource::Normal(source), 7, 4000);
         let count = samples.len() as f64;
 
         let statistics = |field: fn(&Triple) -> f32| {
