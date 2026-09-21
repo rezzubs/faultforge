@@ -4,6 +4,7 @@
 mod bit;
 pub mod computer;
 pub mod fault_selection;
+pub mod file;
 pub mod generation;
 pub mod histogram;
 pub mod input_source;

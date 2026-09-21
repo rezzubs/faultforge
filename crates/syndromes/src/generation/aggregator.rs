@@ -4,7 +4,7 @@ use super::{stopping::StoppingRule, worker::Batch};
 use crate::{
     Syndrome,
     computer::EvaluationError,
-    histogram::{Half, Histogram},
+    histogram::{Half, Histogram, Statistics},
 };
 use std::{collections::BTreeMap, num::NonZeroU64};
 
@@ -13,10 +13,8 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 pub struct Outcome {
     /// The syndrome counts over every committed job.
     pub histogram: Histogram,
-    /// The missing mass at stop.
-    pub missing_mass: f64,
-    /// The self-split distance at stop.
-    pub self_split_distance: f64,
+    /// The statistics of the histogram at stop.
+    pub statistics: Statistics,
 }
 
 /// What receiving a batch led to.
@@ -58,11 +56,18 @@ impl Aggregator {
 
     /// Takes a batch in and records what is contiguous.
     ///
+    /// `on_checkpoint` is called with the histogram and its statistics
+    /// every `check_interval` jobs, before the rule is asked.
+    ///
     /// Once the rule has fired, jobs past the stopping point are not
     /// recorded, including the rest of the batch that reached it. A failed
     /// batch is likewise reported only when its turn comes, so an error
     /// past the stopping point never surfaces.
-    pub fn receive(mut self, batch: Batch) -> Progress {
+    pub fn receive(
+        mut self,
+        batch: Batch,
+        on_checkpoint: &mut impl FnMut(&Histogram, &Statistics),
+    ) -> Progress {
         self.buffer.insert(batch.index, batch.result);
         while let Some(result) = self.buffer.remove(&self.next_batch) {
             let syndromes = match result {
@@ -75,10 +80,15 @@ impl Aggregator {
                 self.histogram.record(syndrome, Half::of_job(job));
                 // Jobs `0..=job` are recorded now, which is `job + 1` of them.
                 let committed_jobs = job + 1;
-                if committed_jobs.is_multiple_of(self.rule.check_interval.get())
-                    && self.rule.stops(&self.histogram)
-                {
-                    return Progress::Stopped(self.into_outcome());
+                if committed_jobs.is_multiple_of(self.rule.check_interval.get()) {
+                    let statistics = self.rule.statistics(&self.histogram);
+                    on_checkpoint(&self.histogram, &statistics);
+                    if self.rule.is_met(&statistics) {
+                        return Progress::Stopped(Outcome {
+                            histogram: self.histogram,
+                            statistics,
+                        });
+                    }
                 }
             }
             self.next_batch += 1;
@@ -86,10 +96,11 @@ impl Aggregator {
         Progress::Continue(self)
     }
 
+    /// The outcome as if the rule had fired now.
+    #[cfg(test)]
     fn into_outcome(self) -> Outcome {
         Outcome {
-            missing_mass: self.histogram.missing_mass(),
-            self_split_distance: self.histogram.self_split_distance(self.rule.head_threshold),
+            statistics: self.rule.statistics(&self.histogram),
             histogram: self.histogram,
         }
     }
@@ -170,7 +181,7 @@ mod tests {
     fn record(batches: impl IntoIterator<Item = Batch>) -> Outcome {
         let mut aggregator = Aggregator::new(nonzero(4), never(2));
         for batch in batches {
-            aggregator = continues(aggregator.receive(batch));
+            aggregator = continues(aggregator.receive(batch, &mut |_, _| {}));
         }
         aggregator.into_outcome()
     }
@@ -194,33 +205,55 @@ mod tests {
     fn early_batches_wait_for_their_predecessors() {
         let aggregator = Aggregator::new(nonzero(4), always(4));
         // Batch 1 alone cannot be recorded, so the rule is not asked.
-        let aggregator = continues(aggregator.receive(distinct(1, 4)));
+        let aggregator = continues(aggregator.receive(distinct(1, 4), &mut |_, _| {}));
         // Batch 0 completes the prefix and the rule fires at job 4.
-        let outcome = stopped(aggregator.receive(distinct(0, 4)));
+        let outcome = stopped(aggregator.receive(distinct(0, 4), &mut |_, _| {}));
         assert_eq!(outcome.histogram.evaluations(), 4);
     }
 
     #[test]
     fn stops_at_a_checkpoint_inside_a_batch() {
         let aggregator = Aggregator::new(nonzero(8), always(3));
-        let outcome = stopped(aggregator.receive(distinct(0, 8)));
+        let outcome = stopped(aggregator.receive(distinct(0, 8), &mut |_, _| {}));
         assert_eq!(outcome.histogram.evaluations(), 3);
-        assert_eq!(outcome.missing_mass, 1.0);
+        assert_eq!(outcome.statistics.missing_mass, 1.0);
+    }
+
+    #[test]
+    fn checkpoints_are_reported_before_the_rule_is_asked() {
+        let mut seen = Vec::new();
+        let aggregator = Aggregator::new(nonzero(8), always(3));
+        let outcome = stopped(aggregator.receive(distinct(0, 8), &mut |_, statistics| {
+            seen.push(statistics.evaluations);
+        }));
+        // The first checkpoint fires the rule, so it is the only one.
+        assert_eq!(seen, [3]);
+        assert_eq!(outcome.statistics.evaluations, 3);
+
+        let mut seen = Vec::new();
+        let aggregator = Aggregator::new(nonzero(8), never(3));
+        continues(aggregator.receive(distinct(0, 8), &mut |_, statistics| {
+            seen.push(statistics.evaluations);
+        }));
+        assert_eq!(seen, [3, 6]);
     }
 
     #[test]
     fn a_failure_waits_for_its_turn() {
         let aggregator = Aggregator::new(nonzero(4), always(4));
-        let aggregator = continues(aggregator.receive(failed(1)));
+        let aggregator = continues(aggregator.receive(failed(1), &mut |_, _| {}));
         // The rule fires at job 4, before batch 1 is reached.
-        let outcome = stopped(aggregator.receive(distinct(0, 4)));
+        let outcome = stopped(aggregator.receive(distinct(0, 4), &mut |_, _| {}));
         assert_eq!(outcome.histogram.evaluations(), 4);
     }
 
     #[test]
     fn a_failure_before_the_stopping_point_is_reported() {
         let aggregator = Aggregator::new(nonzero(4), always(4));
-        let aggregator = continues(aggregator.receive(distinct(1, 4)));
-        assert!(matches!(aggregator.receive(failed(0)), Progress::Failed(_)));
+        let aggregator = continues(aggregator.receive(distinct(1, 4), &mut |_, _| {}));
+        assert!(matches!(
+            aggregator.receive(failed(0), &mut |_, _| {}),
+            Progress::Failed(_)
+        ));
     }
 }

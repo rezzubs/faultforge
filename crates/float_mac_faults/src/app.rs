@@ -275,7 +275,7 @@ impl App {
             }
             self.step_requested = ui.button("step").clicked();
             ui.toggle_value(&mut self.show_counts, "Counts");
-            if self.view_mode == ViewMode::Patterns {
+            if self.view_mode == ViewMode::Patterns && !self.results.is_empty() {
                 ui.add(
                     egui::Slider::new(&mut self.bars_to_skip, 0..=self.results.len() - 1)
                         .text("Skip")

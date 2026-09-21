@@ -9,9 +9,9 @@ proptest = ["dep:proptest-derive", "dep:proptest"]
 
 [dependencies]
 thiserror.workspace = true
-ariadne = "0.6"
+ariadne.workspace = true
 chumsky = "0.13.0"
-clap = { version = "4.6.1", features = ["derive"] }
+clap.workspace = true
 
 proptest = { version = "1.11.0", optional = true }
 proptest-derive = { version = "0.8.0", optional = true }

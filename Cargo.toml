@@ -9,6 +9,10 @@ authors = ["Marten Roots"]
 
 
 [workspace.dependencies]
+ariadne = "0.6.0"
+clap = { version = "4.6.1", features = ["derive"] }
+color-eyre = "0.6.5"
+eyre = "0.6.12"
 ndarray = "0.17.2"
 numpy = "0.29.0"
 proptest = "1.11.0"

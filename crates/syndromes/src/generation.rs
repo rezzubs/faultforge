@@ -13,6 +13,7 @@ mod worker;
 use crate::{
     computer::{Computer, EvaluationError},
     fault_selection::FaultSelection,
+    histogram::{Histogram, Statistics},
     input_source::InputSource,
 };
 use aggregator::{Aggregator, Progress};
@@ -63,8 +64,15 @@ pub enum GenerationError {
 impl Configuration {
     /// Runs the generation to its stopping point.
     ///
-    /// Each worker gets a clone of `computer`. The calling thread aggregates.
-    pub fn run(&self, computer: &Computer) -> Result<Outcome, GenerationError> {
+    /// Each worker gets a clone of `computer`. The calling thread aggregates
+    /// and calls `on_checkpoint` every `check_interval` jobs with the
+    /// histogram so far and its statistics. The callback runs between
+    /// commits, so a slow one slows the run.
+    pub fn run(
+        &self,
+        computer: &Computer,
+        mut on_checkpoint: impl FnMut(&Histogram, &Statistics),
+    ) -> Result<Outcome, GenerationError> {
         if computer.fault_case_count() == 0 {
             return Err(GenerationError::NoFaultCases);
         }
@@ -89,7 +97,7 @@ impl Configuration {
             let mut aggregator = Aggregator::new(self.batch_size, self.rule);
             let outcome = loop {
                 match receiver.recv() {
-                    Ok(batch) => match aggregator.receive(batch) {
+                    Ok(batch) => match aggregator.receive(batch, &mut on_checkpoint) {
                         Progress::Continue(next) => aggregator = next,
                         Progress::Stopped(outcome) => break Some(Ok(outcome)),
                         Progress::Failed(error) => {
@@ -159,15 +167,17 @@ mod tests {
     #[test]
     fn outcome_does_not_depend_on_workers_or_batch_size() {
         let (computer, _file) = xor3("run");
-        let reference = configuration(1, 64).run(&computer).expect("runs");
+        let reference = configuration(1, 64)
+            .run(&computer, |_, _| {})
+            .expect("runs");
         assert!(reference.histogram.evaluations() > 64);
         assert!(reference.histogram.evaluations().is_multiple_of(64));
-        assert!(reference.missing_mass <= 0.01);
-        assert!(reference.self_split_distance <= 0.1);
+        assert!(reference.statistics.missing_mass <= 0.01);
+        assert!(reference.statistics.self_split_distance <= 0.1);
 
         for (workers, batch_size) in [(4, 64), (1, 100), (3, 7)] {
             let outcome = configuration(workers, batch_size)
-                .run(&computer)
+                .run(&computer, |_, _| {})
                 .expect("runs");
             assert_eq!(
                 outcome, reference,
@@ -197,7 +207,7 @@ mod tests {
         })
         .expect("loads");
         let error = configuration(2, 8)
-            .run(&Computer::Separate(computer))
+            .run(&Computer::Separate(computer), |_, _| {})
             .expect_err("fails");
         assert!(matches!(error, GenerationError::Evaluation(_)));
     }

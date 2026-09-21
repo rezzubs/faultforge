@@ -1,10 +1,12 @@
 //! When a histogram counts as stable.
 
-use crate::histogram::Histogram;
+use crate::histogram::{Histogram, Statistics};
+use serde::{Deserialize, Serialize};
 use std::num::NonZeroU64;
 
 /// A probability-scale threshold: a finite number in `0..=1`.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(try_from = "f64", into = "f64")]
 pub struct Threshold(f64);
 
 /// A number that is not a [`Threshold`].
@@ -16,6 +18,12 @@ impl Threshold {
     /// The threshold as a number.
     pub fn get(self) -> f64 {
         self.0
+    }
+}
+
+impl From<Threshold> for f64 {
+    fn from(threshold: Threshold) -> Self {
+        threshold.0
     }
 }
 
@@ -36,7 +44,7 @@ impl TryFrom<f64> for Threshold {
 ///
 /// Both statistics must be at or below their thresholds. The rule is asked
 /// every `check_interval` jobs, so a run ends at a multiple of it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct StoppingRule {
     /// Stop once the missing mass is at most this.
     pub missing_mass: Threshold,
@@ -49,13 +57,18 @@ pub struct StoppingRule {
 }
 
 impl StoppingRule {
-    /// Whether `histogram` is stable by this rule.
-    pub fn stops(&self, histogram: &Histogram) -> bool {
+    /// The statistics this rule judges `histogram` by.
+    pub fn statistics(&self, histogram: &Histogram) -> Statistics {
+        histogram.statistics(self.head_threshold)
+    }
+
+    /// Whether a histogram with these statistics is stable by this rule.
+    pub fn is_met(&self, statistics: &Statistics) -> bool {
         // An empty histogram has both statistics at zero, which is absence
         // of evidence rather than stability.
-        !histogram.is_empty()
-            && histogram.missing_mass() <= self.missing_mass.get()
-            && histogram.self_split_distance(self.head_threshold) <= self.self_split_distance.get()
+        statistics.evaluations > 0
+            && statistics.missing_mass <= self.missing_mass.get()
+            && statistics.self_split_distance <= self.self_split_distance.get()
     }
 }
 
@@ -66,6 +79,11 @@ mod tests {
 
     fn threshold(value: f64) -> Threshold {
         Threshold::try_from(value).expect("valid threshold")
+    }
+
+    /// Whether `histogram` is stable by `rule`.
+    fn stops(rule: StoppingRule, histogram: &Histogram) -> bool {
+        rule.is_met(&rule.statistics(histogram))
     }
 
     fn rule(missing_mass: f64, self_split_distance: f64) -> StoppingRule {
@@ -89,7 +107,7 @@ mod tests {
 
     #[test]
     fn empty_histogram_never_stops() {
-        assert!(!rule(1.0, 1.0).stops(&Histogram::new()));
+        assert!(!stops(rule(1.0, 1.0), &Histogram::new()));
     }
 
     #[test]
@@ -106,12 +124,12 @@ mod tests {
             histogram.record(0, Half::B);
             histogram.record(1, Half::B);
         }
-        assert!(rule(0.0, 0.25).stops(&histogram));
-        assert!(!rule(0.0, 0.2).stops(&histogram));
+        assert!(stops(rule(0.0, 0.25), &histogram));
+        assert!(!stops(rule(0.0, 0.2), &histogram));
 
         // A singleton makes the missing mass 1/9.
         histogram.record(2, Half::A);
-        assert!(rule(0.2, 1.0).stops(&histogram));
-        assert!(!rule(0.1, 1.0).stops(&histogram));
+        assert!(stops(rule(0.2, 1.0), &histogram));
+        assert!(!stops(rule(0.1, 1.0), &histogram));
     }
 }

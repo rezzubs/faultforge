@@ -27,8 +27,9 @@ multiply-add result. The histogram is the fault model. This crate builds it.
   compared, which is not worth building without a need. The seed and the
   evaluation count are recorded, so any run is reproducible.
 - Not tied to particular netlists. Port names and constant input assignments
-  come from the command line. The crate knows nothing about the netlists it
-  is given beyond "these buses are inputs, this bus is the output".
+  come from a description file named on the command line. The crate knows
+  nothing about the netlists it is given beyond "these buses are inputs,
+  this bus is the output".
 
 ## Core loop
 
@@ -73,7 +74,8 @@ cases it has and how to apply case `n`. Two implementations:
 
 A netlist is described by a path, its input bus names, its output bus name
 and a list of constant assignments (a rounding mode input, for example). Bus
-widths are checked at load time.
+widths are checked at load time. The command line takes these from a TOML
+file, so a computer is described once and named by path.
 
 **The input source.** Yields triples. Planned implementations:
 
@@ -134,9 +136,11 @@ is the right weight.
 ## Output
 
 JSON. One file holds one histogram: the `(mask, count)` list, the seed, the
-evaluation count, and the two statistics above at stop time. Masks and counts are plain integers. Counts
-rather than fractions, so histograms can be added together later without
-loss.
+stopping rule, the evaluation count, and the two statistics above at stop
+time. The rule is recorded because its check interval and head cut-off are
+part of what defines the result. Masks and counts are plain integers.
+Counts rather than fractions, so histograms can be added together later
+without loss.
 
 Chosen over a binary or array format because at tens of thousands of entries
 size is irrelevant, and being able to open the file and read it is worth
@@ -179,9 +183,10 @@ are fully determined.
 
 ## User interface
 
-Optional, behind a flag. The UI pulls a snapshot (sorted entries plus
-statistics) from the aggregator at a fixed rate and never touches the live
-histogram. Headless mode is the same workers with no UI attached.
+Optional, behind a flag. The aggregator reports the histogram and its
+statistics at every checkpoint; the UI takes a snapshot (sorted entries
+plus statistics) from those at a fixed rate and never touches the live
+histogram. Headless mode is the same workers with a status line instead.
 
 The earlier prototype ran the simulation inside the frame loop and rebuilt,
 cloned, sorted and labelled every bar from the live map on every frame, which

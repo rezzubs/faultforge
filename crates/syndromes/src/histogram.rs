@@ -1,6 +1,7 @@
 //! Syndrome counts and the statistics that decide when to stop.
 
 use crate::Syndrome;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// One of the two interleaved halves of a run.
@@ -31,6 +32,19 @@ impl Half {
             Self::B => 1,
         }
     }
+}
+
+/// The numbers that summarise a histogram.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Statistics {
+    /// The number of evaluations counted.
+    pub evaluations: u64,
+    /// The number of distinct syndromes seen.
+    pub distinct_syndromes: u64,
+    /// See [`Histogram::missing_mass`].
+    pub missing_mass: f64,
+    /// See [`Histogram::self_split_distance`].
+    pub self_split_distance: f64,
 }
 
 /// Syndrome counts, kept per half.
@@ -90,6 +104,17 @@ impl Histogram {
         self.counts
             .iter()
             .map(|(&syndrome, counts)| (syndrome, counts[0] + counts[1]))
+    }
+
+    /// The statistics of this histogram, with the distance restricted to
+    /// syndromes seen at least `head_threshold` times.
+    pub fn statistics(&self, head_threshold: u64) -> Statistics {
+        Statistics {
+            evaluations: self.evaluations(),
+            distinct_syndromes: u64::try_from(self.len()).expect("usize fits in u64"),
+            missing_mass: self.missing_mass(),
+            self_split_distance: self.self_split_distance(head_threshold),
+        }
     }
 
     /// The estimated probability that the next evaluation produces a syndrome
