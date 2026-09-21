@@ -138,13 +138,33 @@ impl Histogram {
         // equal and the halved sum is not exactly a max over sets any more.
         // It is still the head's L1 distance on the `[0, 1]` scale, which is
         // what the stopping threshold is calibrated against.
-        let sum: f64 = self
+        //
+        // The terms are brought to the common denominator `N_A * N_B` and
+        // summed as integers, so the result does not depend on the order the
+        // map is iterated in. A float sum would, in its last bits, and the
+        // stopping decision must be a function of the histogram alone.
+        let [evaluations_a, evaluations_b] = [evaluations_a, evaluations_b].map(u128::from);
+        let overflow = "a self-split term exceeds u128";
+        let scaled_sum = self
             .counts
             .values()
             .filter(|counts| counts[0] + counts[1] >= head_threshold)
-            .map(|counts| (ratio(counts[0], evaluations_a) - ratio(counts[1], evaluations_b)).abs())
-            .sum();
-        sum / 2.0
+            .map(|counts| {
+                let [count_a, count_b] = counts.map(u128::from);
+                count_a
+                    .checked_mul(evaluations_b)
+                    .expect(overflow)
+                    .abs_diff(count_b.checked_mul(evaluations_a).expect(overflow))
+            })
+            .try_fold(0u128, u128::checked_add)
+            .expect(overflow);
+        let denominator = evaluations_a
+            .checked_mul(evaluations_b)
+            .and_then(|product| product.checked_mul(2))
+            .expect(overflow);
+        // There is no lossless u128 to f64 conversion. Each cast rounds once,
+        // deterministically, so the result is a function of the counts.
+        scaled_sum as f64 / denominator as f64
     }
 }
 

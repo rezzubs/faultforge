@@ -88,8 +88,7 @@ widths are checked at load time.
 - Independent draws from a normal distribution, with a scale per input.
   Recorded values cluster around zero, so this is a candidate parametric
   stand-in for the artifact. Whether it is a good one is the test.
-- A constant triple. One stage of the computation always sees `(0, 0, 0)`;
-  its exact histogram is one pass over every fault case.
+- A constant triple. One stage of the computation always sees `(0, 0, 0)`.
 - Uniformly random bit patterns. Not physically meaningful, useful for
   testing the crate.
 
@@ -125,9 +124,9 @@ never happens, so it cannot be the criterion. Two statistics that work:
   would just be the missing mass again. Restricted to the head it measures
   the thing the first statistic does not: whether the bulk is stable.
 
-Headless runs stop when both are below thresholds given on the command line,
-or at a hard cap on evaluations. The UI shows both live so the thresholds can
-be calibrated by eye before being trusted headless.
+Headless runs stop when both are below thresholds given on the command line.
+The UI shows both live so the thresholds can be calibrated by eye before
+being trusted headless.
 
 Masks seen once stay in the output. The consumer samples them at `1/N`, which
 is the right weight.
@@ -135,8 +134,7 @@ is the right weight.
 ## Output
 
 JSON. One file holds one histogram: the `(mask, count)` list, the seed, the
-evaluation count, whether the histogram is exact or sampled, and the two
-statistics above at stop time. Masks and counts are plain integers. Counts
+evaluation count, and the two statistics above at stop time. Masks and counts are plain integers. Counts
 rather than fractions, so histograms can be added together later without
 loss.
 
@@ -158,20 +156,23 @@ Jobs are numbered. Job `k` is `(input triple, fault case)`, both drawn from
 an RNG seeded from `(seed, k)`. Any worker can produce any job by itself, so
 there is no shared input stream: workers claim contiguous batches of job
 indices from an atomic counter, and each owns a clone of the netlist
-simulation and a local histogram. Seeding a small RNG per job costs
-nanoseconds against a netlist evaluation.
+simulation and collects its batch as a list of syndromes. Seeding a small
+RNG per job costs nanoseconds against a netlist evaluation.
 
 The input source seam follows from this: a source is "given an RNG, produce
 a triple", holding no RNG of its own. An adaptive source that chooses inputs
 based on results so far would not fit, and would need a producer thread
 instead; the worker side would be unchanged.
 
-Workers hand finished batches to an aggregator, which merges them into the
-master histogram strictly in index order, buffering any batch that arrives
-early. The stopping rule and the UI snapshot only ever see the committed
+Workers hand finished batches to an aggregator, which records them into the
+master histogram strictly in job order, buffering any batch that arrives
+early. The stopping rule is asked at a fixed interval of jobs, independent
+of the batch size. It and the UI snapshot only ever see the committed
 prefix "jobs `0..M`", so the decision to stop at `M` depends on the job
-sequence, not on timing. Batches computed past `M` are discarded, at most
-one per worker. The self-split halves are job parity.
+sequence, not on timing.
+Work past `M` is discarded, at most a batch per worker, and so is any
+evaluation error in it: a failure is reported only when its job would have
+been committed. The self-split halves are job parity.
 
 Result: given the seed, both the histogram and the evaluation count at stop
 are fully determined.

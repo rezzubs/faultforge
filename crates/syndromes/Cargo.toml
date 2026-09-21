@@ -9,6 +9,6 @@ ariadne = "0.6"
 logic_simulation = { path = "../logic_simulation" }
 ndarray.workspace = true
 ndarray-npy = "0.10"
-rand.workspace = true
+rand = { workspace = true, features = ["chacha"] }
 rand_distr = "0.6"
 thiserror.workspace = true
