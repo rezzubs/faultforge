@@ -39,7 +39,7 @@
 mod helpers;
 
 use std::{
-    collections::{HashMap, HashSet, hash_map::Entry as HashMapEntry},
+    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry as HashMapEntry},
     fmt::Display,
     marker::PhantomData,
     ops::Range,
@@ -515,13 +515,17 @@ pub enum Assignment {
 /// See [`Simulation::builder`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimulationBuilder<F = ()> {
+    // Ordered maps, so that the ids assigned by `build` are a function of
+    // the names rather than of the process's hash seed. Fault targets are
+    // numbered by component id, so this is what makes fault case `n` mean
+    // the same gate in every run.
     /// The components that have been configured.
-    components: HashMap<String, ComponentSpec>,
+    components: BTreeMap<String, ComponentSpec>,
     /// The connectors that have been configured.
-    connectors: HashMap<String, Connector>,
+    connectors: BTreeMap<String, Connector>,
     /// The IO connections that have been configured.
-    ios: HashMap<String, GenericIo>,
-    assignments: HashMap<(String, Option<usize>), Signal>,
+    ios: BTreeMap<String, GenericIo>,
+    assignments: BTreeMap<(String, Option<usize>), Signal>,
     fault_kind: PhantomData<F>,
 }
 
@@ -547,10 +551,10 @@ impl<F> SimulationBuilder<F> {
     /// Create a new simulation builder.
     pub fn new() -> Self {
         Self {
-            components: HashMap::new(),
-            connectors: HashMap::new(),
-            ios: HashMap::new(),
-            assignments: HashMap::new(),
+            components: BTreeMap::new(),
+            connectors: BTreeMap::new(),
+            ios: BTreeMap::new(),
+            assignments: BTreeMap::new(),
             fault_kind: PhantomData,
         }
     }
@@ -1535,10 +1539,10 @@ impl RunningBuilder {
     /// Maps all names to concrete IDs and builds the simulation.
     fn realize<F>(
         mut self,
-        components: HashMap<String, ComponentSpec>,
-        connectors: HashMap<String, Connector>,
-        ios: HashMap<String, GenericIo>,
-        assignments: HashMap<(String, Option<usize>), Signal>,
+        components: BTreeMap<String, ComponentSpec>,
+        connectors: BTreeMap<String, Connector>,
+        ios: BTreeMap<String, GenericIo>,
+        assignments: BTreeMap<(String, Option<usize>), Signal>,
     ) -> Result<Simulation<F>, BuildError> {
         // `realize_connection` expects connectors to be added before components and IOs.
         for (name, connector) in connectors {
