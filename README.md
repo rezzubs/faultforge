@@ -16,6 +16,8 @@ its first experiment.
 - [`Fingerprint`](docs/library.md#fingerprint)-based verification: resuming or
   comparing a saved result against a changed configuration fails loudly with
   a precise diff, instead of silently mixing incompatible data.
+- A generic and extensible system for [reliabilty
+  metrics](src/faultforge/metric.py).
 - A composable [encoding framework](experiments/encoded_memory/README.md#encoding-techniques)
   (`Encoder`/`Encoding`, chainable via `EncoderSequence`) with three built-in
   ECC-style techniques - SECDED (Hamming codes), MSET, and CEP - usable

@@ -1,8 +1,8 @@
 """Tests for `encoded_memory.plots.build_compare_figure`."""
 
 import pytest
-from encoded_memory import ReliabilityMetric
 from encoded_memory.plots import GroupBy, build_compare_figure
+from faultforge.metric import Sdc
 from matplotlib.figure import Figure
 
 
@@ -26,9 +26,7 @@ def test_build_compare_figure_raises_on_empty():
 
 
 def test_build_compare_figure_raises_on_mismatched_metric(tmp_path, make_configuration):
-    sdc = make_configuration(
-        tmp_path / "sdc", label="sdc", metric=ReliabilityMetric.Sdc
-    )
+    sdc = make_configuration(tmp_path / "sdc", label="sdc", metric=Sdc())
     accuracy = make_configuration(tmp_path / "acc", label="accuracy")
 
     with pytest.raises(ValueError, match="reliability metric"):
