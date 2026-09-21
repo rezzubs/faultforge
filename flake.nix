@@ -27,6 +27,13 @@
       pkgs.stdenv.cc.cc.lib
       # for numpy
       pkgs.zlib
+      # matplotlib's compiled `_c_internal_utils` extension dlopen()s these to
+      # probe for a usable display (`display_is_valid()`); without them the
+      # dlopen silently fails, matplotlib assumes headless, and it falls back
+      # to the non-interactive Agg backend even when a real X11/Wayland
+      # session is running.
+      pkgs.libX11
+      pkgs.wayland
     ];
   in {
     devShells.${system}.default = pkgs.mkShell {
