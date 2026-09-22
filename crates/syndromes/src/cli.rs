@@ -3,6 +3,8 @@
 mod computer;
 mod source;
 mod status;
+#[cfg(feature = "ui")]
+mod view;
 
 use clap::{Args, Parser, Subcommand};
 use eyre::{Context, bail};
@@ -30,12 +32,17 @@ pub struct Cli {
 enum Command {
     /// Generate a syndrome histogram and save it as JSON.
     Generate(GenerateArguments),
+    /// Show one saved histogram, or two side by side.
+    #[cfg(feature = "ui")]
+    View(view::ViewArguments),
 }
 
 impl Cli {
     pub fn run(self) -> eyre::Result<()> {
         match self.command {
             Command::Generate(arguments) => generate(&arguments),
+            #[cfg(feature = "ui")]
+            Command::View(arguments) => arguments.run(),
         }
     }
 }

@@ -1,6 +1,9 @@
 //! The `syndromes` command line.
 
 mod cli;
+mod format;
+#[cfg(feature = "ui")]
+mod ui;
 
 use clap::Parser;
 

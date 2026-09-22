@@ -188,28 +188,50 @@ statistics at every checkpoint; the UI takes a snapshot (sorted entries
 plus statistics) from those at a fixed rate and never touches the live
 histogram. Headless mode is the same workers with a status line instead.
 
+That snapshot is also the seam between the views and where their data comes
+from. A saved file becomes one the same way a running generation does, so the
+same window serves both and a frame never does more than read the current one.
+
 The earlier prototype ran the simulation inside the frame loop and rebuilt,
 cloned, sorted and labelled every bar from the live map on every frame, which
 is why it fell over at large entry counts. The number of distinct syndromes
 is not limited; only the number of bars drawn is.
 
-Two views: syndromes sorted by frequency, and per-bit flip frequency. Both
-can show counts or fractions.
+Two views: syndromes sorted by frequency, and per-bit flip frequency. Each
+chooses what its bar heights mean. The frequency view shows counts or a share
+of all evaluations. The per-bit view adds a third scale, the share of the
+evaluations whose mask was nonzero, because the two fractions answer different
+questions: one is how often an injection flips the bit, the other is the shape
+of a corruption given that the fault changed the output at all. Neither
+fraction is a share of the total flips across bits, since bits are not
+mutually exclusive.
 
-A second histogram can be loaded from a file for comparison. Bars are drawn
-rank by rank next to the primary; when the mask at a rank is the same in
-both, the bar is highlighted. The header shows the total variation distance
-between the two. Compare mode defaults to fractions, since evaluation counts
-differ. The same view works on two files with no simulation running.
+Bars fill their slot, so neighbours touch. A second histogram can be loaded
+from a file for comparison, and both views compare. The two bars of a slot are
+drawn over each other rather than beside each other, the shorter in front, so
+the pair reads as one bar with the difference showing above it. In the
+frequency view they are paired rank by rank, and when the mask at a rank is
+the same in both, the bar is highlighted; in the per-bit view they share a bit
+index, so there is nothing to highlight. Hovering a bar in the frequency view
+also paints every drawn bar counting the same mask one shared colour, so a mask
+can be followed across the two histograms even where their ranks disagree; a
+pair that already shares a rank is left alone, since the highlight says that
+much. The header shows the total variation distance between the two. Compare
+mode defaults to fractions, since evaluation counts differ. The same view
+works on two files with no simulation running.
 
 Colours are constants in one module: primary, primary for the zero mask,
-secondary, secondary for the zero mask, and a highlight variant of each.
+secondary, secondary for the zero mask, a highlight variant of each, and one
+shared colour for a hovered mask and its match.
 
 ## Layout
 
 A library and a binary in one crate. The library holds the netlist wrapper,
 the two seams, the histogram with its statistics, the worker and aggregator,
 and the file format. The binary holds the command line and the UI.
+
+The UI is optional at compile time. Turning it off drops the graphics stack
+with it, so generation builds and runs on a machine that has none.
 
 ## Implementation order
 

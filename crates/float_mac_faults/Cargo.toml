@@ -8,9 +8,9 @@ authors.workspace = true
 ariadne.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
-eframe = "0.34.2"
-egui = "0.34.2"
-egui_plot = "0.35.0"
+eframe.workspace = true
+egui.workspace = true
+egui_plot.workspace = true
 eyre.workspace = true
 logic_simulation = { path = "../logic_simulation" }
 rand.workspace = true

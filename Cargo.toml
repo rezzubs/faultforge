@@ -12,6 +12,9 @@ authors = ["Marten Roots"]
 ariadne = "0.6.0"
 clap = { version = "4.6.1", features = ["derive"] }
 color-eyre = "0.6.5"
+eframe = "0.36.2"
+egui = "0.36.2"
+egui_plot = "0.37.0"
 eyre = "0.6.12"
 ndarray = "0.17.2"
 numpy = "0.29.0"

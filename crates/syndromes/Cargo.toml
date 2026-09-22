@@ -8,6 +8,9 @@ authors.workspace = true
 ariadne.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
+eframe = { workspace = true, optional = true }
+egui = { workspace = true, optional = true }
+egui_plot = { workspace = true, optional = true }
 eyre.workspace = true
 logic_simulation = { path = "../logic_simulation" }
 ndarray.workspace = true
@@ -18,3 +21,8 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 thiserror.workspace = true
 toml = "0.9"
+
+[features]
+default = ["ui"]
+# The window. Off makes a headless build that needs no graphics stack.
+ui = ["dep:eframe", "dep:egui", "dep:egui_plot"]

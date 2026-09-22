@@ -34,7 +34,16 @@
       # session is running.
       pkgs.libX11
       pkgs.wayland
-    ];
+      # winit's Wayland backend dlopen()s this via xkbcommon-dl for keyboard
+      # handling instead of linking it at build time.
+      pkgs.libxkbcommon
+      pkgs.vulkan-loader
+    ]
+    # NixOS keeps the actual GPU driver (Mesa/nvidia) here rather than in the
+    # nix store. Setting LD_LIBRARY_PATH below overrides the system's own
+    # search path, so without this wgpu can't dlopen() the Vulkan/GL driver
+    # and fails to create a rendering surface.
+    + ":/run/opengl-driver/lib";
   in {
     devShells.${system}.default = pkgs.mkShell {
       # NOTE: the project's own Python is deliberately left out. We can let uv

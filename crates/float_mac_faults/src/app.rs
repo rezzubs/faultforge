@@ -348,8 +348,8 @@ impl eframe::App for App {
 
         let render_start = Instant::now();
 
-        egui::Panel::top("top control panel").show_inside(ui, |ui| self.draw_header(ui));
-        egui::CentralPanel::default().show_inside(ui, |ui| {
+        egui::Panel::top("top control panel").show(ui, |ui| self.draw_header(ui));
+        egui::CentralPanel::default().show(ui, |ui| {
             egui_plot::Plot::new("results").show(ui, |plot_ui| {
                 match self.view_mode {
                     ViewMode::Patterns => self.draw_pattern_bars(plot_ui),

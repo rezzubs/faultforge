@@ -275,8 +275,11 @@ mod tests {
     }
     /// Builds the source of a `generate` command line with the given flags.
     fn build(source_flags: &[&str]) -> eyre::Result<InputSource> {
-        let Command::Generate(arguments) = parse(source_flags).expect("parses").command;
-        arguments.source.build()
+        match parse(source_flags).expect("parses").command {
+            Command::Generate(arguments) => arguments.source.build(),
+            #[cfg(feature = "ui")]
+            Command::View(_) => unreachable!("the parsed command line is a generate"),
+        }
     }
 
     fn normal(activation: f32, weight: f32, partial_sum: f32) -> InputSource {
