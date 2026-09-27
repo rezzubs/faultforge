@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A `Perplexity` metric under `faultforge.metric` for analyzing decoder-based
+  language models. ([#38])
+- A `WikiTextBundle` under `faultforge.loading` for evaluating HuggingFace
+  language models on the WikiText dataset. ([#38])
+
+[#38]: https://github.com/rezzubs/faultforge/pull/38
+
 ## [0.3.0] - 2026-09-29
 
 ### Added
