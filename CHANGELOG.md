@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
 ### Added
 
 - The `BatchedDataset` API now supports shuffling. ([#32])
@@ -174,7 +176,8 @@ side moved from one crate to a `picker`/`memory`/`bindings` workspace.
   (`compare_array_list_bitwise_*`) - comparison logic now lives on the
   Python side.
 
-[Unreleased]: https://github.com/rezzubs/faultforge/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/rezzubs/faultforge/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/rezzubs/faultforge/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/rezzubs/faultforge/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rezzubs/faultforge/compare/0.1.0...v0.2.0
 [0.1.0]: https://github.com/rezzubs/faultforge/releases/tag/0.1.0

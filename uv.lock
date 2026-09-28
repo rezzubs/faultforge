@@ -174,7 +174,7 @@ wheels = [
 
 [[package]]
 name = "encoded-memory"
-version = "0.2.1"
+version = "0.3"
 source = { editable = "experiments/encoded_memory" }
 dependencies = [
     { name = "faultforge" },
@@ -197,7 +197,7 @@ requires-dist = [
 
 [[package]]
 name = "faultforge"
-version = "0.2.1"
+version = "0.3"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },

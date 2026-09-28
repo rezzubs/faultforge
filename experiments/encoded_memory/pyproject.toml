@@ -1,6 +1,6 @@
 [project]
 name = "encoded-memory"
-version = "0.2.1"
+version = "0.3.0"
 description = "Fault injection into ECC-protected model parameters - a FaultForge experiment, with a CLI for recording and plotting results"
 readme = "README.md"
 authors = [
@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "faultforge==0.2.1",
+    "faultforge>=0.3.0,<0.4.0",
     "matplotlib>=3.10.5",
     "numpy>=2.3.1",
     "pydantic>=2.12.3",
