@@ -82,26 +82,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           pattern: faultforge*
           path: dist
           merge-multiple: true
 
-      - name: Extract changelog section
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          awk -v version="$version" '
-            $0 ~ "^## \\[" version "\\]" { found=1; next }
-            found && /^## \[/ { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-
+      # A draft, so the release notes can be written by hand before publishing.
       - uses: softprops/action-gh-release@v2
         with:
-          body_path: release-notes.md
+          draft: true
           files: dist/*
 
   update-latest-branch:
