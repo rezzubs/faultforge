@@ -9,29 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The `BatchedDataset` API now supports shuffling. (#32)
-- The `Progress` API now properly handles nested stages. (#33)
-- A reusable reliability metrics system under `faultforge.metric`. (#34)
+- The `BatchedDataset` API now supports shuffling. ([#32])
+- The `Progress` API now properly handles nested stages. ([#33])
+- A reusable reliability metrics system under `faultforge.metric`. ([#34])
 
 ### Changed
 
 - Experiments live in the repository under `experiments/` as their own packages.
-  (#30)
+  ([#30])
 - `faultforge`'s Python source now lives directly at the
   repository root (`src/`, `tests/`) rather than nested under
-  `packages/faultforge`/`faultforge/`. (#30)
-- **Breaking:** `faultforge encoded-memory <command>` is now `encoded-memory <command>`,
-  shipped as part of the `experiments/encoded_memory` package. `faultforge-cli`
-  is removed. (#30)
+  `packages/faultforge`/`faultforge/`. ([#30])
+- **Breaking:** `faultforge encoded-memory <command>` is now `encoded-memory
+  <command>`, shipped as part of the `experiments/encoded_memory` package.
+  `faultforge-cli` is removed. ([#30])
 - **Breaking:** `BatchedDataset` is now an iterable rather than an iterator. Not
-  possible to forget to call `reset` anymore. (#35)
-- **Breaking:** Model/dataset dtype is bundle configuration, not a loading parameter. (#36)
+  possible to forget to call `reset` anymore. ([#35])
+- **Breaking:** Model/dataset dtype is bundle configuration, not a loading
+  parameter. ([#36])
 
 ### Removed
 
 - **`faultforge-cli`** is no longer published to PyPI or maintained as a
-  separate package. (#30)
-- **Breaking:** `faultforge.loading.DEFAULT_DTYPE` (#36)
+  separate package. ([#30])
+- **Breaking:** `faultforge.loading.DEFAULT_DTYPE` ([#36])
+
+[#30]: https://github.com/rezzubs/faultforge/pull/30
+[#32]: https://github.com/rezzubs/faultforge/pull/32
+[#33]: https://github.com/rezzubs/faultforge/pull/33
+[#34]: https://github.com/rezzubs/faultforge/pull/34
+[#35]: https://github.com/rezzubs/faultforge/pull/35
+[#36]: https://github.com/rezzubs/faultforge/pull/36
 
 ## [0.2.1] - 2026-07-08
 
