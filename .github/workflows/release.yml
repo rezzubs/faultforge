@@ -6,7 +6,7 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  build-faultforge:
+  build:
     strategy:
       matrix:
         include:
@@ -34,10 +34,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: faultforge-wheel-${{ matrix.runner }}
+          name: wheel-${{ matrix.runner }}
           path: dist
 
-  sdist-faultforge:
+  sdist:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,11 +50,11 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: faultforge-sdist
+          name: sdist
           path: dist
 
-  publish-faultforge:
-    needs: [build-faultforge, sdist-faultforge]
+  publish:
+    needs: [build, sdist]
     runs-on: ubuntu-latest
     environment: pypi-faultforge
     permissions:
@@ -62,14 +62,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: faultforge-wheel-*
           path: dist
           merge-multiple: true
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: faultforge-sdist
-          path: dist
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -77,14 +71,13 @@ jobs:
           skip-existing: true
 
   github-release:
-    needs: [publish-faultforge]
+    needs: [publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: faultforge*
           path: dist
           merge-multiple: true
 
