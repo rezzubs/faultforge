@@ -12,12 +12,6 @@ from typing import override
 import pytest
 import torch
 from encoded_memory import EncodedFaultInjection
-from faultforge import Fingerprint
-from faultforge.dataset import BatchedDataset, DeviceLike
-from faultforge.dtype import dtype_name
-from faultforge.encoding import IdentityEncoder
-from faultforge.loading import ModelBundle
-from faultforge.metric import Accuracy, Metric
 from encoded_memory.results import (
     Configuration,
     build_configurations,
@@ -25,6 +19,13 @@ from encoded_memory.results import (
 )
 from torch import nn
 from torch.utils.data import TensorDataset
+
+from faultforge import Fingerprint
+from faultforge.dataset import BatchedDataset, DeviceLike
+from faultforge.dtype import dtype_name
+from faultforge.encoding import IdentityEncoder
+from faultforge.loading import ModelBundle
+from faultforge.metric import Accuracy, Metric
 
 
 class _FakeBundle(ModelBundle):
@@ -56,6 +57,7 @@ class _FakeBundle(ModelBundle):
         *,
         progress=None,
     ) -> nn.Module:
+        _ = progress
         return nn.Linear(self._in_features, self._out_features).to(
             device=device, dtype=self._dtype
         )
@@ -70,6 +72,7 @@ class _FakeBundle(ModelBundle):
         seed: int | None = None,
         progress=None,
     ) -> BatchedDataset:
+        _ = progress
         n = self._batch_size * self._num_batches
         inputs = torch.randn(n, self._in_features, dtype=self._dtype)
         targets = torch.randint(0, self._out_features, (n,))
@@ -96,14 +99,16 @@ def save_result():
     def _save(
         path: Path,
         *,
-        faults: float | int = 0.05,
+        faults: float = 0.05,
         runs: int = 1,
         model: str = "toynet",
         dataset: str | None = None,
         dtype: torch.dtype = torch.float32,
-        metric: Metric = Accuracy(),
+        metric: Metric | None = None,
         compare_bitwise: bool = True,
     ) -> Path:
+        if metric is None:
+            metric = Accuracy()
         bundle = _FakeBundle(8, 4, 4, 4, model=model, dataset=dataset, dtype=dtype)
         experiment = EncodedFaultInjection(
             bundle,

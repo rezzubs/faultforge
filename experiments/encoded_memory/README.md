@@ -217,7 +217,7 @@ experiment = EncodedFaultInjection(
     bundle,
     encoder,
     ReliabilityMetric.Sdc,
-    faults=1e-3,       # a bit error rate; an int is treated as an exact fault count
+    faults=1e-3,  # a bit error rate; an int is treated as an exact fault count
     compare_bitwise=True,
     fault_summary=True,
 )
@@ -237,9 +237,9 @@ dataset that produced it, via `SavedResult`:
 from encoded_memory import SavedResult
 
 saved = SavedResult.load("result.json")
-saved.scores()               # every recorded run's score, in run order
-saved.reliability_metric()   # the ReliabilityMetric it was recorded with
-saved.bit_error_rate()       # faults / total_bits
+saved.scores()  # every recorded run's score, in run order
+saved.reliability_metric()  # the ReliabilityMetric it was recorded with
+saved.bit_error_rate()  # faults / total_bits
 ```
 
 When `compare_bitwise=True`, results are `DetailedResult` (per-run bitmasks

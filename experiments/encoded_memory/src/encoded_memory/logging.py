@@ -31,7 +31,7 @@ def get_log_level() -> tuple[int, bool]:
     default_verbosity = {
         logging.DEBUG: True,
         logging.INFO: False,
-        logging.WARN: False,
+        logging.WARNING: False,
         logging.ERROR: False,
     }
 

@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+
 from faultforge.metric import Accuracy, AccuracyDegradation, Metric, Sdc, Top1Sdc
 
 from .conftest import _make_experiment, _result

@@ -80,8 +80,8 @@ dev = [
     # Keep in sync with `build-system.requires`.
     "maturin>=1.14.1,<2.0.0",
     "pytest>=9.1.1,<10.0.0",
-    "ruff>=0.15.20,<0.16.0",
-    "ty>=0.0.56,<0.0.57",
+    "ruff>=0.16.9,<0.17.0",
+    "ty>=0.0.84,<0.0.85",
 ]
 
 [build-system]

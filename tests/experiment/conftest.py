@@ -4,9 +4,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
+from pydantic import BaseModel
+
 from faultforge import Fingerprint
 from faultforge.experiment import Experiment, StopCondition
-from pydantic import BaseModel
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 

@@ -5,6 +5,7 @@ from os import PathLike
 from pathlib import Path
 
 import pytest
+
 from faultforge.experiment import AdditionalRuns, SaveConfig
 
 from .conftest import _TestResult, make

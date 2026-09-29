@@ -1,6 +1,7 @@
 """Tests for `encoded_memory.results.build_configurations`."""
 
 from encoded_memory.results import build_configurations, load_results
+
 from faultforge.metric import Sdc
 
 

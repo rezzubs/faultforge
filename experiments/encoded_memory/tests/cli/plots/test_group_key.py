@@ -1,8 +1,9 @@
 """Tests for `encoded_memory.plots.group_key`."""
 
 import pytest
-from faultforge import Fingerprint
 from encoded_memory.plots import GroupBy, group_key
+
+from faultforge import Fingerprint
 
 
 def test_group_key_ungrouped_is_none():

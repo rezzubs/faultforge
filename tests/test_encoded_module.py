@@ -5,6 +5,9 @@ import copy
 import hypothesis.strategies as st
 import pytest
 import torch
+from hypothesis import given, settings
+from torch import nn
+
 from faultforge import BitFlip
 from faultforge.encoding import (
     CepEncoder,
@@ -14,8 +17,6 @@ from faultforge.encoding import (
     MsetEncoder,
     SecdedEncoder,
 )
-from hypothesis import given, settings
-from torch import nn
 
 _DTYPES = st.sampled_from([torch.float32, torch.float16])
 

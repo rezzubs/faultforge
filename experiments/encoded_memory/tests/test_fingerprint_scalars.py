@@ -4,6 +4,7 @@ import json
 
 import torch
 from encoded_memory import EncodedFaultInjection
+
 from faultforge.metric import Sdc
 
 from .conftest import _make_experiment

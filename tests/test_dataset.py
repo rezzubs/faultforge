@@ -5,11 +5,12 @@ from typing import override
 
 import pytest
 import torch
+from torch import Tensor
+from torch.utils.data import Dataset
+
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.progress import ProgressStage
 from faultforge.progress import Progress
-from torch import Tensor
-from torch.utils.data import Dataset
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 

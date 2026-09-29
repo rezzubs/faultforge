@@ -2,8 +2,9 @@
 
 import pytest
 from encoded_memory.plots import GroupBy, build_compare_figure
-from faultforge.metric import Sdc
 from matplotlib.figure import Figure
+
+from faultforge.metric import Sdc
 
 
 def test_build_compare_figure_returns_figure(tmp_path, make_configuration):

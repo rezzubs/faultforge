@@ -4,11 +4,12 @@ from typing import override
 
 import pytest
 import torch
+from torch import Tensor, nn
+from torch.utils.data import Dataset
+
 from faultforge._internal.dataset import BatchedDataset
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.metric import GoldenCache, Metric
-from torch import Tensor, nn
-from torch.utils.data import Dataset
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 
@@ -159,7 +160,7 @@ def test_golden_model_not_run_when_metric_does_not_require_golden() -> None:
 def test_non_tensor_model_output_raises() -> None:
     cache, _ = _make_cache(_StubMetric(requires_golden=True), _NonTensorModel())
 
-    with pytest.raises(ValueError, match="tensor"):
+    with pytest.raises(TypeError, match="tensor"):
         _ = list(cache)
 
 

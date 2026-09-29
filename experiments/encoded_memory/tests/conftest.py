@@ -5,6 +5,9 @@ from typing import override
 
 import torch
 from encoded_memory import EncodedFaultInjection
+from torch import nn
+from torch.utils.data import TensorDataset
+
 from faultforge import Fingerprint
 from faultforge.dataset import BatchedDataset, DeviceLike
 from faultforge.dtype import dtype_name
@@ -12,8 +15,6 @@ from faultforge.encoding import IdentityEncoder
 from faultforge.loading import ModelBundle
 from faultforge.metric import Accuracy, Metric
 from faultforge.progress import Progress
-from torch import nn
-from torch.utils.data import TensorDataset
 
 # `_` prefixed to not interpret it as a Test class.
 
@@ -43,6 +44,7 @@ class _FakeBundle(ModelBundle):
         *,
         progress: Progress | None = None,
     ) -> nn.Module:
+        _ = progress
         return nn.Linear(self._in_features, self._out_features).to(
             device=device, dtype=self._dtype
         )
@@ -57,6 +59,7 @@ class _FakeBundle(ModelBundle):
         seed: int | None = None,
         progress: Progress | None = None,
     ) -> BatchedDataset:
+        _ = progress
         n = self._batch_size * self._num_batches
         inputs = torch.randn(n, self._in_features, dtype=self._dtype)
         targets = torch.randint(0, self._out_features, (n,))
@@ -76,13 +79,15 @@ class _FakeBundle(ModelBundle):
 def _make_experiment(
     *,
     compare_bitwise: bool,
-    faults: int | float = 1,
+    faults: float = 1,
     golden_is_encoded: bool = False,
     dataset_batch_limit: int | None = None,
-    reliability_metric: Metric = Accuracy(),
+    reliability_metric: Metric | None = None,
     dtype: torch.dtype = torch.float32,
     fault_summary: bool = False,
 ) -> EncodedFaultInjection:
+    if reliability_metric is None:
+        reliability_metric = Accuracy()
     bundle = _FakeBundle(
         in_features=4, out_features=3, batch_size=2, num_batches=2, dtype=dtype
     )

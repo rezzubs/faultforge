@@ -214,7 +214,7 @@ class Progress:
     it handles the `None` case for you.
     """
 
-    __slots__ = ("min_log_interval", "_stack", "_last_render")
+    __slots__ = ("_last_render", "_stack", "min_log_interval")
 
     def __init__(self, min_log_interval: float = DEFAULT_MIN_LOG_INTERVAL) -> None:
         self.min_log_interval: float = min_log_interval

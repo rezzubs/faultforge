@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.typing as npt
+
 from faultforge._rust import Fault
 
 type ListOfArray[T: np.generic] = list[npt.NDArray[T]]

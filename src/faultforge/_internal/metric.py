@@ -5,14 +5,15 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from typing import final, override
 
-from faultforge._internal.fingerprint import Fingerprint
+import torch
+from torch import Tensor, nn
+
 from faultforge._internal.dataset import (
     BatchedDataset,
     DataBatch,
 )
+from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.progress import Progress, stage
-from torch import Tensor, nn
-import torch
 
 
 class Metric[R](abc.ABC):
@@ -198,7 +199,7 @@ class GoldenCache[R]:
             raw_output = self._golden_model.forward(data_batch.inputs)
 
         if not isinstance(raw_output, Tensor):
-            raise ValueError("Expected model to return a tensor")
+            raise TypeError("Expected model to return a tensor")
 
         processed = self._metric.preprocess_golden(raw_output)
 

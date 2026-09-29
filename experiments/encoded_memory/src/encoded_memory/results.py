@@ -33,10 +33,12 @@ The `compare` pipeline, end to end:
 
 import logging
 from collections.abc import Mapping, Sequence
+from compression.zstd import ZstdError
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
 from encoded_memory import SavedResult
 from faultforge import Fingerprint
 
@@ -69,7 +71,9 @@ def load_results(paths: Sequence[Path]) -> list[tuple[Path, SavedResult]]:
         for file in discover_result_files(path):
             try:
                 loaded.append((file, SavedResult.load(file)))
-            except Exception as error:
+            # Everything a file that isn't a valid saved result can raise.
+            # Other exceptions are bugs and should propagate.
+            except (OSError, ValueError, EOFError, ZstdError) as error:
                 logger.warning(
                     f"Failed to load a result from {file} - skipping\n-> {error}"
                 )

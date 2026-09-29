@@ -2,8 +2,9 @@
 
 import hypothesis.strategies as st
 import pytest
-from faultforge._rust import Picker
 from hypothesis import given, settings
+
+from faultforge._rust import Picker
 
 _U64_MAX = 2**64 - 1
 _seeds = st.integers(min_value=0, max_value=_U64_MAX)

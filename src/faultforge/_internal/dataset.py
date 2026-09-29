@@ -3,9 +3,9 @@
 import abc
 import logging
 import math
-from collections.abc import Iterable, Sized
+from collections.abc import Iterable, Iterator, Sized
 from dataclasses import dataclass
-from typing import Any, Iterator, Self, final, override
+from typing import Any, Self, final, override
 
 import torch
 from torch import Tensor

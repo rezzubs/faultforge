@@ -306,7 +306,9 @@ def build_heatmap_figure(
 
     for result in results:
         if not isinstance(result.result, DetailedResults):
-            raise ValueError(
+            # A result recorded without `--compare-bitwise` is bad user input,
+            # not a programming error. The CLI reports `ValueError`s cleanly.
+            raise ValueError(  # noqa: TRY004
                 "heatmap requires results recorded with --compare-bitwise "
                 "(a per-run bitmask)"
             )
@@ -317,9 +319,15 @@ def build_heatmap_figure(
         raise ValueError(f"all results must share a reliability metric, got {names}")
     metric_name = next(iter(metric_names))
 
-    dtypes = {
-        result.fingerprint.children["bundle"][0].scalars["dtype"] for result in results
-    }
+    dtypes = set()
+    for result in results:
+        dtype = result.fingerprint.children["bundle"][0].scalars["dtype"]
+        if not isinstance(dtype, str):
+            raise TypeError(
+                f"Expected fingerprint dtype to be a str, got {type(dtype)}"
+            )
+        dtypes.add(dtype)
+
     if len(dtypes) > 1:
         raise ValueError(f"all results must share a dtype, got {sorted(dtypes)}")
     dtype = dtype_from_name(str(next(iter(dtypes))))

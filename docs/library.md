@@ -137,7 +137,9 @@ from faultforge.experiment import SaveConfig, Stability
 
 experiment.run_loop(
     stop_conditions=[Stability(min_samples=10, threshold=1.0)],
-    save_config=SaveConfig(path="result.json.zst", interval_seconds=30, compressed=True),
+    save_config=SaveConfig(
+        path="result.json.zst", interval_seconds=30, compressed=True
+    ),
 )
 ```
 

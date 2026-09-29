@@ -1,8 +1,9 @@
 """Tests for `faultforge._internal.loading.transform`."""
 
 import torch
-from faultforge._internal.loading.transform import dtype_transforms
 from torchvision.transforms import Compose
+
+from faultforge._internal.loading.transform import dtype_transforms
 
 
 def test_none_adds_no_steps() -> None:

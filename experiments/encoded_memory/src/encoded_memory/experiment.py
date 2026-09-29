@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Annotated, Literal, final, override
 
 import torch
+from pydantic import BaseModel, Field
+from torch import nn
+
 from faultforge import (
     BitFlip,
     Fingerprint,
@@ -20,9 +23,6 @@ from faultforge import (
     bitwise_xor,
     tensor_list_dtype,
 )
-from pydantic import BaseModel, Field
-from torch import nn
-
 from faultforge.dataset import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
@@ -32,8 +32,8 @@ from faultforge.dtype import FiDtype
 from faultforge.encoding import EncodedModule, Encoder
 from faultforge.experiment import Experiment, ExperimentDisplay
 from faultforge.io import AnyPath, is_compressed, open_text
-from faultforge.metric import GoldenCache, Metric
 from faultforge.loading import ModelBundle
+from faultforge.metric import GoldenCache, Metric
 from faultforge.progress import Progress, stage
 
 logger = logging.getLogger(__name__)
@@ -205,8 +205,10 @@ class _FaultInjectionSummary:
     @override
     def __str__(self) -> str:
         lines = [
-            f"Flipped {self.faults_injected}/{self.total_bits} bits "
-            f"- BER: {self.bit_error_rate():.2e}"
+            (
+                f"Flipped {self.faults_injected}/{self.total_bits} bits "
+                f"- BER: {self.bit_error_rate():.2e}"
+            )
         ]
 
         if self.bit_histogram is not None:
@@ -277,7 +279,7 @@ class EncodedFaultInjection[R](Experiment):
         reliability_metric: Metric[R],
         *,
         golden_is_encoded: bool = False,
-        faults: int | float = 1,
+        faults: float = 1,
         compare_bitwise: bool = False,
         fault_summary: bool = False,
         preload_dataset: bool = True,
@@ -358,7 +360,9 @@ class EncodedFaultInjection[R](Experiment):
                     f"`faults` ({faults}) is greater than 1.0 (floats are interpreted as the bit error rate)"
                 )
 
-            self._faulty_bit_count = int(round(faults * self._total_bits))
+            # RUF046: int * float -> float, round(float) -> float, therefore int
+            # conversion is required.
+            self._faulty_bit_count = int(round(faults * self._total_bits))  # noqa: RUF046
             logger.debug(
                 f"Resolved bit error rate {faults} to {self._faulty_bit_count} faults"
             )

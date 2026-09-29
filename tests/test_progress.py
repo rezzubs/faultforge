@@ -5,6 +5,7 @@ import re
 import time
 
 import pytest
+
 from faultforge._internal.progress import ProgressStage, _format_duration
 from faultforge.progress import Progress, stage
 
@@ -91,9 +92,8 @@ def test_stage_throttles_advance_logging(
 def test_stage_exit_logs_on_exception(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
 
-    with pytest.raises(ValueError, match="boom"):
-        with stage(Progress(), "X"):
-            raise ValueError("boom")
+    with pytest.raises(ValueError, match="boom"), stage(Progress(), "X"):
+        raise ValueError("boom")
 
     messages = [r.message for r in caplog.records]
     assert any("X: failed" in m for m in messages)
@@ -152,9 +152,8 @@ def test_nested_stage_does_not_log_its_own_started_or_done(
     caplog.set_level(logging.INFO)
     progress = Progress(min_log_interval=0.0)
 
-    with stage(progress, "Outer"):
-        with stage(progress, "Inner"):
-            pass
+    with stage(progress, "Outer"), stage(progress, "Inner"):
+        pass
 
     messages = [r.message for r in caplog.records]
     assert any("Outer: started" in m for m in messages)
@@ -169,9 +168,11 @@ def test_breadcrumb_contains_all_open_frames_innermost_last(
     caplog.set_level(logging.INFO)
     progress = Progress(min_log_interval=0.0)
 
-    with stage(progress, "Outer", total=2):
-        with stage(progress, "Inner", total=4) as inner:
-            inner.advance()
+    with (
+        stage(progress, "Outer", total=2),
+        stage(progress, "Inner", total=4) as inner,
+    ):
+        inner.advance()
 
     breadcrumbs = [
         r.message
@@ -226,9 +227,8 @@ def test_render_happens_before_pop_on_stage_exit(
     caplog.set_level(logging.INFO)
     progress = Progress(min_log_interval=0.0)
 
-    with stage(progress, "Outer", total=2):
-        with stage(progress, "Inner", total=4):
-            pass
+    with stage(progress, "Outer", total=2), stage(progress, "Inner", total=4):
+        pass
 
     # The line rendered as "Inner" exits (before it's popped) is the only
     # place its completion, with a final duration, is visible at all.

@@ -23,7 +23,8 @@ def dtype_from_name(name: str) -> torch.dtype:
     """
     dtype = getattr(torch, name, None)
     if not isinstance(dtype, torch.dtype):
-        raise ValueError(f"{name!r} is not the name of a torch dtype")
+        # The `isinstance` check validates the value of `name`, not its type.
+        raise ValueError(f"{name!r} is not the name of a torch dtype")  # noqa: TRY004
     return dtype
 
 
