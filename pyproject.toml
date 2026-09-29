@@ -9,15 +9,32 @@ authors = [
     { name = "Marten Roots", email = "marten.roots@gmail.com" },
     { name = "Sven-Markus Loorits", email = "sven.loorits@proton.me" },
 ]
+# The Rust extension is built per Python minor. A new Python minor needs a
+# `pyo3` version that supports it, see `Cargo.toml`.
 requires-python = ">=3.14"
+# Upper bounds exclude the next breaking release. Packages that don't follow
+# semver have a comment explaining their bound.
 dependencies = [
-    "numpy>=2.3.1",
-    "pillow>=11.3.0",
-    "pydantic>=2.12.3",
-    "scipy>=1.17.1",
-    "timm>=1.0.22",
-    "torch>=2.7.1",
-    "torchvision>=0.22.1",
+    # NumPy removes deprecated APIs in minor releases.
+    # See https://numpy.org/neps/nep-0023-backwards-compatibility.html
+    # The Rust extension only requires 2.x, see the `numpy` crate in
+    # `Cargo.toml`.
+    "numpy>=2.5.0,<2.6.0",
+    "pillow>=12.2.0,<13.0.0",
+    "pydantic>=2.13.4,<3.0.0",
+    # SciPy removes deprecated APIs in minor releases.
+    # See https://docs.scipy.org/doc/scipy/dev/core-dev/index.html#deprecations
+    "scipy>=1.18.0,<1.19.0",
+    # New features ship in 1.0.x patch releases, so a minor release may break.
+    # See https://github.com/huggingface/pytorch-image-models/releases
+    "timm>=1.0.27,<1.1.0",
+    # PyTorch removes deprecated APIs in minor releases.
+    # See https://github.com/pytorch/pytorch/wiki/PyTorch's-Python-Frontend-Backward-and-Forward-Compatibility-Policy
+    # Bump together with torchvision.
+    "torch>=2.12.1,<2.13.0",
+    # Each torchvision minor is paired with one torch minor.
+    # See https://github.com/pytorch/vision#installation
+    "torchvision>=0.27.1,<0.28.0",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -41,6 +58,12 @@ members = ["experiments/encoded_memory"]
 
 [tool.uv]
 default-groups = ["dev"]
+# `uv add` writes an upper bound excluding the next breaking release, treating
+# the first nonzero version component as breaking (`0.x` minors, `0.0.x`
+# patches).
+# See https://docs.astral.sh/uv/reference/settings/#add-bounds and
+# https://github.com/astral-sh/uv/issues/19047 for the `0.x` behavior.
+add-bounds = "major"
 # Rebuild the extension when Rust sources change, not only when
 # `pyproject.toml` does.
 cache-keys = [
@@ -53,15 +76,17 @@ cache-keys = [
 
 [dependency-groups]
 dev = [
-    "hypothesis>=6.148.7",
-    "maturin>=1.14.0",
-    "pytest>=9.0.2",
-    "ruff>=0.12.4",
-    "ty>=0.0.49",
+    "hypothesis>=6.155.7,<7.0.0",
+    # Keep in sync with `build-system.requires`.
+    "maturin>=1.14.1,<2.0.0",
+    "pytest>=9.1.1,<10.0.0",
+    "ruff>=0.15.20,<0.16.0",
+    "ty>=0.0.56,<0.0.57",
 ]
 
 [build-system]
-requires = ["maturin>=1.12,<2.0"]
+# Keep in sync with the `dev` dependency group.
+requires = ["maturin>=1.14.1,<2.0.0"]
 build-backend = "maturin"
 
 [tool.maturin]

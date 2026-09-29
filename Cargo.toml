@@ -8,8 +8,18 @@ edition = "2024"
 
 
 [workspace.dependencies]
+# Must use the same `pyo3` version as the workspace. `pyo3-ffi` sets
+# `links = "python"` and Cargo allows only one package per `links` value.
+# See https://doc.rust-lang.org/cargo/reference/build-scripts.html#the-links-manifest-key
+# Uses the NumPy 2 C API at runtime, so it works with any 2.x release of the
+# Python `numpy` package, see `pyproject.toml`.
+# See https://github.com/PyO3/rust-numpy/blob/v0.29.0/src/npyffi/mod.rs
 numpy = "0.29.0"
 proptest = "1.11.0"
+# 0.29 supports CPython up to 3.15.
+# See https://github.com/PyO3/pyo3/blob/v0.29.0/pyo3-ffi/build.rs
+# The extension is built per Python minor, so supporting a new one may need a
+# bump, see `requires-python` in `pyproject.toml`. Bump together with `numpy`.
 pyo3 = "0.29.0"
 rand = "0.10.1"
 rayon = "1.12.0"
