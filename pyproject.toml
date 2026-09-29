@@ -35,6 +35,15 @@ members = ["experiments/encoded_memory"]
 
 [tool.uv]
 default-groups = ["dev"]
+# Rebuild the extension when Rust sources change, not only when
+# `pyproject.toml` does.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "crates/**/*.rs" },
+    { file = "crates/**/Cargo.toml" },
+]
 
 [dependency-groups]
 dev = [

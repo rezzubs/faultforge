@@ -29,13 +29,16 @@ experiments as well as experiments which use that library.
 
 ## Commands
 
-- Common project commands are exposed in a `justfile`. You should run the
-  various test/check commands after completing a significant change.
-- The project uses `uv` as the python project/package manager. `uv` by default
-  creates a venv in `.venv`. Prefer using binaries from `.venv` rather than
-  `uv run`.
+- Common project commands are exposed in a `justfile`. Prefer these over running
+  tools directly. `just --list` can be used for an overview.
+- You should run the various test/check commands after completing a significant
+  change. `just ci` runs everything CI checks.
+- The project uses `uv` as the python project/package manager. When you need
+  options the recipes don't cover, use `uv run --all-packages <tool>` rather
+  than binaries from `.venv`. `uv run` rebuilds the Rust extension when Rust
+  sources change, so `.venv` binaries may run against stale bindings.
 - The project also uses nix. You can run `nix develop` to get access to project
-  tooling.
+  tooling if not already in a nix development shell.
 
 ## Testing conventions
 

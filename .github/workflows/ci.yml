@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@nextest
+
+      - uses: extractions/setup-just@v3
+
+      - name: Clippy
+        run: just lint-rust
+
+      - name: Format
+        run: just fmt-check-rust
+
+      - name: Test
+        run: just test-rust
+
+      - name: Documentation
+        run: just doc-rust
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - uses: extractions/setup-just@v3
+
+      - name: Install
+        run: uv sync --locked --all-packages
+
+      - name: Type check
+        run: just typecheck-python
+
+      - name: Lint
+        run: just lint-python
+
+      - name: Format
+        run: just fmt-check-python
+
+      - name: Test
+        run: just test-python

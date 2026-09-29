@@ -1,60 +1,77 @@
-# Rebuild the `faultforge._rust` extension from current Rust sources. Needed
-# before Python tests can see Rust changes.
-build:
-    .venv/bin/maturin develop
+# Full pre-push sanity check: everything CI checks for Rust and Python.
+[group('general')]
+ci: ci-rust ci-python
 
-# Lint Rust with clippy.
-lint-rust:
-    cargo clippy --workspace -- -D warnings
+# Everything CI checks for the `crates/` workspace.
+[group('rust')]
+ci-rust: lint-rust fmt-check-rust test-rust doc-rust
 
-# Check Rust formatting without modifying files.
-fmt-check-rust:
-    cargo fmt --all -- --check
+# Everything CI checks for the Python side.
+[group('python')]
+ci-python: typecheck-python lint-python fmt-check-python test-python
+
+# Format both Rust and Python in place.
+[group('general')]
+fmt: fmt-rust fmt-python
 
 # Format Rust in place.
+[group('rust')]
 fmt-rust:
     cargo fmt --all
 
+# Format Python in place.
+[group('python')]
+fmt-python:
+    uv run --all-packages ruff format .
+
+# Check Rust and Python formatting without modifying files.
+[group('general')]
+fmt-check: fmt-check-rust fmt-check-python
+
+# Check Rust formatting without modifying files.
+[group('rust')]
+fmt-check-rust:
+    cargo fmt --all -- --check
+
+# Check Python formatting without modifying files.
+[group('python')]
+fmt-check-python:
+    uv run --all-packages ruff format --check .
+
+# Lint Rust and Python.
+[group('general')]
+lint: lint-rust lint-python
+
+# Lint Rust with clippy.
+[group('rust')]
+lint-rust:
+    cargo clippy --workspace -- -D warnings
+
+# Lint Python with ruff.
+[group('python')]
+lint-python:
+    uv run --all-packages ruff check .
+
+# Run Rust and Python tests.
+[group('general')]
+test: test-rust test-python
+
 # Run Rust tests.
+[group('rust')]
 test-rust:
     cargo nextest run --workspace
 
-# Check that Rust documentation builds without warnings.
-doc-rust:
-    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+# Run Python tests.
+[group('python')]
+test-python:
+    uv run --all-packages pytest
 
 # Type-check Python with ty.
+[group('python')]
 typecheck-python:
-    .venv/bin/ty check
+    uv run --all-packages ty check
 
-# Lint Python with ruff.
-lint-python:
-    .venv/bin/ruff check .
-
-# Check Python formatting without modifying files.
-fmt-check-python:
-    .venv/bin/ruff format --check .
-
-# Format Python in place.
-fmt-python:
-    .venv/bin/ruff format .
-
-# Run Python tests.
-test-python:
-    .venv/bin/pytest
-
-# Everything CI checks for the `crates/` workspace.
-check-rust: lint-rust fmt-check-rust test-rust doc-rust
-
-# Everything CI checks for the Python side. Rebuilds the extension first so
-# tests run against current Rust code.
-check-python: build typecheck-python lint-python fmt-check-python test-python
-
-# Format both Rust and Python in place.
-fmt: fmt-rust fmt-python
-
-# Full pre-push sanity check: Rust and Python, lint/format/types/tests/docs.
-commit-checklist: check-rust check-python
-
-# Lighter check for Python-only changes, skipping the Rust suite.
-commit-checklist-python: check-python
+# Check that Rust documentation builds without warnings.
+[group('rust')]
+doc-rust:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
