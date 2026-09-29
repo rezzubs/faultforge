@@ -1,5 +1,11 @@
 # FaultForge
 
+[![CI](https://github.com/rezzubs/faultforge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rezzubs/faultforge/actions/workflows/ci.yml)
+[![License](https://img.shields.io/pypi/l/faultforge)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/faultforge)](https://pypi.org/project/faultforge/)
+[![Python](https://img.shields.io/pypi/pyversions/faultforge)](https://pypi.org/project/faultforge/)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+
 A framework for running reproducible hardware fault-injection experiments on
 PyTorch models - with error-corrected memory reliability testing built in as
 its first experiment.
