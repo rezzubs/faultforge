@@ -163,7 +163,3 @@ Introduced the CEP technique:
   link={arXiv preprint arXiv:2605.07417}
 }
 ```
-
-## License
-
-[UPL-1.0](LICENSE)
