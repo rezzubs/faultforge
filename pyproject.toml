@@ -3,6 +3,8 @@ name = "faultforge"
 version = "0.3.0"
 description = "A framework for reproducible hardware fault-injection experiments on PyTorch models"
 readme = "README.md"
+license = "UPL-1.0"
+license-files = ["LICENSE"]
 authors = [
     { name = "Marten Roots", email = "marten.roots@gmail.com" },
     { name = "Sven-Markus Loorits", email = "sven.loorits@proton.me" },
