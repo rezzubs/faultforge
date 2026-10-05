@@ -53,8 +53,14 @@
       # are exported as environment variables in the shell.
       RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
 
-      LD_LIBRARY_PATH = foreignLibraryPath;
-      NIX_LD_LIBRARY_PATH = foreignLibraryPath;
+      # A plain attr would replace these outright, dropping e.g. NixOS's
+      # NIX_LD_LIBRARY_PATH entry for the NVIDIA driver and breaking CUDA.
+      # shellHook runs as a real script, so it can extend the parent
+      # shell's existing value instead.
+      shellHook = ''
+        export LD_LIBRARY_PATH="${foreignLibraryPath}:$LD_LIBRARY_PATH"
+        export NIX_LD_LIBRARY_PATH="${foreignLibraryPath}:$NIX_LD_LIBRARY_PATH"
+      '';
     };
 
     formatter.${system} = pkgs.alejandra;
