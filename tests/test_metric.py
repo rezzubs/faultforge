@@ -242,3 +242,20 @@ def test_perplexity_end_to_end_uniform_logits_gives_vocab_size():
     perplexity = Perplexity().score(result)
 
     assert perplexity == pytest.approx(float(vocab))
+
+
+def test_perplexity_score_nan_is_inf():
+    # Non-finite logits from a fault make the summed cross-entropy NaN.
+    result = PerplexityResult(cross_entropy_sums=math.nan, token_count=3)
+
+    assert Perplexity().score(result) == math.inf
+
+
+def test_perplexity_end_to_end_non_finite_logits_gives_inf():
+    logits = torch.zeros(1, 2, 3)
+    logits[0, 0, 1] = math.inf
+    targets = torch.tensor([[0, 1]])
+
+    result = Perplexity().evaluate_batch(logits, torch.empty(0), targets)
+
+    assert Perplexity().score(result) == math.inf

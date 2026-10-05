@@ -585,8 +585,16 @@ class Perplexity(Metric[PerplexityResult]):
             raise ValueError(
                 "cannot compute perplexity: no valid (non -100) target tokens"
             )
+        mean_cross_entropy = result.cross_entropy_sums / result.token_count
+
+        # NaN comes from non-finite logits (e.g. a fault in a high exponent
+        # bit). The model then assigns no usable probability to the target,
+        # which is the same conclusion as an infinite perplexity.
+        if math.isnan(mean_cross_entropy):
+            return math.inf
+
         try:
-            return math.exp(result.cross_entropy_sums / result.token_count)
+            return math.exp(mean_cross_entropy)
         except OverflowError:
             return math.inf
 

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Annotated, Literal, final, override
 
 import torch
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from torch import nn
 
 from faultforge import (
@@ -38,9 +38,18 @@ from faultforge.progress import Progress, stage
 
 logger = logging.getLogger(__name__)
 
+_SCORE_CONFIG = ConfigDict(ser_json_inf_nan="constants")
+"""Scores can be non-finite (e.g. an infinite perplexity). Pydantic writes those
+as `null` by default, which then fails to load back as a `float`. Set on every
+model in the saved structure: it doesn't propagate through nesting, and a
+discriminated union serializes with its parent's config instead of the
+member's."""
+
 
 class SimpleResults(BaseModel):
     """Correct/total accounting only."""
+
+    model_config = _SCORE_CONFIG
 
     kind: Literal["simple"] = "simple"
     results: list[float]
@@ -51,6 +60,8 @@ class SimpleResults(BaseModel):
 
 class DetailedRunResult(BaseModel):
     """A single run's correct/total accounting plus its bitwise-comparison data."""
+
+    model_config = _SCORE_CONFIG
 
     score: float
     """The `score` as determined by the `Metric`."""
@@ -89,6 +100,8 @@ class SavedResult(BaseModel):
     error rate lives here, so a result file can be inspected (e.g. for
     plotting) without reconstructing the model/dataset that produced it.
     """
+
+    model_config = _SCORE_CONFIG
 
     fingerprint: Fingerprint
     total_bits: int
