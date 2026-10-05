@@ -130,6 +130,7 @@ class WikiTextBundle(ModelBundle):
                 sequence_length=self._sequence_length,
                 stride=self._stride,
             )
+        # batch_size = dataset._inputs.shape[0]
         return BatchedDataset.from_dataset(
             dataset, batch_size, device, shuffle=shuffle, seed=seed
         )

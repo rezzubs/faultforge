@@ -53,6 +53,7 @@ from faultforge.loading import (
     ImageNet,
     ImageNetModel,
     ModelBundle,
+    WikiTextBundle,
 )
 from faultforge.metric import Metric
 from faultforge.progress import Progress
@@ -68,6 +69,7 @@ class DatasetChoice(enum.StrEnum):
     Cifar10 = "cifar10"
     Cifar100 = "cifar100"
     ImageNet = "imagenet"
+    WikiText = "wikitext"
 
 
 class MetricChoice(enum.StrEnum):
@@ -75,6 +77,7 @@ class MetricChoice(enum.StrEnum):
     AccuracyDegradation = "accuracy-degradation"
     Sdc = "sdc"
     Top1Sdc = "top1-sdc"
+    Perplexity = "perplexity"
 
     def into_metric(self) -> Metric:
         match self:
@@ -86,6 +89,8 @@ class MetricChoice(enum.StrEnum):
                 return m.Sdc()
             case MetricChoice.Top1Sdc:
                 return m.Top1Sdc()
+            case MetricChoice.Perplexity:
+                return m.Perplexity()
 
 
 def _init_model_bundle(
@@ -127,6 +132,10 @@ def _init_model_bundle(
                     param_hint="--model",
                 ) from error
             bundle = ImageNet(kind=imagenet_model, root=imagenet_root, dtype=dtype)
+        case DatasetChoice.WikiText:
+            if dtype != torch.float32:
+                raise typer.BadParameter("Only float32 is supported for wikitext")
+            bundle = WikiTextBundle(model_id=model)
 
     return bundle
 
@@ -172,6 +181,8 @@ def list_models(
             models = [model.value for model in CifarModel]
         case DatasetChoice.ImageNet:
             models = [model.value for model in ImageNetModel]
+        case DatasetChoice.WikiText:
+            typer.echo("Any HuggingFace causal LM model id (e.g. gpt2)")
 
     for model in models:
         typer.echo(model)

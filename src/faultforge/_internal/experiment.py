@@ -103,7 +103,7 @@ class ExperimentDisplay:
 
     def format_score(self, score: float) -> str:
         """Format a single score value (the latest score, mean, or margin of error)."""
-        return f"{score:6.2f}"
+        return f"{score:6.2e}"
 
     def progress_label(self, run_count: int) -> str:
         """The leading `[...]` progress marker.
