@@ -70,6 +70,8 @@ class WikiTextBundle(ModelBundle):
         split: WikiTextSplit = WikiTextSplit.Test,
         dtype: torch.dtype = torch.float32,
     ) -> None:
+        # TODO: remove hardcoded value
+        sequence_length = 1024
 
         self._model_id = model_id
         self._sequence_length = (
