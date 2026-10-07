@@ -30,15 +30,21 @@ class _TestExperiment(Experiment):
     _fingerprint: Fingerprint
     _results: dict[int, _TestResult]
     _intrinsic_stop_conditions: list[StopCondition]
+    _golden: float | None
+    golden_requests: int
+    """How many times `golden_score` was called."""
 
     def __init__(
         self,
         results: dict[int, _TestResult] | None = None,
         name: str = "test",
+        golden: float | None = None,
     ) -> None:
         self._fingerprint = _fingerprint(name)
         self._results = results or {}
         self._intrinsic_stop_conditions = []
+        self._golden = golden
+        self.golden_requests = 0
 
     def add_stop_condition(self, condition: StopCondition) -> None:
         """Contribute an additional intrinsic condition, as if a subclass had
@@ -48,6 +54,11 @@ class _TestExperiment(Experiment):
     @override
     def stop_conditions(self) -> Sequence[StopCondition]:
         return self._intrinsic_stop_conditions
+
+    @override
+    def golden_score(self) -> float | None:
+        self.golden_requests += 1
+        return self._golden
 
     @override
     def scores(self) -> Sequence[float]:
@@ -74,7 +85,11 @@ class _TestExperiment(Experiment):
         }
 
 
-def make(values: list[float] | None = None, name: str = "test") -> _TestExperiment:
+def make(
+    values: list[float] | None = None,
+    name: str = "test",
+    golden: float | None = None,
+) -> _TestExperiment:
     """Create a test experiment with existing results"""
     results = {key: _TestResult(value=value) for key, value in enumerate(values or [])}
-    return _TestExperiment(results=results, name=name)
+    return _TestExperiment(results=results, name=name, golden=golden)

@@ -5,6 +5,7 @@ See `faultforge.experiment` for a general overview.
 
 import abc
 import logging
+import math
 import os
 import signal
 import tempfile
@@ -22,6 +23,8 @@ from pathlib import Path
 from typing import (
     IO,
     Self,
+    final,
+    override,
 )
 
 import scipy.stats
@@ -64,21 +67,165 @@ class SaveConfig:
     `Experiment.save_atomic`."""
 
 
-def relative_margin_of_error(
-    mean: float | None, margin_of_error: float | None
-) -> float | None:
-    """The 95% margin of error as a percentage of the mean.
+_CONFIDENCE_LEVEL = 0.95
+"""The confidence level of every `Estimate` bound."""
 
-    `None` if either input is `None`. A mean of exactly `0` would otherwise
-    raise `ZeroDivisionError` (a legitimate outcome for e.g. a 0% SDC score);
-    that case is treated as 0% relative error when there is no error either,
-    and as an undefined (infinite) relative error otherwise.
+
+@dataclass(frozen=True, slots=True)
+class Estimate:
+    """A summary of an experiment's runs: a value with 95% confidence bounds.
+
+    Produced by an `Estimator`. The bounds need not be symmetric around
+    `value` (e.g. a failure rate near 0% can't extend below 0).
     """
-    if mean is None or margin_of_error is None:
-        return None
-    if mean == 0:
-        return 0.0 if margin_of_error == 0 else float("inf")
-    return margin_of_error / mean * 100
+
+    value: float
+    lower: float
+    upper: float
+
+    def margin(self) -> float:
+        """The margin of error: the larger distance from `value` to a bound."""
+        return max(self.value - self.lower, self.upper - self.value)
+
+    def relative_margin(self) -> float:
+        """The margin of error as a percentage of `|value|`.
+
+        A `value` of exactly `0` is treated as 0% relative error when there is
+        no error either, and as an undefined (infinite) relative error
+        otherwise.
+        """
+        margin = self.margin()
+        if self.value == 0:
+            return 0.0 if margin == 0 else math.inf
+        return margin / abs(self.value) * 100
+
+
+class Estimator(abc.ABC):
+    """Summarizes the scores of an experiment's runs into an `Estimate`.
+
+    Passed to `Experiment.run_loop`, which shows the estimate in the status line
+    and hands it to the stop conditions (e.g. `Stability`). Estimators only see
+    plain scores and the golden score, so the same estimate can also be
+    computed later from saved results, e.g. for plotting.
+    """
+
+    @abc.abstractmethod
+    def estimate(
+        self, scores: Sequence[float], golden: float | None
+    ) -> Estimate | None:
+        """Summarize `scores`, or None if there aren't enough of them yet.
+
+        `golden` is the experiment's golden score if `requires_golden` is
+        true, otherwise None.
+        """
+
+    def requires_golden(self) -> bool:
+        """Whether `estimate` needs the experiment's golden score.
+
+        Computing the golden score can be expensive, so it's only requested
+        from the experiment when this is true.
+        """
+        return False
+
+    @abc.abstractmethod
+    def name(self) -> str:
+        """What is being estimated, for display purposes."""
+
+    @abc.abstractmethod
+    def format_value(self, value: float, display: ExperimentDisplay) -> str:
+        """Format a value of an `Estimate` (the value, a bound or the margin)."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class Mean(Estimator):
+    """The mean of the scores, bounded by a Student's t confidence interval."""
+
+    @override
+    def estimate(
+        self, scores: Sequence[float], golden: float | None
+    ) -> Estimate | None:
+        _ = golden
+        n = len(scores)
+        if n < 2:
+            return None
+        mean = float(sum(scores) / n)
+        t = scipy.stats.t.ppf((1 + _CONFIDENCE_LEVEL) / 2, df=n - 1)
+        margin = float(t * scipy.stats.sem(scores))
+        return Estimate(value=mean, lower=mean - margin, upper=mean + margin)
+
+    @override
+    def name(self) -> str:
+        return "mean"
+
+    @override
+    def format_value(self, value: float, display: ExperimentDisplay) -> str:
+        return display.format_score(value) + (display.score_unit() or "")
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class FailureRate(Estimator):
+    """The percentage of runs that failed, bounded by a Wilson score interval.
+
+    A run fails if its score is above `threshold` times the golden score, so
+    this assumes scores where higher is worse, such as perplexity. Non-finite
+    scores always count as failures.
+    """
+
+    threshold: float
+    """A run fails if its score is above `threshold * golden`, e.g. `2.0` means
+    "more than twice the golden score"."""
+
+    def __post_init__(self) -> None:
+        if not self.threshold > 0:
+            raise ValueError(f"threshold must be positive, got {self.threshold}")
+
+    @override
+    def estimate(
+        self, scores: Sequence[float], golden: float | None
+    ) -> Estimate | None:
+        if golden is None:
+            raise ValueError(
+                "FailureRate requires a golden score but the experiment provides none"
+            )
+        if not (math.isfinite(golden) and golden > 0):
+            raise ValueError(
+                f"FailureRate requires a positive, finite golden score, got {golden}"
+            )
+
+        n = len(scores)
+        if n == 0:
+            return None
+
+        limit = self.threshold * golden
+        # NOTE: written so that NaN counts as a failure too.
+        failures = sum(1 for score in scores if not score <= limit)
+
+        interval = scipy.stats.binomtest(failures, n).proportion_ci(
+            confidence_level=_CONFIDENCE_LEVEL, method="wilson"
+        )
+        value = failures / n * 100
+        # Guard against floating point error putting `value` outside its bounds
+        # at 0% and 100%.
+        return Estimate(
+            value=value,
+            lower=min(float(interval.low) * 100, value),
+            upper=max(float(interval.high) * 100, value),
+        )
+
+    @override
+    def requires_golden(self) -> bool:
+        return True
+
+    @override
+    def name(self) -> str:
+        return f"failure rate (>{self.threshold:g}x golden)"
+
+    @override
+    def format_value(self, value: float, display: ExperimentDisplay) -> str:
+        _ = display
+        return f"{value:.2f}%"
 
 
 class ExperimentDisplay:
@@ -86,11 +233,11 @@ class ExperimentDisplay:
 
     Returned by `Experiment.display`; nothing here is stored on the experiment,
     it's computed on demand. Override any piece to customize; the default
-    renders `[Run n]: name = score unit | mean ± moe (95% CI) | Relative MoE: x%
-    of mean`, with the `Relative MoE` fragment only shown when a `Stability`
-    condition is among the ones currently configured on `run_loop` - it's the
-    exact quantity `Stability` checks against its threshold, so it has nothing
-    to say if there's no threshold to preview.
+    renders `[Run n]: name = score unit | estimate value [lower, upper] (95%
+    CI) | margin m (x% of value)`, with the `margin` fragment only shown when a
+    `Stability` condition is among the ones currently configured on `run_loop` -
+    it's the exact quantity `Stability` checks against its limits, so it has
+    nothing to say if there are no limits to preview.
     """
 
     def score_name(self) -> str | None:
@@ -102,7 +249,7 @@ class ExperimentDisplay:
         return None
 
     def format_score(self, score: float) -> str:
-        """Format a single score value (the latest score, mean, or margin of error)."""
+        """Format a single score value (the latest score, or e.g. a mean)."""
         return f"{score:6.2e}"
 
     def progress_label(self, run_count: int) -> str:
@@ -126,8 +273,8 @@ class ExperimentDisplay:
         *,
         run_count: int,
         score: float,
-        mean: float | None,
-        margin_of_error: float | None,
+        estimator: Estimator,
+        estimate: Estimate | None,
         stop_conditions: Sequence[StopCondition] = (),
     ) -> str:
         """Compose the full status line from the pieces above.
@@ -135,7 +282,7 @@ class ExperimentDisplay:
         `stop_conditions` is whatever's currently configured on `run_loop`
         (both intrinsic and caller-supplied), passed through so a subclass can
         shape its output around what's actually being checked - the default
-        implementation uses it only to decide whether to show `Relative MoE`.
+        implementation uses it only to decide whether to show the margin.
         """
         parts: list[str] = [self.progress_label(run_count), ": "]
 
@@ -151,16 +298,16 @@ class ExperimentDisplay:
             if score_unit is not None:
                 parts.append(score_unit)
 
-            if mean is None:
+            if estimate is None:
                 return
-            parts.append(" | ")
-            parts.append(f"mean {self.format_score(mean)}")
-            if score_unit is not None:
-                parts.append(score_unit)
 
-            if margin_of_error is None:
-                return
-            parts.append(f" ±{self.format_score(margin_of_error)} (95% CI)")
+            def fmt(value: float) -> str:
+                return estimator.format_value(value, self)
+
+            parts.append(
+                f" | {estimator.name()} {fmt(estimate.value)} "
+                f"[{fmt(estimate.lower)}, {fmt(estimate.upper)}] (95% CI)"
+            )
 
             has_stability = any(
                 isinstance(condition, Stability) for condition in stop_conditions
@@ -168,10 +315,10 @@ class ExperimentDisplay:
             if not has_stability:
                 return
 
-            relative = relative_margin_of_error(mean, margin_of_error)
-            if relative is None:
-                return
-            parts.append(f" | Relative MoE: {relative:.2f}% of mean")
+            parts.append(
+                f" | margin {fmt(estimate.margin())} "
+                f"({estimate.relative_margin():.2f}% of value)"
+            )
 
         build()
         if extra := self.extra():
@@ -180,9 +327,10 @@ class ExperimentDisplay:
         return "".join(parts)
 
 
-# A check run by `Experiment.run_loop` each iteration, before `run`. Returns a
-# human-readable reason to stop, or `None` to keep going.
-type StopCondition = Callable[[Experiment], str | None]
+# A check run by `Experiment.run_loop` each iteration, before `run`. Receives
+# the experiment and its current `Estimate` (None if there isn't one yet).
+# Returns a human-readable reason to stop, or `None` to keep going.
+type StopCondition = Callable[[Experiment, Estimate | None], str | None]
 
 
 class Experiment(abc.ABC):
@@ -194,8 +342,10 @@ class Experiment(abc.ABC):
 
     - `run`: perform one iteration and record it internally, any way you like.
     - `scores`: report every recorded score so far, in run order, as plain
-      floats. This is the only view the generic machinery below needs, so it
-      never has to know your result type.
+      floats. Together with `golden_score` this is the only view the generic
+      machinery below needs, so it never has to know your result type.
+    - `golden_score` (optional): the score of a fault-free reference run, for
+      estimators that compare runs against it (e.g. `FailureRate`).
     - `display`: describe how to format your score, via `ExperimentDisplay`.
     - `serialize` / `deserialize`: turn your own state into a string and back.
       That's the only shape-specific part of persistence; `save`/`save_file`/
@@ -208,8 +358,9 @@ class Experiment(abc.ABC):
       via `Fingerprint.raise_if_differs`, which raises `FingerprintError` on
       a mismatch.
 
-    `run_loop` drives the experiment: it calls `run` repeatedly, prints progress
-    via `format_status`, and stops once any `StopCondition` fires - including
+    `run_loop` drives the experiment: it calls `run` repeatedly, summarizes
+    the scores with an `Estimator` (the mean by default), prints progress via
+    `format_status`, and stops once any `StopCondition` fires - including
     Ctrl+C, which is just another condition `run_loop` installs internally.
     Conditions come from two places: `stop_conditions()`, overridden by a
     subclass to contribute conditions driven by its own internal state (e.g. "no
@@ -229,6 +380,25 @@ class Experiment(abc.ABC):
     @abc.abstractmethod
     def scores(self) -> Sequence[float]:
         """Every score recorded so far, in the order the runs happened."""
+
+    def golden_score(self) -> float | None:
+        """The score of a fault-free reference run, or None if there is none.
+
+        Only requested when the `Estimator` in use needs it (see
+        `Estimator.requires_golden`), so an experiment may compute it lazily on
+        the first call. If it does, it should also include the value in
+        `serialize` so that resuming from a file doesn't recompute it. The
+        default implementation provides no golden score.
+        """
+        return None
+
+    def estimate(self, estimator: Estimator) -> Estimate | None:
+        """Summarize the current scores with `estimator`.
+
+        Requests `golden_score` only if `estimator` requires it.
+        """
+        golden = self.golden_score() if estimator.requires_golden() else None
+        return estimator.estimate(self.scores(), golden)
 
     def display(self) -> ExperimentDisplay:
         """Describes how `format_status` should render this experiment's score."""
@@ -315,10 +485,17 @@ class Experiment(abc.ABC):
     def run_loop(
         self,
         *,
+        estimator: Estimator | None = None,
         stop_conditions: Sequence[StopCondition] = (),
         save_config: SaveConfig | None = None,
     ) -> None:
-        """Keep running until a stop condition is met, including Ctrl+C."""
+        """Keep running until a stop condition is met, including Ctrl+C.
+
+        `estimator` summarizes the scores for the status line and the stop
+        conditions. Defaults to `Mean`.
+        """
+        if estimator is None:
+            estimator = Mean()
 
         interrupted = _Interrupted()
         all_conditions = [*self.stop_conditions(), *stop_conditions, interrupted]
@@ -329,13 +506,14 @@ class Experiment(abc.ABC):
 
         with interrupted:
             while True:
-                reason = _first_stop_reason(all_conditions, self)
+                estimate = self.estimate(estimator)
+                reason = _first_stop_reason(all_conditions, self, estimate)
                 if reason is not None:
                     logger.info(reason)
                     break
 
                 self.run()
-                print(self.format_status(all_conditions))
+                print(self.format_status(estimator, all_conditions))
                 dirty = True
 
                 if save_config is not None and save_config.interval_seconds is not None:
@@ -352,50 +530,35 @@ class Experiment(abc.ABC):
                         )
                         passed_seconds = 0.0
 
-        if dirty and save_config is not None:
+        # An estimator that requires the golden score may have just computed
+        # it (e.g. lazily, when resuming from a file without one), so save even
+        # if no new runs happened.
+        if (dirty or estimator.requires_golden()) and save_config is not None:
             self.save_atomic(save_config.path, compressed=save_config.compressed)
 
-    def margin_of_error(self) -> float | None:
-        """Return the margin of error (half-width of the 95% confidence interval)
-        for the mean of the current set of scores.
-
-        None if there are less than 2 results.
-        """
-        scores = self.scores()
-        n = len(scores)
-        if n < 2:
-            return None
-        t = scipy.stats.t.ppf(0.975, df=n - 1)
-        return float(t * scipy.stats.sem(scores))
-
-    def mean_score(self) -> float | None:
-        """Return the mean of the current set of scores.
-
-        None if there are no results yet.
-        """
-        scores = self.scores()
-        if not scores:
-            return None
-        return float(sum(scores) / len(scores))
-
     def format_status(
-        self, stop_conditions: Sequence[StopCondition] = ()
+        self,
+        estimator: Estimator | None = None,
+        stop_conditions: Sequence[StopCondition] = (),
     ) -> str | None:
         """Formats the current status of the experiment as a str.
 
-        None if there are no results yet. `stop_conditions` lets a caller
-        (typically `run_loop`) tell the display what's currently configured;
-        it's `()` if called standalone, which `ExperimentDisplay` treats as
-        "nothing configured" rather than anything meaningful to report on.
+        None if there are no results yet. `estimator` defaults to `Mean`.
+        `stop_conditions` lets a caller (typically `run_loop`) tell the display
+        what's currently configured; it's `()` if called standalone, which
+        `ExperimentDisplay` treats as "nothing configured" rather than anything
+        meaningful to report on.
         """
+        if estimator is None:
+            estimator = Mean()
         scores = self.scores()
         if not scores:
             return None
         return self.display().format(
             run_count=len(scores),
             score=scores[-1],
-            mean=self.mean_score(),
-            margin_of_error=self.margin_of_error(),
+            estimator=estimator,
+            estimate=self.estimate(estimator),
             stop_conditions=stop_conditions,
         )
 
@@ -433,41 +596,70 @@ class _Interrupted:
         )
         _ = signal.signal(signal.SIGINT, self._original_handler)
 
-    def __call__(self, experiment: Experiment) -> str | None:
-        _ = experiment
+    def __call__(self, experiment: Experiment, estimate: Estimate | None) -> str | None:
+        _ = experiment, estimate
         return "Interrupted by Ctrl+C" if self._triggered else None
 
 
 def _first_stop_reason(
-    conditions: Sequence[StopCondition], experiment: Experiment
+    conditions: Sequence[StopCondition],
+    experiment: Experiment,
+    estimate: Estimate | None,
 ) -> str | None:
     """The reason given by the first condition in `conditions` that wants to stop, if any."""
     for condition in conditions:
-        if (reason := condition(experiment)) is not None:
+        if (reason := condition(experiment, estimate)) is not None:
             return reason
     return None
 
 
 @dataclass(slots=True)
 class Stability:
-    """A `StopCondition`: stop once the mean score's margin of error is small
-    relative to the mean."""
+    """A `StopCondition`: stop once the estimate's margin of error is small enough.
+
+    The margin can be limited in absolute terms (in the estimate's own units,
+    e.g. percentage points for `FailureRate`), relative to the estimate's
+    value, or both - in which case whichever limit is reached first stops the
+    experiment. At least one limit is required.
+
+    A relative limit can't be reached while the value is exactly 0 (e.g. no
+    failures yet), since any remaining uncertainty is infinitely large relative
+    to 0. Combine it with an absolute limit to cover that case.
+    """
 
     min_samples: int
     """Minimum number of runs before checking the stopping criterion."""
-    threshold: float
-    """Stop when the relative margin of error (95% margin of error as a percentage of the mean) falls below this value, e.g. 1.0 = 1%."""
+    max_absolute_margin: float | None = None
+    """Stop when the margin of error is at most this, in the estimate's units."""
+    max_relative_margin: float | None = None
+    """Stop when the margin of error is at most this percentage of the
+    estimate's value, e.g. 1.0 = 1%."""
 
-    def __call__(self, experiment: Experiment) -> str | None:
-        if experiment.run_count() < self.min_samples:
-            return None
-        relative = relative_margin_of_error(
-            experiment.mean_score(), experiment.margin_of_error()
-        )
-        if relative is not None and relative <= self.threshold:
-            return (
-                f"Reached stability threshold {self.threshold:.2f}% ({relative:.2f}%)"
+    def __post_init__(self) -> None:
+        if self.max_absolute_margin is None and self.max_relative_margin is None:
+            raise ValueError(
+                "Stability requires max_absolute_margin, max_relative_margin or both"
             )
+
+    def __call__(self, experiment: Experiment, estimate: Estimate | None) -> str | None:
+        if experiment.run_count() < self.min_samples or estimate is None:
+            return None
+
+        margin = estimate.margin()
+        if self.max_absolute_margin is not None and margin <= self.max_absolute_margin:
+            return (
+                f"Reached absolute margin of error {self.max_absolute_margin:g} "
+                f"({margin:g})"
+            )
+
+        if self.max_relative_margin is not None:
+            relative = estimate.relative_margin()
+            if relative <= self.max_relative_margin:
+                return (
+                    f"Reached relative margin of error {self.max_relative_margin:.2f}% "
+                    f"({relative:.2f}%)"
+                )
+
         return None
 
 
@@ -484,7 +676,8 @@ class AdditionalRuns:
     count: int
     _baseline: int | None = field(default=None, init=False, repr=False)
 
-    def __call__(self, experiment: Experiment) -> str | None:
+    def __call__(self, experiment: Experiment, estimate: Estimate | None) -> str | None:
+        _ = estimate
         if self._baseline is None:
             self._baseline = experiment.run_count()
         if experiment.run_count() - self._baseline >= self.count:
@@ -504,7 +697,8 @@ class MaxRuns:
 
     total: int
 
-    def __call__(self, experiment: Experiment) -> str | None:
+    def __call__(self, experiment: Experiment, estimate: Estimate | None) -> str | None:
+        _ = estimate
         if experiment.run_count() >= self.total:
             return f"Reached max run count ({self.total})"
         return None

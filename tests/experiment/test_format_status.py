@@ -1,6 +1,6 @@
 """Tests for Experiment.format_status."""
 
-from faultforge.experiment import AdditionalRuns, Stability
+from faultforge.experiment import AdditionalRuns, FailureRate, Stability
 
 from .conftest import make
 
@@ -10,31 +10,40 @@ def test_format_status_no_results_is_none():
 
 
 def test_format_status_shows_mean_once_two_scores():
-    # Mean/margin-of-error display shows up as soon as there's enough data,
-    # regardless of whether any stop condition is configured at all.
+    # The estimate shows up as soon as there's enough data, regardless of
+    # whether any stop condition is configured at all.
     exp = make([1.0, 2.0])
     status = exp.format_status()
     assert status is not None
     assert "mean" in status
-    assert "±" in status
+    assert "(95% CI)" in status
 
 
-def test_format_status_omits_margin_with_one_score():
+def test_format_status_omits_estimate_with_one_score():
     exp = make([1.0])
     status = exp.format_status()
     assert status is not None
-    assert "±" not in status
+    assert "(95% CI)" not in status
 
 
-def test_format_status_omits_relative_moe_without_stability():
+def test_format_status_omits_margin_without_stability():
     exp = make([1.0, 2.0])
-    status = exp.format_status([AdditionalRuns(5)])
+    status = exp.format_status(stop_conditions=[AdditionalRuns(5)])
     assert status is not None
-    assert "Relative MoE" not in status
+    assert "margin" not in status
 
 
-def test_format_status_shows_relative_moe_with_stability():
+def test_format_status_shows_margin_with_stability():
     exp = make([1.0, 2.0])
-    status = exp.format_status([Stability(min_samples=0, threshold=1.0)])
+    status = exp.format_status(
+        stop_conditions=[Stability(min_samples=0, max_relative_margin=1.0)]
+    )
     assert status is not None
-    assert "Relative MoE" in status
+    assert "margin" in status
+
+
+def test_format_status_uses_given_estimator():
+    exp = make([1.0, 3.0], golden=1.0)
+    status = exp.format_status(FailureRate(2.0))
+    assert status is not None
+    assert "failure rate (>2x golden) 50.00%" in status
