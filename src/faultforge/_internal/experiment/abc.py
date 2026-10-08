@@ -1,8 +1,3 @@
-"""Classes for running experiments.
-
-See `faultforge.experiment` for a general overview.
-"""
-
 import abc
 import logging
 import os
@@ -10,179 +5,20 @@ import signal
 import tempfile
 import time
 import types
-from collections.abc import (
-    Callable,
-    Sequence,
-)
-from dataclasses import (
-    dataclass,
-    field,
-)
+from collections.abc import Sequence
 from pathlib import Path
-from typing import (
-    IO,
-    Self,
-)
+from typing import IO, Self
 
 import scipy.stats
 
+from faultforge._internal.experiment.config import ExperimentDisplay, SaveConfig
+from faultforge._internal.experiment.stop import StopCondition
 from faultforge._internal.io import AnyPath, is_compressed, open_text
 
 logger = logging.getLogger(__name__)
 
-_COMPRESSED_SUFFIXES = (".zst", ".zstd")
-
-
-def _warn_on_extension_mismatch(path: AnyPath, *, compressed: bool) -> None:
-    """Advisory-only: log a warning if `compressed` disagrees with `path`'s name.
-
-    Never changes what path is actually written to - purely a hint that the
-    file's contents and its name disagree about whether it's zstd-compressed,
-    which would otherwise confuse tools like `cat`/`jq` reading it later.
-    """
-    looks_compressed = Path(path).name.endswith(_COMPRESSED_SUFFIXES)
-    if compressed and not looks_compressed:
-        logger.warning(
-            f"Saving compressed data to {path!r}, whose name doesn't end in .zst/.zstd."
-        )
-    elif not compressed and looks_compressed:
-        logger.warning(
-            f"Saving uncompressed data to {path!r}, whose name ends in .zst/.zstd."
-        )
-
-
-@dataclass(slots=True)
-class SaveConfig:
-    """Where and how often `Experiment.run_loop` persists progress."""
-
-    path: AnyPath
-    """Where to save the experiment's results, via `Experiment.save_atomic`."""
-    interval_seconds: float | None
-    """How many seconds between saves. None means save only at the end."""
-    compressed: bool = False
-    """Whether to save through zstd compression; passed straight through to
-    `Experiment.save_atomic`."""
-
-
-def relative_margin_of_error(
-    mean: float | None, margin_of_error: float | None
-) -> float | None:
-    """The 95% margin of error as a percentage of the mean.
-
-    `None` if either input is `None`. A mean of exactly `0` would otherwise
-    raise `ZeroDivisionError` (a legitimate outcome for e.g. a 0% SDC score);
-    that case is treated as 0% relative error when there is no error either,
-    and as an undefined (infinite) relative error otherwise.
-    """
-    if mean is None or margin_of_error is None:
-        return None
-    if mean == 0:
-        return 0.0 if margin_of_error == 0 else float("inf")
-    return margin_of_error / mean * 100
-
-
-class ExperimentDisplay:
-    """Formats an `Experiment`'s status line for `run_loop`.
-
-    Returned by `Experiment.display`; nothing here is stored on the experiment,
-    it's computed on demand. Override any piece to customize; the default
-    renders `[Run n]: name = score unit | mean ± moe (95% CI) | Relative MoE: x%
-    of mean`, with the `Relative MoE` fragment only shown when a `Stability`
-    condition is among the ones currently configured on `run_loop` - it's the
-    exact quantity `Stability` checks against its threshold, so it has nothing
-    to say if there's no threshold to preview.
-    """
-
-    def score_name(self) -> str | None:
-        """The name given to the result score, or None to omit it."""
-        return None
-
-    def score_unit(self) -> str | None:
-        """The unit printed after a score, or None to omit it."""
-        return None
-
-    def format_score(self, score: float) -> str:
-        """Format a single score value (the latest score, mean, or margin of error)."""
-        return f"{score:6.2f}"
-
-    def progress_label(self, run_count: int) -> str:
-        """The leading `[...]` progress marker.
-
-        The base case only knows the run count. An experiment that also
-        knows a total (e.g. an exhaustive search over a known number of
-        cases) should override this using a value it tracks itself, rather
-        than have `Experiment` prescribe a "total" concept every subclass
-        must carry.
-        """
-        return f"[Run {run_count}]"
-
-    def extra(self) -> str | None:
-        """A string to append as-is to the end of the status message, or None
-        to omit it. Include any leading separator/spacing yourself."""
-        return None
-
-    def format(
-        self,
-        *,
-        run_count: int,
-        score: float,
-        mean: float | None,
-        margin_of_error: float | None,
-        stop_conditions: Sequence[StopCondition] = (),
-    ) -> str:
-        """Compose the full status line from the pieces above.
-
-        `stop_conditions` is whatever's currently configured on `run_loop`
-        (both intrinsic and caller-supplied), passed through so a subclass can
-        shape its output around what's actually being checked - the default
-        implementation uses it only to decide whether to show `Relative MoE`.
-        """
-        parts: list[str] = [self.progress_label(run_count), ": "]
-
-        def build() -> None:
-            score_name = self.score_name()
-            if score_name is not None:
-                parts.append(score_name)
-                parts.append(" = ")
-
-            score_unit = self.score_unit()
-
-            parts.append(self.format_score(score))
-            if score_unit is not None:
-                parts.append(score_unit)
-
-            if mean is None:
-                return
-            parts.append(" | ")
-            parts.append(f"mean {self.format_score(mean)}")
-            if score_unit is not None:
-                parts.append(score_unit)
-
-            if margin_of_error is None:
-                return
-            parts.append(f" ±{self.format_score(margin_of_error)} (95% CI)")
-
-            has_stability = any(
-                isinstance(condition, Stability) for condition in stop_conditions
-            )
-            if not has_stability:
-                return
-
-            relative = relative_margin_of_error(mean, margin_of_error)
-            if relative is None:
-                return
-            parts.append(f" | Relative MoE: {relative:.2f}% of mean")
-
-        build()
-        if extra := self.extra():
-            parts.append(extra)
-
-        return "".join(parts)
-
-
-# A check run by `Experiment.run_loop` each iteration, before `run`. Returns a
-# human-readable reason to stop, or `None` to keep going.
-type StopCondition = Callable[[Experiment], str | None]
+COMPRESSED_SUFFIXES = (".zst", ".zstd")
+"""File extensions that we expect for compressed results."""
 
 
 class Experiment(abc.ABC):
@@ -263,7 +99,7 @@ class Experiment(abc.ABC):
         stdlib) instead of plain text - `serialize()`'s output itself never
         changes, only how it's stored on disk.
         """
-        _warn_on_extension_mismatch(path, compressed=compressed)
+        warn_on_extension_mismatch(path, compressed=compressed)
         with open_text(path, "wt", compressed=compressed) as f:
             self.save_file(f)
 
@@ -281,7 +117,7 @@ class Experiment(abc.ABC):
         `compressed=True` to write through zstd instead of plain text, same
         as `save`.
         """
-        _warn_on_extension_mismatch(path, compressed=compressed)
+        warn_on_extension_mismatch(path, compressed=compressed)
         destination = Path(path).expanduser()
         fd, temp_name = tempfile.mkstemp(dir=destination.parent)
         os.close(fd)
@@ -320,7 +156,7 @@ class Experiment(abc.ABC):
     ) -> None:
         """Keep running until a stop condition is met, including Ctrl+C."""
 
-        interrupted = _Interrupted()
+        interrupted = Interrupted()
         all_conditions = [*self.stop_conditions(), *stop_conditions, interrupted]
 
         dirty = False
@@ -329,7 +165,7 @@ class Experiment(abc.ABC):
 
         with interrupted:
             while True:
-                reason = _first_stop_reason(all_conditions, self)
+                reason = first_stop_reason(all_conditions, self)
                 if reason is not None:
                     logger.info(reason)
                     break
@@ -400,7 +236,7 @@ class Experiment(abc.ABC):
         )
 
 
-class _Interrupted:
+class Interrupted:
     """A `StopCondition` that fires once Ctrl+C has been received.
 
     Used as a context manager for the duration of `run_loop`: entering
@@ -438,7 +274,7 @@ class _Interrupted:
         return "Interrupted by Ctrl+C" if self._triggered else None
 
 
-def _first_stop_reason(
+def first_stop_reason(
     conditions: Sequence[StopCondition], experiment: Experiment
 ) -> str | None:
     """The reason given by the first condition in `conditions` that wants to stop, if any."""
@@ -448,63 +284,19 @@ def _first_stop_reason(
     return None
 
 
-@dataclass(slots=True)
-class Stability:
-    """A `StopCondition`: stop once the mean score's margin of error is small
-    relative to the mean."""
+def warn_on_extension_mismatch(path: AnyPath, *, compressed: bool) -> None:
+    """Advisory-only: log a warning if `compressed` disagrees with `path`'s name.
 
-    min_samples: int
-    """Minimum number of runs before checking the stopping criterion."""
-    threshold: float
-    """Stop when the relative margin of error (95% margin of error as a percentage of the mean) falls below this value, e.g. 1.0 = 1%."""
-
-    def __call__(self, experiment: Experiment) -> str | None:
-        if experiment.run_count() < self.min_samples:
-            return None
-        relative = relative_margin_of_error(
-            experiment.mean_score(), experiment.margin_of_error()
+    Never changes what path is actually written to - purely a hint that the
+    file's contents and its name disagree about whether it's zstd-compressed,
+    which would otherwise confuse tools like `cat`/`jq` reading it later.
+    """
+    looks_compressed = Path(path).name.endswith(COMPRESSED_SUFFIXES)
+    if compressed and not looks_compressed:
+        logger.warning(
+            f"Saving compressed data to {path!r}, whose name doesn't end in .zst/.zstd."
         )
-        if relative is not None and relative <= self.threshold:
-            return (
-                f"Reached stability threshold {self.threshold:.2f}% ({relative:.2f}%)"
-            )
-        return None
-
-
-@dataclass(slots=True)
-class AdditionalRuns:
-    """A `StopCondition`: stop after `count` more runs, on top of however many
-    already existed when this instance first got checked (typically the start
-    of `run_loop`).
-
-    Use `MaxRuns` instead if you want to cap the *total* run count regardless
-    of how many results already exist (e.g. loaded from a save file).
-    """
-
-    count: int
-    _baseline: int | None = field(default=None, init=False, repr=False)
-
-    def __call__(self, experiment: Experiment) -> str | None:
-        if self._baseline is None:
-            self._baseline = experiment.run_count()
-        if experiment.run_count() - self._baseline >= self.count:
-            return f"Reached requested additional run count (+{self.count})"
-        return None
-
-
-@dataclass(slots=True)
-class MaxRuns:
-    """A `StopCondition`: stop once the total run count reaches `total`,
-    including any results that already existed before this instance was ever
-    checked (e.g. loaded from a save file).
-
-    Use `AdditionalRuns` instead if you want to run a fixed number more
-    regardless of how many results already exist.
-    """
-
-    total: int
-
-    def __call__(self, experiment: Experiment) -> str | None:
-        if experiment.run_count() >= self.total:
-            return f"Reached max run count ({self.total})"
-        return None
+    elif not compressed and looks_compressed:
+        logger.warning(
+            f"Saving uncompressed data to {path!r}, whose name ends in .zst/.zstd."
+        )
