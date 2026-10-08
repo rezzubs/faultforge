@@ -12,11 +12,12 @@ from faultforge._internal.dataset import (
     BatchedDataset,
     DataBatch,
 )
+from faultforge._internal.experiment.config import ScoreDisplay
 from faultforge._internal.fingerprint import Fingerprint
 from faultforge._internal.progress import Progress, stage
 
 
-class Metric[R](abc.ABC):
+class Metric[R](ScoreDisplay, abc.ABC):
     """A metric for evaluating the output of a DNN.
 
     In the end all metrics need to produce a numeric [`score`] but can use any
@@ -121,14 +122,6 @@ class Metric[R](abc.ABC):
     @abc.abstractmethod
     def fingerprint(self) -> Fingerprint:
         """Return a structural identity for the metric"""
-
-    def display_name(self) -> str | None:
-        """The name of the metric used for display purposes. Override to set"""
-        return None
-
-    def display_unit(self) -> str | None:
-        """The unit of the metric used for display purposes. Override to set"""
-        return None
 
     def init_or_accumulate(self, existing: R | None, new: R) -> R:
         """Helper for `accumulate` given an initial non-existing result."""

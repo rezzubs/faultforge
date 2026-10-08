@@ -12,6 +12,9 @@ Here's the full list of built-in metrics that this module provides:
 - [`Sdc`]
 - [`Top1Sdc`]
 
+Every [`Metric`] is also a [`ScoreDisplay`], which describes how to present a
+score.
+
 In addition to metrics, this module provides a [`GoldenCache`] type. This cache
 is meant to simplify working with metrics which rely on outputs from a golden
 (non-faulty) model.

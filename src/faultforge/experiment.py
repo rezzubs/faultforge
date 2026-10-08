@@ -7,6 +7,7 @@ from faultforge._internal.experiment.abc import Experiment
 from faultforge._internal.experiment.config import (
     ExperimentDisplay,
     SaveConfig,
+    ScoreDisplay,
 )
 from faultforge._internal.experiment.helper import relative_margin_of_error
 from faultforge._internal.experiment.stop import (
@@ -22,6 +23,7 @@ __all__ = [
     "ExperimentDisplay",
     "MaxRuns",
     "SaveConfig",
+    "ScoreDisplay",
     "Stability",
     "StopCondition",
     "relative_margin_of_error",

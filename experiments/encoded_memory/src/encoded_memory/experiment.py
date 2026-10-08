@@ -30,7 +30,7 @@ from faultforge.dataset import (
 )
 from faultforge.dtype import FiDtype
 from faultforge.encoding import EncodedModule, Encoder
-from faultforge.experiment import Experiment, ExperimentDisplay
+from faultforge.experiment import Experiment, ExperimentDisplay, ScoreDisplay
 from faultforge.io import AnyPath, is_compressed, open_text
 from faultforge.loading import ModelBundle
 from faultforge.metric import GoldenCache, Metric
@@ -239,12 +239,8 @@ class _Display(ExperimentDisplay):
         self._fault_summary = fault_summary
 
     @override
-    def score_name(self) -> str | None:
-        return self._metric.display_name()
-
-    @override
-    def score_unit(self) -> str | None:
-        return self._metric.display_unit()
+    def score_display(self) -> ScoreDisplay:
+        return self._metric
 
     @override
     def extra(self) -> str | None:

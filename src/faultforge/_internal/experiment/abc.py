@@ -11,9 +11,16 @@ from typing import IO, Self
 
 import scipy.stats
 
-from faultforge._internal.experiment.config import ExperimentDisplay, SaveConfig
+from faultforge._internal.experiment.config import (
+    ExperimentDisplay,
+    SaveConfig,
+)
 from faultforge._internal.experiment.stop import StopCondition
-from faultforge._internal.io import AnyPath, is_compressed, open_text
+from faultforge._internal.io import (
+    AnyPath,
+    is_compressed,
+    open_text,
+)
 
 logger = logging.getLogger(__name__)
 
