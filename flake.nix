@@ -38,6 +38,12 @@
         # Attributes not recognized by mkShell (packages, shellHook, etc.)
         # are exported as environment variables in the shell.
         RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+
+        # Without a uv-managed Python installed, uv would otherwise pick up
+        # `python314` from above. Being nix-native, it doesn't go through
+        # nix-ld or the system library paths, so wheels that need e.g.
+        # libstdc++ fail to load.
+        UV_PYTHON_PREFERENCE = "only-managed";
       };
 
       formatter.${system} = pkgs.nixfmt-tree;
