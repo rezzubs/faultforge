@@ -22,3 +22,6 @@ dataset-cache
 
 # Editor specific
 .zed
+
+# Direnv cache
+.direnv
