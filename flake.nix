@@ -40,16 +40,19 @@
           cargo-nextest
           clippy
           just
+          ruff
+          rust-analyzer
+          rustc
+          rustfmt
+          ty
+          uv
+
           # Not used to build or run faultforge itself (see NOTE above) - only
           # gives pyo3-ffi's build script a Python to find for `cargo
           # clippy`/`test` on the `bindings` crate. Being nix-native, it's
           # correctly RPATH-linked, so cargo's test binaries can find libpython
           # at runtime without any LD_LIBRARY_PATH help.
           python314
-          rust-analyzer
-          rustc
-          rustfmt
-          uv
         ];
 
         # Attributes not recognized by mkShell (packages, shellHook, etc.)
