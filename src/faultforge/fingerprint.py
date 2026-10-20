@@ -5,7 +5,7 @@ holds the pieces only needed when comparing two fingerprints and reporting
 the result.
 """
 
-from faultforge._internal.fingerprint import (
+from faultforge._impl.fingerprint import (
     ABSENT,
     FingerprintDifference,
     FingerprintError,

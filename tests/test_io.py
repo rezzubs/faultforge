@@ -1,8 +1,8 @@
-"""Tests for faultforge._internal.io."""
+"""Tests for faultforge._impl.io."""
 
 from pathlib import Path
 
-from faultforge._internal.io import is_compressed, open_text
+from faultforge._impl.io import is_compressed, open_text
 
 _ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 

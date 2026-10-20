@@ -11,12 +11,12 @@ from typing import IO, Self
 
 import scipy.stats
 
-from faultforge._internal.experiment.config import (
+from faultforge._impl.experiment.config import (
     ExperimentDisplay,
     SaveConfig,
 )
-from faultforge._internal.experiment.stop import StopCondition
-from faultforge._internal.io import (
+from faultforge._impl.experiment.stop import StopCondition
+from faultforge._impl.io import (
     AnyPath,
     is_compressed,
     open_text,

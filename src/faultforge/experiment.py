@@ -3,14 +3,14 @@
 See `Experiment` for the full overview.
 """
 
-from faultforge._internal.experiment.abc import Experiment
-from faultforge._internal.experiment.config import (
+from faultforge._impl.experiment.abc import Experiment
+from faultforge._impl.experiment.config import (
     ExperimentDisplay,
     SaveConfig,
     ScoreDisplay,
 )
-from faultforge._internal.experiment.helper import relative_margin_of_error
-from faultforge._internal.experiment.stop import (
+from faultforge._impl.experiment.helper import relative_margin_of_error
+from faultforge._impl.experiment.stop import (
     AdditionalRuns,
     MaxRuns,
     Stability,

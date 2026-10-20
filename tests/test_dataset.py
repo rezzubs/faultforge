@@ -1,4 +1,4 @@
-"""Tests for faultforge._internal.dataset (BatchedDataset.batch_count, CachedDataset)."""
+"""Tests for faultforge._impl.dataset (BatchedDataset.batch_count, CachedDataset)."""
 
 import math
 from typing import override
@@ -8,8 +8,8 @@ import torch
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from faultforge._internal.dataset import BatchedDataset
-from faultforge._internal.progress import ProgressStage
+from faultforge._impl.dataset import BatchedDataset
+from faultforge._impl.progress import ProgressStage
 from faultforge.progress import Progress
 
 # The following classes are `_` prefixed to not interpret them as Test classes.

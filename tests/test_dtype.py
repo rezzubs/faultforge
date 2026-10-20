@@ -1,9 +1,9 @@
-"""Tests for `faultforge._internal.dtype`."""
+"""Tests for `faultforge._impl.dtype`."""
 
 import pytest
 import torch
 
-from faultforge._internal.dtype import dtype_from_name, dtype_name
+from faultforge._impl.dtype import dtype_from_name, dtype_name
 
 
 @pytest.mark.parametrize(

@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from faultforge._internal.progress import ProgressStage, _format_duration
+from faultforge._impl.progress import ProgressStage, _format_duration
 from faultforge.progress import Progress, stage
 
 # The following classes are `_` prefixed to not interpret them as Test classes.

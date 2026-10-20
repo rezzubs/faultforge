@@ -20,7 +20,7 @@ is meant to simplify working with metrics which rely on outputs from a golden
 (non-faulty) model.
 """
 
-from faultforge._internal.metric import (
+from faultforge._impl.metric import (
     Accuracy,
     AccuracyDegradation,
     AccuracyDegradationResult,

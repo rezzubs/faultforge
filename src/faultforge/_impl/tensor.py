@@ -7,8 +7,8 @@ import torch
 from torch import Tensor
 
 from faultforge import _rust
-from faultforge._internal.dtype import FiDtype
-from faultforge._internal.fault import (
+from faultforge._impl.dtype import FiDtype
+from faultforge._impl.fault import (
     Fault,
     fault_to_rust,
 )

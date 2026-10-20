@@ -19,13 +19,13 @@ from torch import (
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
-from faultforge._internal.dataset import BatchedDataset, DeviceLike
-from faultforge._internal.dtype import dtype_name
-from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.io import AnyPath
-from faultforge._internal.loading.abc import ModelBundle
-from faultforge._internal.loading.transform import dtype_transforms
-from faultforge._internal.progress import Progress, stage
+from faultforge._impl.dataset import BatchedDataset, DeviceLike
+from faultforge._impl.dtype import dtype_name
+from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.io import AnyPath
+from faultforge._impl.loading.abc import ModelBundle
+from faultforge._impl.loading.transform import dtype_transforms
+from faultforge._impl.progress import Progress, stage
 
 type Transform = Callable[[Image.Image], Tensor]
 

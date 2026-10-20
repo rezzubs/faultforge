@@ -49,9 +49,9 @@ root rather than in their own submodule:
 
 import sys
 
-from faultforge._internal.fault import BitFlip, Fault, StuckAt
-from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.tensor import (
+from faultforge._impl.fault import BitFlip, Fault, StuckAt
+from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.tensor import (
     bitwise_xor,
     tensor_list_dtype,
     tensor_list_fault,

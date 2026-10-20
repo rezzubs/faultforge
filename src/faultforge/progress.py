@@ -16,7 +16,7 @@ those units. A stage that merely spans work driven by someone else's control
 flow should be opened without one, and reports elapsed time alone.
 """
 
-from faultforge._internal.progress import Progress, StageHandle, stage
+from faultforge._impl.progress import Progress, StageHandle, stage
 
 __all__ = [
     "Progress",

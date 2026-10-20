@@ -1,6 +1,6 @@
 """Types related to datasets."""
 
-from faultforge._internal.dataset import (
+from faultforge._impl.dataset import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
     BatchedDataset,

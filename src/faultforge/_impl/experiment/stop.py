@@ -5,10 +5,10 @@ from dataclasses import (
 )
 from typing import TYPE_CHECKING
 
-from faultforge._internal.experiment.helper import relative_margin_of_error
+from faultforge._impl.experiment.helper import relative_margin_of_error
 
 if TYPE_CHECKING:
-    from faultforge._internal.experiment.abc import Experiment
+    from faultforge._impl.experiment.abc import Experiment
 
 type StopCondition = Callable[[Experiment], str | None]
 """A check run by `Experiment.run_loop` each iteration, before `run`.

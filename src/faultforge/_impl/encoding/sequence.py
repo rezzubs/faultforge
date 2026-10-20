@@ -6,15 +6,15 @@ from typing import override
 
 from torch import Tensor
 
-from faultforge._internal.encoding.abc import (
+from faultforge._impl.encoding.abc import (
     Encoder,
     Encoding,
     TensorEncoder,
     TensorEncoding,
 )
-from faultforge._internal.fault import Fault
-from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.progress import Progress
+from faultforge._impl.fault import Fault
+from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.progress import Progress
 
 
 @dataclass(slots=True)

@@ -23,7 +23,7 @@ encoded memory directly rather than the live parameters.
 See the various `*Encoder` classes for details on each technique.
 """
 
-from faultforge._internal.encoding.abc import (
+from faultforge._impl.encoding.abc import (
     Encoder,
     Encoding,
     InPlaceEncoder,
@@ -31,25 +31,25 @@ from faultforge._internal.encoding.abc import (
     TensorEncoder,
     TensorEncoding,
 )
-from faultforge._internal.encoding.cep import (
+from faultforge._impl.encoding.cep import (
     CepEncoder,
     CepEncoding,
     CepScheme,
 )
-from faultforge._internal.encoding.identity import (
+from faultforge._impl.encoding.identity import (
     IdentityEncoder,
     IdentityEncoding,
 )
-from faultforge._internal.encoding.mset import (
+from faultforge._impl.encoding.mset import (
     MsetEncoder,
     MsetEncoding,
 )
-from faultforge._internal.encoding.nn import EncodedModule
-from faultforge._internal.encoding.secded import (
+from faultforge._impl.encoding.nn import EncodedModule
+from faultforge._impl.encoding.secded import (
     SecdedEncoder,
     SecdedEncoding,
 )
-from faultforge._internal.encoding.sequence import (
+from faultforge._impl.encoding.sequence import (
     EncoderSequence,
     EncodingSequence,
 )

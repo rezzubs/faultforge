@@ -7,12 +7,12 @@ from typing import override
 import torch
 from torch import Tensor, nn
 
-from faultforge._internal.encoding.abc import (
+from faultforge._impl.encoding.abc import (
     Encoder,
     Encoding,
 )
-from faultforge._internal.fault import Fault
-from faultforge._internal.progress import Progress
+from faultforge._impl.fault import Fault
+from faultforge._impl.progress import Progress
 
 
 class EncodedModule(nn.Module):

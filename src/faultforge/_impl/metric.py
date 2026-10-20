@@ -8,13 +8,13 @@ from typing import final, override
 import torch
 from torch import Tensor, nn
 
-from faultforge._internal.dataset import (
+from faultforge._impl.dataset import (
     BatchedDataset,
     DataBatch,
 )
-from faultforge._internal.experiment.config import ScoreDisplay
-from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.progress import Progress, stage
+from faultforge._impl.experiment.config import ScoreDisplay
+from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.progress import Progress, stage
 
 
 class Metric[R](ScoreDisplay, abc.ABC):

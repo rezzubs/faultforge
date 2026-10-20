@@ -9,15 +9,15 @@ from typing import override
 
 import torch
 
-from faultforge._internal.dtype import EncodingDtype
-from faultforge._internal.encoding.abc import Encoder, Encoding
-from faultforge._internal.fault import (
+from faultforge._impl.dtype import EncodingDtype
+from faultforge._impl.encoding.abc import Encoder, Encoding
+from faultforge._impl.fault import (
     Fault,
     fault_to_rust,
 )
-from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.progress import Progress, stage
-from faultforge._internal.tensor import tensor_list_dtype
+from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.progress import Progress, stage
+from faultforge._impl.tensor import tensor_list_dtype
 from faultforge._rust import secded
 
 logger = logging.getLogger(__name__)

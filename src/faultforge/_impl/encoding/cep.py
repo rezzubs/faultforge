@@ -8,13 +8,13 @@ from typing import override
 import torch
 from torch import Tensor
 
-from faultforge._internal.dtype import EncodingDtype
-from faultforge._internal.encoding.abc import (
+from faultforge._impl.dtype import EncodingDtype
+from faultforge._impl.encoding.abc import (
     InPlaceEncoder,
     InPlaceEncoding,
     TensorEncoding,
 )
-from faultforge._internal.fingerprint import Fingerprint
+from faultforge._impl.fingerprint import Fingerprint
 from faultforge._rust import cep
 
 _logger = logging.getLogger(__name__)

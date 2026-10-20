@@ -29,7 +29,7 @@ where
 /// Applies a batch of faults to a list of arrays.
 ///
 /// The caller-side numpy conversion (see `tensor_list_faults` in
-/// `faultforge._internal.tensor`) is only paid once for the whole batch instead
+/// `faultforge._impl.tensor`) is only paid once for the whole batch instead
 /// of once per fault. Bit lookups are also batched via `NonUniformSequence`'s
 /// `BitBuffer::apply_faults` override, which looks up each target array once
 /// via a precomputed offset table rather than rescanning the whole array list

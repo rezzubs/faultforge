@@ -4,9 +4,9 @@ import abc
 
 from torch import nn
 
-from faultforge._internal.dataset import BatchedDataset, DeviceLike
-from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.progress import Progress
+from faultforge._impl.dataset import BatchedDataset, DeviceLike
+from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.progress import Progress
 
 
 class ModelBundle(abc.ABC):

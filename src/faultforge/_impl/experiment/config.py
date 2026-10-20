@@ -2,12 +2,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from faultforge._internal.experiment.helper import relative_margin_of_error
-from faultforge._internal.experiment.stop import (
+from faultforge._impl.experiment.helper import relative_margin_of_error
+from faultforge._impl.experiment.stop import (
     Stability,
     StopCondition,
 )
-from faultforge._internal.io import AnyPath
+from faultforge._impl.io import AnyPath
 
 
 @dataclass(slots=True)

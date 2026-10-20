@@ -9,17 +9,17 @@ import torch
 import torchvision
 from torch import nn
 
-from faultforge._internal.dataset import (
+from faultforge._impl.dataset import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
     BatchedDataset,
     DeviceLike,
 )
-from faultforge._internal.dtype import dtype_name
-from faultforge._internal.fingerprint import Fingerprint
-from faultforge._internal.loading.abc import ModelBundle
-from faultforge._internal.loading.transform import dtype_transforms
-from faultforge._internal.progress import Progress, stage
+from faultforge._impl.dtype import dtype_name
+from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.loading.abc import ModelBundle
+from faultforge._impl.loading.transform import dtype_transforms
+from faultforge._impl.progress import Progress, stage
 
 CACHE_DIRECTORY = Path("~/.cache/faultforge/").expanduser()
 

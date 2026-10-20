@@ -9,7 +9,7 @@ experiments as well as experiments which use that library.
 
 - `src/faultforge` - The python package of the faultforge library.
   - Top-level modules under `faultforge/*.py` are thin, documented re-export
-    shims; the real implementation lives in `faultforge/_internal/`. This design
+    shims; the real implementation lives in `faultforge/_impl/`. This design
     makes it simple to avoid import errors while keeping the public API shape
     distinct from the one that's convenient for implementation.
 - `crates/` - Cargo workspace. Rust crates that are either standalone or
