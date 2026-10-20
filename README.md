@@ -1,10 +1,11 @@
 # FaultForge
 
 [![CI](https://github.com/rezzubs/faultforge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rezzubs/faultforge/actions/workflows/ci.yml)
-[![License](https://img.shields.io/pypi/l/faultforge)](LICENSE)
+[![License](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Frezzubs%2Ffaultforge%2Fmain%2Fpyproject.toml&query=%24.project.license&label=license)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/faultforge)](https://pypi.org/project/faultforge/)
-[![Python](https://img.shields.io/pypi/pyversions/faultforge)](https://pypi.org/project/faultforge/)
+[![Python](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Frezzubs%2Ffaultforge%2Fmain%2Fpyproject.toml&query=%24.project%5B%27requires-python%27%5D&label=python)](pyproject.toml)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Built with Nix](https://img.shields.io/badge/built%20with-Nix-5277C3?logo=nixos&logoColor=white)](https://builtwithnix.org)
 
 A framework for running reproducible hardware fault-injection experiments on
 PyTorch models - with error-corrected memory reliability testing built in as
