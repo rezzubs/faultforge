@@ -120,7 +120,9 @@ class EncodedModule(nn.Module):
         return self._memory.bit_count()
 
     @override
-    def forward(self, t: Tensor) -> Tensor:
+    # torch declares `forward` as a mutable `Callable[..., Any]` attribute, so ty
+    # rejects any narrower method. Narrowing `forward` is how torch is meant to be used.
+    def forward(self, t: Tensor) -> Tensor:  # ty: ignore[invalid-mutable-override]
         result = self.decode().forward(t)
         assert isinstance(result, Tensor)
 

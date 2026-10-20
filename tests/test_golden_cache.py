@@ -36,7 +36,8 @@ class _DoublingModel(nn.Module):
         self.call_count: int = 0
 
     @override
-    def forward(self, inputs: Tensor) -> Tensor:
+    # torch types `forward` as a mutable `Callable[..., Any]`; narrowing it is intended.
+    def forward(self, inputs: Tensor) -> Tensor:  # ty: ignore[invalid-mutable-override]
         self.call_count += 1
         return inputs * 2
 
@@ -45,7 +46,8 @@ class _NonTensorModel(nn.Module):
     """A golden model returning something that isn't a `Tensor`."""
 
     @override
-    def forward(self, inputs: Tensor) -> object:
+    # torch types `forward` as a mutable `Callable[..., Any]`; narrowing it is intended.
+    def forward(self, inputs: Tensor) -> object:  # ty: ignore[invalid-mutable-override]
         _ = inputs
         return "not a tensor"
 
