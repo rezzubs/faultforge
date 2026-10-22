@@ -9,6 +9,7 @@ to implement new ones.
 Here's the full list of built-in metrics that this module provides:
 - [`AccuracyDegradation`]
 - [`Accuracy`]
+- [`Perplexity`]
 - [`Sdc`]
 - [`Top1Sdc`]
 
@@ -27,6 +28,8 @@ from faultforge._impl.metric import (
     AccuracyResult,
     GoldenCache,
     Metric,
+    Perplexity,
+    PerplexityResult,
     Sdc,
     SdcResult,
     Top1Sdc,
@@ -39,6 +42,8 @@ __all__ = [
     "AccuracyResult",
     "GoldenCache",
     "Metric",
+    "Perplexity",
+    "PerplexityResult",
     "Sdc",
     "SdcResult",
     "Top1Sdc",
