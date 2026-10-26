@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Annotated, Literal, final, override
 
 import torch
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from torch import nn
 
 from faultforge import (
@@ -39,7 +39,19 @@ from faultforge.progress import Progress, stage
 logger = logging.getLogger(__name__)
 
 
-class SimpleResults(BaseModel):
+class _ResultModel(BaseModel):
+    """Base for models that hold scores."""
+
+    # A faulty model can score NaN or ±inf. The default writes them as `null`,
+    # which can't be loaded back. Strings keep the file valid JSON.
+    #
+    # Whether the setting applies depends on how models are nested. Through a
+    # union only the outermost model's setting counts, otherwise the innermost
+    # one's. Every model in the result file needs it to be safe.
+    model_config = ConfigDict(ser_json_inf_nan="strings")
+
+
+class SimpleResults(_ResultModel):
     """Correct/total accounting only."""
 
     kind: Literal["simple"] = "simple"
@@ -49,7 +61,7 @@ class SimpleResults(BaseModel):
         return self.results
 
 
-class DetailedRunResult(BaseModel):
+class DetailedRunResult(_ResultModel):
     """A single run's correct/total accounting plus its bitwise-comparison data."""
 
     score: float
@@ -59,7 +71,7 @@ class DetailedRunResult(BaseModel):
     across all parameter tensors."""
 
 
-class DetailedResults(BaseModel):
+class DetailedResults(_ResultModel):
     """Correct/total accounting plus per-run bitwise-comparison data.
 
     Each run contributes a single `DetailedRunResult`, so `correct` and
@@ -82,7 +94,7 @@ ExperimentResult = Annotated[
 ]
 
 
-class SavedResult(BaseModel):
+class SavedResult(_ResultModel):
     """The on-disk shape of an `EncodedFaultInjection`'s results.
 
     Standalone-loadable: everything needed to recompute scores and bit
