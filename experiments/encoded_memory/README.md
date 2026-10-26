@@ -9,9 +9,10 @@ for recording and plotting results.
 [`Encoder`](../../docs/library.md#encoder--encoding), injects bit flips (or
 stuck-at faults) into that encoded memory, and scores the result according to
 a `ReliabilityMetric`: `Accuracy`, `AccuracyDegradation`, `Sdc` (Silent Data
-Corruption - any output logit changed vs. a golden model), or `Top1Sdc`
-(Critical SDC - the top-1 prediction changed vs. a golden model). The last
-three metrics additionally require a golden (unencoded, or golden-encoded)
+Corruption - any output logit changed vs. a golden model), `Top1Sdc`
+(Critical SDC - the top-1 prediction changed vs. a golden model) or
+`Perplexity` (for language models). `AccuracyDegradation`, `Sdc` and
+`Top1Sdc` additionally require a golden (unencoded, or golden-encoded)
 reference run.
 
 It's the reference [`Experiment`](../../docs/library.md#experiment)
@@ -134,10 +135,14 @@ encoded-memory <command> --help
 Runs an encoded-memory experiment and records the results. Flags are grouped
 into help panels:
 
-- **Model Setup**: `--model`, `--dataset` (`cifar10`/`cifar100`/`imagenet`),
-  `--imagenet-root` (required for `imagenet`), `--batch-size`,
-  `--preload-batches`, `--batch-limit`, `--f16` (run in float16 instead of
-  float32, halving the encoded bit width per parameter), `--reliability-metric`.
+- **Model Setup**: `--model`, `--batch-size` (required, since a good value
+  depends on the model and the hardware), `--dataset`
+  (`cifar10`/`cifar100`/`imagenet`/`wikitext`), `--imagenet-root` (required
+  for `imagenet`), `--model-revision`, `--sequence-length` (required for
+  `wikitext`) and `--stride` (`wikitext` only), `--preload-batches`,
+  `--batch-limit`, `--f16` (run in float16 instead of float32, halving the
+  encoded bit width per parameter), `--reliability-metric` (defaults to
+  `perplexity` for `wikitext` and `accuracy` otherwise).
 - **Fault Injection**: `--bit-error-rate`/`--ber` and `--faults` (mutually
   exclusive - a rate or an exact count), `--compare-bitwise` (record
   per-run XOR bitmasks against the golden model; required by `heatmap`),
@@ -155,12 +160,28 @@ into help panels:
 
 ```sh
 encoded-memory record \
-  --dataset cifar10 --model resnet20 \
+  --dataset cifar10 --model resnet20 --batch-size 256 \
   --secded 64 \
   --bit-error-rate 1e-3 \
   --stability-threshold 1.0 \
   --output result.json.zst --compress \
   --fault-summary
+```
+
+With `wikitext`, `--model` is any causal language model on the HuggingFace
+Hub. `--model-revision` (default `main`) is resolved to a commit hash, which
+is what gets recorded. A single diverged run makes the mean perplexity
+infinite, so `--stability-threshold` isn't available there; use `--runs` or
+`--max-runs` instead:
+
+```sh
+encoded-memory record \
+  --dataset wikitext --model openai-community/gpt2 \
+  --batch-size 8 --sequence-length 1024 \
+  --secded 64 \
+  --bit-error-rate 1e-6 \
+  --runs 100 \
+  --output gpt2.json.zst --compress
 ```
 
 ### `compare`
@@ -202,13 +223,11 @@ encoded-memory discard-bitmasks result.json.zst
 `EncodedFaultInjection` can be used directly, without the CLI:
 
 ```python
-from encoded_memory import (
-    EncodedFaultInjection,
-    ReliabilityMetric,
-)
+from encoded_memory import EncodedFaultInjection
 from faultforge.encoding import SecdedEncoder
 from faultforge.experiment import MaxRuns
 from faultforge.loading import Cifar, CifarDataset, CifarModel
+from faultforge.metric import Sdc
 
 bundle = Cifar(model=CifarModel.ResNet20, dataset=CifarDataset.Cifar10)
 encoder = SecdedEncoder(bits_per_chunk=64)
@@ -216,7 +235,8 @@ encoder = SecdedEncoder(bits_per_chunk=64)
 experiment = EncodedFaultInjection(
     bundle,
     encoder,
-    ReliabilityMetric.Sdc,
+    Sdc(),
+    batch_size=256,
     faults=1e-3,  # a bit error rate; an int is treated as an exact fault count
     compare_bitwise=True,
     fault_summary=True,

@@ -24,7 +24,6 @@ from faultforge import (
     tensor_list_dtype,
 )
 from faultforge.dataset import (
-    DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
     DeviceLike,
 )
@@ -286,13 +285,13 @@ class EncodedFaultInjection[R](Experiment):
         encoder: Encoder,
         reliability_metric: Metric[R],
         *,
+        batch_size: int,
         golden_is_encoded: bool = False,
         faults: float = 1,
         compare_bitwise: bool = False,
         fault_summary: bool = False,
         preload_dataset: bool = True,
         dataset_batch_limit: int | None = None,
-        batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
         progress: Progress | None = None,
     ) -> None:
@@ -345,13 +344,13 @@ class EncodedFaultInjection[R](Experiment):
             },
         )
 
-        test_image_limit = (
+        sample_limit = (
             dataset_batch_limit * batch_size
             if dataset_batch_limit is not None
             else None
         )
-        if test_image_limit is not None:
-            fingerprint.scalars["test_image_limit"] = test_image_limit
+        if sample_limit is not None:
+            fingerprint.scalars["sample_limit"] = sample_limit
 
         self._total_bits = self._model.bit_count()
 

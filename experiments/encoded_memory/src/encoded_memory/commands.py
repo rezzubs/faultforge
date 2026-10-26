@@ -13,7 +13,6 @@ from encoded_memory import (
     EncodedFaultInjection,
     discard_bitmasks_in_file,
 )
-from faultforge.dataset import DEFAULT_BATCH_SIZE
 from faultforge.encoding import (
     CepEncoder,
     CepScheme,
@@ -39,6 +38,8 @@ from faultforge.loading import (
     ImageNet,
     ImageNetModel,
     ModelBundle,
+    WikiTextBundle,
+    resolve_huggingface_revision,
 )
 from faultforge.metric import Metric
 from faultforge.progress import Progress
@@ -54,6 +55,7 @@ class DatasetChoice(enum.StrEnum):
     Cifar10 = "cifar10"
     Cifar100 = "cifar100"
     ImageNet = "imagenet"
+    WikiText = "wikitext"
 
 
 class MetricChoice(enum.StrEnum):
@@ -61,6 +63,7 @@ class MetricChoice(enum.StrEnum):
     AccuracyDegradation = "accuracy-degradation"
     Sdc = "sdc"
     Top1Sdc = "top1-sdc"
+    Perplexity = "perplexity"
 
     def into_metric(self) -> Metric:
         match self:
@@ -72,17 +75,56 @@ class MetricChoice(enum.StrEnum):
                 return m.Sdc()
             case MetricChoice.Top1Sdc:
                 return m.Top1Sdc()
+            case MetricChoice.Perplexity:
+                return m.Perplexity()
+
+
+def _resolve_metric(
+    dataset: DatasetChoice, metric: MetricChoice | None
+) -> MetricChoice:
+    """Pick the dataset's default metric if none was given and reject unfitting pairs.
+
+    Perplexity needs a language model's per-token logits and next-token
+    targets. The other metrics compare top-1 predictions or whole outputs
+    against class labels. On WikiText they would count padding and window
+    overlap as wrong predictions.
+    """
+    is_language_dataset = dataset == DatasetChoice.WikiText
+    if metric is None:
+        return MetricChoice.Perplexity if is_language_dataset else MetricChoice.Accuracy
+
+    is_language_metric = metric == MetricChoice.Perplexity
+    if is_language_dataset != is_language_metric:
+        raise typer.BadParameter(
+            f"metric {metric.value} doesn't apply to dataset {dataset.value}",
+            param_hint="--reliability-metric",
+        )
+    return metric
 
 
 def _init_model_bundle(
     dataset: DatasetChoice,
     model: str | None,
     imagenet_root: str | None,
+    model_revision: str | None,
+    sequence_length: int | None,
+    stride: int | None,
     dtype: torch.dtype,
 ) -> ModelBundle:
     """Build the `ModelBundle` for the given CLI choices and load the model/dataset from it."""
     if model is None:
         raise typer.BadParameter("A --model must be specified.", param_hint="--model")
+
+    if dataset != DatasetChoice.WikiText:
+        for value, option in [
+            (model_revision, "--model-revision"),
+            (sequence_length, "--sequence-length"),
+            (stride, "--stride"),
+        ]:
+            if value is not None:
+                raise typer.BadParameter(
+                    f"{option} only applies to --dataset wikitext", param_hint=option
+                )
 
     bundle: ModelBundle
     match dataset:
@@ -113,6 +155,28 @@ def _init_model_bundle(
                     param_hint="--model",
                 ) from error
             bundle = ImageNet(kind=imagenet_model, root=imagenet_root, dtype=dtype)
+        case DatasetChoice.WikiText:
+            if sequence_length is None:
+                raise typer.BadParameter(
+                    "--sequence-length is required when --dataset wikitext.",
+                    param_hint="--sequence-length",
+                )
+            requested_revision = model_revision or "main"
+            try:
+                revision = resolve_huggingface_revision(model, requested_revision)
+                if revision != requested_revision:
+                    logger.info(
+                        f"Resolved revision {requested_revision} of {model} to {revision}"
+                    )
+                bundle = WikiTextBundle(
+                    model_id=model,
+                    revision=revision,
+                    sequence_length=sequence_length,
+                    stride=stride,
+                    dtype=dtype,
+                )
+            except ValueError as error:
+                raise typer.BadParameter(str(error)) from error
 
     return bundle
 
@@ -158,6 +222,11 @@ def list_models(
             models = [model.value for model in CifarModel]
         case DatasetChoice.ImageNet:
             models = [model.value for model in ImageNetModel]
+        case DatasetChoice.WikiText:
+            typer.echo(
+                "Any causal language model on the HuggingFace Hub, e.g. openai-community/gpt2"
+            )
+            return
 
     for model in models:
         typer.echo(model)
@@ -171,6 +240,15 @@ def record(
         str,
         typer.Option(
             help="Which model to use. Choices depend on the dataset. The the list-models command can be used to see available models.",
+            rich_help_panel="Model Setup",
+        ),
+    ],
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            help="The number of samples per batch. Larger batches use more memory "
+            "but only run faster until the device is fully utilized.",
             rich_help_panel="Model Setup",
         ),
     ],
@@ -189,13 +267,33 @@ def record(
             rich_help_panel="Model Setup",
         ),
     ] = None,
-    batch_size: Annotated[
-        int,
+    model_revision: Annotated[
+        str | None,
         typer.Option(
-            help="The batch size of the dataset",
+            help="A branch, tag or commit hash of the model on the HuggingFace Hub. "
+            "Resolved to a commit hash, which is what gets recorded. "
+            "Defaults to main. Only for --dataset wikitext.",
             rich_help_panel="Model Setup",
         ),
-    ] = DEFAULT_BATCH_SIZE,
+    ] = None,
+    sequence_length: Annotated[
+        int | None,
+        typer.Option(
+            help="The number of tokens per evaluation window. Shouldn't exceed the "
+            "model's maximum context length. Memory use grows with it. "
+            "Required for --dataset wikitext.",
+            rich_help_panel="Model Setup",
+        ),
+    ] = None,
+    stride: Annotated[
+        int | None,
+        typer.Option(
+            help="How many tokens each evaluation window moves forward. Must be "
+            "smaller than --sequence-length. Defaults to half of it. "
+            "Only for --dataset wikitext.",
+            rich_help_panel="Model Setup",
+        ),
+    ] = None,
     preload_batches: Annotated[
         bool,
         typer.Option(
@@ -223,12 +321,13 @@ def record(
         ),
     ] = False,
     reliability_metric: Annotated[
-        MetricChoice,
+        MetricChoice | None,
         typer.Option(
-            help="Which metric to use for reliability measurements",
+            help="Which metric to use for reliability measurements. Defaults to "
+            "perplexity for wikitext and accuracy for the other datasets.",
             rich_help_panel="Model Setup",
         ),
-    ] = MetricChoice.Accuracy,
+    ] = None,
     bit_error_rate: Annotated[
         float | None,
         typer.Option(
@@ -371,11 +470,22 @@ def record(
     ] = "cpu",
 ) -> None:
     """Run an encoded memory fault injection experiment and record the results."""
+    metric = _resolve_metric(dataset, reliability_metric)
+    if metric == MetricChoice.Perplexity and stability_threshold is not None:
+        raise typer.BadParameter(
+            "--stability-threshold can't be used with perplexity. A single run with "
+            "an infinite perplexity makes the mean and its margin of error undefined.",
+            param_hint="--stability-threshold",
+        )
+
     dtype = torch.float16 if f16 else torch.float32
     bundle = _init_model_bundle(
         dataset,
         model,
         imagenet_root,
+        model_revision,
+        sequence_length,
+        stride,
         dtype,
     )
 
@@ -409,7 +519,7 @@ def record(
     experiment = EncodedFaultInjection(
         bundle,
         encoder,
-        reliability_metric=reliability_metric.into_metric(),
+        reliability_metric=metric.into_metric(),
         golden_is_encoded=golden_is_encoded,
         faults=faults_,
         compare_bitwise=compare_bitwise,

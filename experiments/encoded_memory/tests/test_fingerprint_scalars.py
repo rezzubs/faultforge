@@ -70,14 +70,14 @@ def test_fingerprint_leaves_dtype_to_the_bundle():
     assert fingerprint["children"]["bundle"][0]["scalars"]["dtype"] == "float16"
 
 
-def test_fingerprint_omits_test_image_limit_by_default():
+def test_fingerprint_omits_sample_limit_by_default():
     scalars = _fingerprint_scalars(_make_experiment(compare_bitwise=False))
-    assert "test_image_limit" not in scalars
+    assert "sample_limit" not in scalars
 
 
-def test_fingerprint_records_test_image_limit_from_batch_limit():
+def test_fingerprint_records_sample_limit_from_batch_limit():
     scalars = _fingerprint_scalars(
         _make_experiment(compare_bitwise=False, dataset_batch_limit=1)
     )
     # batch_size=2 (fixed in `_make_experiment`) * dataset_batch_limit=1
-    assert scalars["test_image_limit"] == 2
+    assert scalars["sample_limit"] == 2
