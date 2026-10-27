@@ -1,11 +1,20 @@
+import abc
+import math
 from collections.abc import Callable
 from dataclasses import (
     dataclass,
     field,
 )
-from typing import TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    override,
+)
 
-from faultforge._impl.experiment.helper import relative_margin_of_error
+from faultforge._impl.experiment.config import ScoreDisplay
+from faultforge._impl.experiment.estimate import (
+    CONFIDENCE_LEVEL,
+    Estimator,
+)
 
 if TYPE_CHECKING:
     from faultforge._impl.experiment.abc import Experiment
@@ -14,30 +23,136 @@ type StopCondition = Callable[[Experiment], str | None]
 """A check run by `Experiment.run_loop` each iteration, before `run`.
 
 Returns a human-readable reason to stop, or `None` to keep going.
+
+A condition can also subclass [`StatusReporter`] to add to the status line.
 """
 
 
-@dataclass(slots=True)
-class Stability:
-    """A `StopCondition`: stop once the mean score's margin of error is small
-    relative to the mean."""
+class StatusReporter(abc.ABC):
+    """A base for [`StopCondition`]s which add a fragment to the status line.
 
-    min_samples: int
-    """Minimum number of runs before checking the stopping criterion."""
-    threshold: float
-    """Stop when the relative margin of error (95% margin of error as a percentage of the mean) falls below this value, e.g. 1.0 = 1%."""
+    `Experiment.run_loop` shows the fragment after every run.
+    """
+
+    @abc.abstractmethod
+    def status(self, experiment: Experiment, score_display: ScoreDisplay) -> str | None:
+        """The fragment to show, or `None` to show nothing.
+
+        `score_display` is the experiment's [`ScoreDisplay`].
+        """
+
+
+@dataclass(slots=True, kw_only=True)
+class Stability(StatusReporter):
+    """A `StopCondition`: stop once an estimate's margin of error is small enough.
+
+    The margin of error is [`Estimate.margin`] of `estimator`'s estimate over
+    the experiment's scores. It can be limited in absolute terms, relative to
+    the estimated value, or both, in which case whichever limit is reached
+    first stops the experiment. At least one limit is required. Limits must be
+    finite and not negative.
+
+    Nothing stops the experiment while `estimator` has too few scores for an
+    estimate. Some estimates never reach a limit, so it can be useful to
+    combine `Stability` with [`MaxRuns`]:
+    - A relative limit is never reached while the estimated value is 0, e.g.
+      a [`FailureRate`] without failures. See [`Estimate.relative_margin`].
+    - [`Mean`] raises a `ValueError` when it gets a non-finite score.
+
+    Also shows the estimate and the margins that are checked in the status
+    line.
+
+    [`FailureRate`]: faultforge.experiment.FailureRate
+    [`Mean`]: faultforge.experiment.Mean
+    """
+
+    estimator: Estimator
+    """Produces the estimate whose margin is checked."""
+    min_samples: int = 0
+    """Minimum number of runs before checking the limits."""
+    max_absolute_margin: float | None = None
+    """Stop when the margin of error is at most this, in the estimate's units."""
+    max_relative_margin: float | None = None
+    """Stop when the margin of error is at most this percentage of the
+    estimated value, e.g. `1.0` means 1%."""
+
+    def __post_init__(self) -> None:
+        if self.max_absolute_margin is None and self.max_relative_margin is None:
+            raise ValueError(
+                "Stability requires max_absolute_margin, max_relative_margin or both"
+            )
+        for name, limit in (
+            ("max_absolute_margin", self.max_absolute_margin),
+            ("max_relative_margin", self.max_relative_margin),
+        ):
+            if limit is not None and not (math.isfinite(limit) and limit >= 0):
+                raise ValueError(f"{name} must be finite and >= 0, got {limit}")
 
     def __call__(self, experiment: Experiment) -> str | None:
-        if experiment.run_count() < self.min_samples:
+        # NOTE: estimated before checking `min_samples` so that problems such
+        # as an unusable golden score are reported before the first run.
+        estimate = experiment.estimate(self.estimator)
+        if experiment.run_count() < self.min_samples or estimate is None:
             return None
-        relative = relative_margin_of_error(
-            experiment.mean_score(), experiment.margin_of_error()
-        )
-        if relative is not None and relative <= self.threshold:
+
+        margin = estimate.margin()
+        if self.max_absolute_margin is not None and margin <= self.max_absolute_margin:
+            score_display = experiment.display().score_display()
+            limit = self._format_value(self.max_absolute_margin, score_display)
             return (
-                f"Reached stability threshold {self.threshold:.2f}% ({relative:.2f}%)"
+                f"Reached absolute margin of error {limit} "
+                f"({self._format_value(margin, score_display)})"
             )
+
+        relative = estimate.relative_margin()
+        if (
+            self.max_relative_margin is not None
+            and relative <= self.max_relative_margin
+        ):
+            return (
+                f"Reached relative margin of error {self.max_relative_margin:.2f}% "
+                f"({relative:.2f}%)"
+            )
+
         return None
+
+    @override
+    def status(self, experiment: Experiment, score_display: ScoreDisplay) -> str | None:
+        """Show the estimate and the margins checked against the limits.
+
+        For example `mean 1.00 [0.90, 1.10] (95% CI) | margin 0.10 (limit
+        0.05)`. Nothing is shown while there's no estimate.
+        """
+        estimate = experiment.estimate(self.estimator)
+        if estimate is None:
+            return None
+
+        def format_value(value: float) -> str:
+            return self._format_value(value, score_display)
+
+        margins: list[str] = []
+        if self.max_absolute_margin is not None:
+            margins.append(
+                f"{format_value(estimate.margin())} "
+                f"(limit {format_value(self.max_absolute_margin)})"
+            )
+        if self.max_relative_margin is not None:
+            margins.append(
+                f"{estimate.relative_margin():.2f}% of value "
+                f"(limit {self.max_relative_margin:.2f}%)"
+            )
+
+        confidence_percent = round(CONFIDENCE_LEVEL * 100)
+        return (
+            f"{self.estimator.name()} {format_value(estimate.value)} "
+            f"[{format_value(estimate.lower)}, {format_value(estimate.upper)}] "
+            f"({confidence_percent}% CI) | margin {', '.join(margins)}"
+        )
+
+    def _format_value(self, value: float, score_display: ScoreDisplay) -> str:
+        # NOTE: score formats may be padded for alignment, which looks odd
+        # inside brackets and parentheses.
+        return self.estimator.format_value(value, score_display).strip()
 
 
 @dataclass(slots=True)

@@ -2,11 +2,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from faultforge._impl.experiment.helper import relative_margin_of_error
-from faultforge._impl.experiment.stop import (
-    Stability,
-    StopCondition,
-)
 from faultforge._impl.io import AnyPath
 
 
@@ -28,11 +23,9 @@ class ExperimentDisplay:
 
     Returned by `Experiment.display`; nothing here is stored on the experiment,
     it's computed on demand. Override any piece to customize; the default
-    renders `[Run n]: name = score unit | mean ± moe (95% CI) | Relative MoE: x%
-    of mean`, with the `Relative MoE` fragment only shown when a `Stability`
-    condition is among the ones currently configured on `run_loop` - it's the
-    exact quantity `Stability` checks against its threshold, so it has nothing
-    to say if there's no threshold to preview.
+    renders `[Run n]: name = score | condition status | ...`, where each
+    condition status comes from a stop condition subclassing
+    `StatusReporter`, such as `Stability`.
     """
 
     def score_display(self) -> ScoreDisplay:
@@ -70,53 +63,27 @@ class ExperimentDisplay:
         *,
         run_count: int,
         score: float,
-        mean: float | None,
-        margin_of_error: float | None,
-        stop_conditions: Sequence[StopCondition] = (),
+        condition_status: Sequence[str] = (),
     ) -> str:
         """Compose the full status line from the pieces above.
 
-        `stop_conditions` is whatever's currently configured on `run_loop`
-        (both intrinsic and caller-supplied), passed through so a subclass can
-        shape its output around what's actually being checked - the default
-        implementation uses it only to decide whether to show `Relative MoE`.
+        `condition_status` holds the fragments of the stop conditions
+        currently configured on `run_loop`, in order.
         """
         parts: list[str] = [self.progress_label(run_count), ": "]
 
         score_display = self.score_display()
 
-        # NOTE: build only exists so early returns can be used while still
-        # applying `extra` to the end.
-        def build() -> None:
-            score_name = score_display.display_name()
-            if score_name is not None:
-                parts.append(score_name)
-                parts.append(" = ")
-            del score_name
+        score_name = score_display.display_name()
+        if score_name is not None:
+            parts.append(score_name)
+            parts.append(" = ")
 
-            parts.append(score_display.format_score(score))
+        parts.append(score_display.format_score(score))
 
-            if mean is None:
-                return
+        for status in condition_status:
             parts.append(" | ")
-            parts.append(f"mean {score_display.format_score(mean)}")
-
-            if margin_of_error is None:
-                return
-            parts.append(f" ±{score_display.format_score(margin_of_error)} (95% CI)")
-
-            has_stability = any(
-                isinstance(condition, Stability) for condition in stop_conditions
-            )
-            if not has_stability:
-                return
-
-            relative = relative_margin_of_error(mean, margin_of_error)
-            if relative is None:
-                return
-            parts.append(f" | Relative MoE: {relative:.2f}% of mean")
-
-        build()
+            parts.append(status)
 
         if extra := self.extra():
             parts.append(extra)

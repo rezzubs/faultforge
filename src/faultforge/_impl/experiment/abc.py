@@ -9,13 +9,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import IO, Self
 
-import scipy.stats
-
 from faultforge._impl.experiment.config import (
     ExperimentDisplay,
     SaveConfig,
 )
-from faultforge._impl.experiment.stop import StopCondition
+from faultforge._impl.experiment.estimate import (
+    Estimate,
+    Estimator,
+)
+from faultforge._impl.experiment.stop import (
+    StatusReporter,
+    StopCondition,
+)
 from faultforge._impl.io import (
     AnyPath,
     is_compressed,
@@ -37,8 +42,11 @@ class Experiment(abc.ABC):
 
     - `run`: perform one iteration and record it internally, any way you like.
     - `scores`: report every recorded score so far, in run order, as plain
-      floats. This is the only view the generic machinery below needs, so it
-      never has to know your result type.
+      floats. Together with `golden_score` this is the only view the generic
+      machinery below needs, so it never has to know your result type.
+    - `golden_score` (optional): the score of a fault-free reference run, for
+      estimators that compare runs against it (e.g. `FailureRate` with a
+      `RelativeThreshold`).
     - `display`: describe how to format your score, via `ExperimentDisplay`.
     - `serialize` / `deserialize`: turn your own state into a string and back.
       That's the only shape-specific part of persistence; `save`/`save_file`/
@@ -50,6 +58,9 @@ class Experiment(abc.ABC):
       own `Fingerprint` in `serialize`'s output and check it in `deserialize`
       via `Fingerprint.raise_if_differs`, which raises `FingerprintError` on
       a mismatch.
+
+    `estimate` summarizes the scores with an `Estimator`, such as `Mean` or
+    `FailureRate`.
 
     `run_loop` drives the experiment: it calls `run` repeatedly, prints progress
     via `format_status`, and stops once any `StopCondition` fires - including
@@ -72,6 +83,33 @@ class Experiment(abc.ABC):
     @abc.abstractmethod
     def scores(self) -> Sequence[float]:
         """Every score recorded so far, in the order the runs happened."""
+
+    def golden_score(self) -> float | None:
+        """The score of a fault-free reference run, or `None` if there is none.
+
+        Only requested when an `Estimator` needs it (see
+        `Estimator.requires_golden`), so an experiment may compute it lazily on
+        the first call. If it does, it should also include the value in
+        `serialize`, so resuming from a file doesn't recompute it. The default
+        implementation provides no golden score.
+        """
+        return None
+
+    def estimate(self, estimator: Estimator) -> Estimate | None:
+        """Summarize the current scores with `estimator`.
+
+        Requests `golden_score` only if `estimator` requires it. Raises a
+        `ValueError` if it's required but this experiment has none.
+        """
+        golden_score = None
+        if estimator.requires_golden():
+            golden_score = self.golden_score()
+            if golden_score is None:
+                raise ValueError(
+                    f"{estimator.name()} requires a golden score but "
+                    f"{type(self).__name__} doesn't provide one"
+                )
+        return estimator.estimate(self.scores(), golden_score)
 
     def display(self) -> ExperimentDisplay:
         """Describes how `format_status` should render this experiment's score."""
@@ -208,48 +246,31 @@ class Experiment(abc.ABC):
             if dirty and save_config is not None:
                 self.save_atomic(save_config.path, compressed=save_config.compressed)
 
-    def margin_of_error(self) -> float | None:
-        """Return the margin of error (half-width of the 95% confidence interval)
-        for the mean of the current set of scores.
-
-        None if there are less than 2 results.
-        """
-        scores = self.scores()
-        n = len(scores)
-        if n < 2:
-            return None
-        t = scipy.stats.t.ppf(0.975, df=n - 1)
-        return float(t * scipy.stats.sem(scores))
-
-    def mean_score(self) -> float | None:
-        """Return the mean of the current set of scores.
-
-        None if there are no results yet.
-        """
-        scores = self.scores()
-        if not scores:
-            return None
-        return float(sum(scores) / len(scores))
-
     def format_status(
         self, stop_conditions: Sequence[StopCondition] = ()
     ) -> str | None:
         """Formats the current status of the experiment as a str.
 
-        None if there are no results yet. `stop_conditions` lets a caller
-        (typically `run_loop`) tell the display what's currently configured;
-        it's `()` if called standalone, which `ExperimentDisplay` treats as
-        "nothing configured" rather than anything meaningful to report on.
+        None if there are no results yet. Every condition in `stop_conditions`
+        that subclasses `StatusReporter` adds its fragment to the status.
+        `run_loop` passes every condition that it checks.
         """
         scores = self.scores()
         if not scores:
             return None
-        return self.display().format(
+
+        display = self.display()
+        score_display = display.score_display()
+        condition_status = [
+            status
+            for condition in stop_conditions
+            if isinstance(condition, StatusReporter)
+            and (status := condition.status(self, score_display)) is not None
+        ]
+        return display.format(
             run_count=len(scores),
             score=scores[-1],
-            mean=self.mean_score(),
-            margin_of_error=self.margin_of_error(),
-            stop_conditions=stop_conditions,
+            condition_status=condition_status,
         )
 
 

@@ -17,11 +17,11 @@ from faultforge._impl.experiment.estimate import (
     Mean,
     RelativeThreshold,
 )
-from faultforge._impl.experiment.helper import relative_margin_of_error
 from faultforge._impl.experiment.stop import (
     AdditionalRuns,
     MaxRuns,
     Stability,
+    StatusReporter,
     StopCondition,
 )
 
@@ -39,6 +39,6 @@ __all__ = [
     "SaveConfig",
     "ScoreDisplay",
     "Stability",
+    "StatusReporter",
     "StopCondition",
-    "relative_margin_of_error",
 ]

@@ -25,6 +25,7 @@ from faultforge.encoding import (
 from faultforge.experiment import (
     AdditionalRuns,
     MaxRuns,
+    Mean,
     SaveConfig,
     Stability,
     StopCondition,
@@ -554,7 +555,11 @@ def record(
         else:
             min_samples = min_runs
         stop_conditions.append(
-            Stability(min_samples=min_samples, threshold=stability_threshold)
+            Stability(
+                estimator=Mean(),
+                min_samples=min_samples,
+                max_relative_margin=stability_threshold,
+            )
         )
 
     if runs is not None:

@@ -95,7 +95,7 @@ from encoded_memory import (
     ReliabilityMetric,
 )
 from faultforge.encoding import SecdedEncoder
-from faultforge.experiment import MaxRuns
+from faultforge.experiment import MaxRuns, Mean
 from faultforge.loading import Cifar, CifarDataset, CifarModel
 
 bundle = Cifar(model=CifarModel.ResNet20, dataset=CifarDataset.Cifar10)
@@ -109,7 +109,7 @@ experiment = EncodedFaultInjection(
 )
 experiment.run_loop(stop_conditions=[MaxRuns(total=20)])
 
-print("Mean accuracy:", experiment.mean_score())
+print("Mean accuracy:", experiment.estimate(Mean()))
 ```
 
 See [`docs/library.md`](docs/library.md) for a full walkthrough of the

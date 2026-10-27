@@ -1,6 +1,17 @@
 """Tests for Experiment.run_loop."""
 
-from faultforge.experiment import AdditionalRuns, MaxRuns, Stability
+import pytest
+
+from faultforge.experiment import (
+    AbsoluteThreshold,
+    AdditionalRuns,
+    FailureRate,
+    MaxRuns,
+    Mean,
+    RelativeThreshold,
+    Stability,
+)
+from faultforge.metric import ScoreDirection
 
 from .conftest import make
 
@@ -12,13 +23,19 @@ def test_run_loop_stops_at_additional_runs():
 
 
 def test_run_loop_stops_when_stable():
-    # Identical values -> margin of error = 0, below any positive threshold.
+    # Identical values -> margin of error = 0, below any positive limit.
     # The experiment already has min_samples+1 results so stability is
     # checked immediately.
     min_samples = 5
     exp = make([1.0] * (min_samples + 1))
     initial = exp.run_count()
-    exp.run_loop(stop_conditions=[Stability(min_samples=min_samples, threshold=0.01)])
+    exp.run_loop(
+        stop_conditions=[
+            Stability(
+                estimator=Mean(), min_samples=min_samples, max_relative_margin=0.01
+            )
+        ]
+    )
     assert exp.run_count() == initial
 
 
@@ -30,7 +47,7 @@ def test_run_loop_does_not_stop_before_min_samples():
     exp = make([1.0] * 3)
     exp.run_loop(
         stop_conditions=[
-            Stability(min_samples=10, threshold=999.0),
+            Stability(estimator=Mean(), min_samples=10, max_relative_margin=999.0),
             AdditionalRuns(3),
         ]
     )
@@ -43,7 +60,7 @@ def test_run_loop_continues_while_unstable():
     exp = make()
     exp.run_loop(
         stop_conditions=[
-            Stability(min_samples=2, threshold=0.0),
+            Stability(estimator=Mean(), min_samples=2, max_relative_margin=0.0),
             AdditionalRuns(20),
         ]
     )
@@ -51,13 +68,13 @@ def test_run_loop_continues_while_unstable():
 
 
 def test_run_loop_stability_check_with_single_sample_does_not_crash():
-    # min_samples=1 means the stability check runs while margin_of_error()
-    # still returns None (fewer than 2 results), which used to raise
+    # min_samples=1 means the stability check runs while the Mean estimate
+    # is still None (fewer than 2 results), which used to raise
     # UnboundLocalError instead of just continuing.
     exp = make()
     exp.run_loop(
         stop_conditions=[
-            Stability(min_samples=1, threshold=0.01),
+            Stability(estimator=Mean(), min_samples=1, max_relative_margin=0.01),
             AdditionalRuns(3),
         ]
     )
@@ -91,3 +108,72 @@ def test_run_loop_additional_runs_and_max_runs_combined_max_wins():
     exp = make([1.0, 2.0])
     exp.run_loop(stop_conditions=[AdditionalRuns(10), MaxRuns(4)])
     assert exp.run_count() == 4
+
+
+def test_run_loop_stops_at_absolute_margin():
+    # Incrementing values 1, 2, 3, ... -> the Mean margin is 2.0 or less from
+    # 5 runs on.
+    exp = make()
+    exp.run_loop(
+        stop_conditions=[
+            Stability(estimator=Mean(), max_absolute_margin=2.0),
+            AdditionalRuns(100),
+        ]
+    )
+    assert exp.run_count() == 5
+
+
+def test_run_loop_stops_at_first_reached_margin_limit():
+    # The relative limit is unreachable, the absolute one stops the loop.
+    exp = make()
+    exp.run_loop(
+        stop_conditions=[
+            Stability(
+                estimator=Mean(), max_absolute_margin=2.0, max_relative_margin=0.0
+            ),
+            AdditionalRuns(100),
+        ]
+    )
+    assert exp.run_count() == 5
+
+
+def test_run_loop_with_failure_rate():
+    # Every run's score is above the threshold, so the failure rate is 100%.
+    # The Wilson margin is at most 30 percentage points from 9 runs on.
+    exp = make()
+    exp.run_loop(
+        stop_conditions=[
+            Stability(
+                estimator=FailureRate(
+                    AbsoluteThreshold(0.0), ScoreDirection.LowerIsBetter
+                ),
+                max_absolute_margin=30.0,
+            ),
+            AdditionalRuns(100),
+        ]
+    )
+    assert exp.run_count() == 9
+
+
+def test_run_loop_rejects_missing_golden_before_any_runs():
+    exp = make()
+    stability = Stability(
+        estimator=FailureRate(RelativeThreshold(2.0), ScoreDirection.LowerIsBetter),
+        min_samples=10,
+        max_absolute_margin=1.0,
+    )
+    with pytest.raises(ValueError, match="golden"):
+        exp.run_loop(stop_conditions=[stability])
+    assert exp.run_count() == 0
+
+
+def test_run_loop_rejects_non_finite_golden_before_any_runs():
+    exp = make(golden_score=float("inf"))
+    stability = Stability(
+        estimator=FailureRate(RelativeThreshold(2.0), ScoreDirection.LowerIsBetter),
+        min_samples=10,
+        max_absolute_margin=1.0,
+    )
+    with pytest.raises(ValueError, match="golden"):
+        exp.run_loop(stop_conditions=[stability])
+    assert exp.run_count() == 0

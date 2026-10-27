@@ -114,29 +114,74 @@ In exchange, the base class provides:
 - `run_loop(*, stop_conditions=(), save_config=None)` - repeatedly calls
   `run()` until a stop condition fires (including Ctrl+C, handled cleanly so
   an in-flight run finishes before stopping), printing a status line each
-  iteration and optionally autosaving.
-- `mean_score()` / `margin_of_error()` - a 95% confidence interval over
-  `scores()`.
+  iteration and optionally autosaving. The results are also saved if an
+  exception stops the loop.
+- `estimate(estimator)` - summarize `scores()` with an `Estimator`, see below.
 - `save`/`save_atomic` and `load_from` - atomic (temp file + rename), so a
   crash mid-write can't corrupt the output file; both can transparently
   read/write zstd-compressed files (`compressed=True`, detected on load by
   sniffing the file's magic bytes, not its extension).
 
+A subclass can also implement `golden_score() -> float | None`, the score of a
+fault-free reference run. Estimators that compare runs against it request it
+only when needed, so it can be computed lazily.
+
+### Estimators
+
+An `Estimator` (`faultforge.experiment`) summarizes many scores as an
+`Estimate`: a `value` with a 95% confidence interval from `lower` to `upper`.
+`Estimate.margin()` is the larger distance from the value to a bound, and
+`Estimate.relative_margin()` is the margin as a percentage of the value.
+
+- `Mean()` - the mean, with a Student's t interval. Needs at least 2 scores.
+  Used for finite scores.
+- `FailureRate(threshold, direction)` - the percentage of runs that failed,
+  with a Wilson score interval. A run fails if its score is worse than the
+  threshold, according to a `ScoreDirection` (see `Metric.direction`).
+  Non-finite scores always count as failures. The threshold is either
+  - `RelativeThreshold(factor)` - `factor` times the golden score, e.g. `2.0`
+    for "more than twice the golden perplexity". Needs a finite, positive
+    golden score.
+  - `AbsoluteThreshold(score)` - a fixed score, e.g. `5.0` for "more than 5%
+    SDC". Doesn't need a golden score.
+
+```python
+from faultforge.experiment import FailureRate, Mean, RelativeThreshold
+from faultforge.metric import ScoreDirection
+
+mean = experiment.estimate(Mean())
+failure_rate = experiment.estimate(
+    FailureRate(RelativeThreshold(2.0), ScoreDirection.LowerIsBetter)
+)
+```
+
+### Stop conditions
+
 Stop conditions (`faultforge.experiment`) are plain callables you pass to
 `run_loop`:
 
-- `Stability(min_samples, threshold)` - stop once the mean's relative 95%
-  margin of error falls below `threshold` percent.
+- `Stability(*, estimator, min_samples=0, max_absolute_margin=None,
+  max_relative_margin=None)` - stop once the estimate's margin is at most
+  `max_absolute_margin` (in the estimate's units) or `max_relative_margin`
+  (percent of the value), whichever is reached first. At least one limit is
+  required. Shows the estimate and the checked margins in the status line.
+  Some estimates never reach a limit, e.g. a relative limit for a failure rate
+  of 0%, so it can be useful to add a `MaxRuns` as well.
 - `MaxRuns(total)` - stop once the total run count (including any loaded
   from a save file) reaches `total`.
 - `AdditionalRuns(count)` - stop after `count` more runs on top of however
   many already existed when first checked.
 
+A condition that subclasses `StatusReporter` adds a fragment to the status
+line, like `Stability` does.
+
 ```python
-from faultforge.experiment import SaveConfig, Stability
+from faultforge.experiment import Mean, SaveConfig, Stability
 
 experiment.run_loop(
-    stop_conditions=[Stability(min_samples=10, threshold=1.0)],
+    stop_conditions=[
+        Stability(estimator=Mean(), min_samples=10, max_relative_margin=1.0)
+    ],
     save_config=SaveConfig(
         path="result.json.zst", interval_seconds=30, compressed=True
     ),
@@ -167,7 +212,7 @@ from encoded_memory import (
     ReliabilityMetric,
 )
 from faultforge.encoding import SecdedEncoder
-from faultforge.experiment import MaxRuns, SaveConfig, Stability
+from faultforge.experiment import MaxRuns, Mean, SaveConfig, Stability
 from faultforge.loading import Cifar, CifarDataset, CifarModel
 
 bundle = Cifar(model=CifarModel.ResNet20, dataset=CifarDataset.Cifar10)
@@ -188,7 +233,7 @@ except FileNotFoundError:
 
 experiment.run_loop(
     stop_conditions=[
-        Stability(min_samples=10, threshold=1.0),
+        Stability(estimator=Mean(), min_samples=10, max_relative_margin=1.0),
         MaxRuns(total=200),
     ],
     save_config=save_config,
