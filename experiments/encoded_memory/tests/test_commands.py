@@ -1,5 +1,6 @@
 """Tests for the `encoded-memory` CLI's argument handling."""
 
+import click
 import pytest
 import torch
 import typer
@@ -155,7 +156,9 @@ def test_record_requires_batch_size():
     result = invoke_record("--dataset", "wikitext", "--sequence-length", "8")
 
     assert result.exit_code != 0
-    assert "--batch-size" in result.output
+    # Typer forces styled output when `GITHUB_ACTIONS` is set, and the styling
+    # splits option names apart, so match against the unstyled text.
+    assert "--batch-size" in click.unstyle(result.output)
 
 
 def test_record_rejects_stability_threshold_with_perplexity(resolved_revisions):
@@ -171,6 +174,6 @@ def test_record_rejects_stability_threshold_with_perplexity(resolved_revisions):
     )
 
     assert result.exit_code != 0
-    assert "--stability-threshold" in result.output
+    assert "--stability-threshold" in click.unstyle(result.output)
     # Rejected before anything is loaded.
     assert resolved_revisions == []
