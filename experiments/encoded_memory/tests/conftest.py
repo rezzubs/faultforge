@@ -5,7 +5,7 @@ from typing import override
 
 import torch
 from encoded_memory import EncodedFaultInjection
-from torch import nn
+from torch import Tensor, nn
 from torch.utils.data import TensorDataset
 
 from faultforge import Fingerprint
@@ -13,7 +13,11 @@ from faultforge.dataset import BatchedDataset, DeviceLike
 from faultforge.dtype import dtype_name
 from faultforge.encoding import IdentityEncoder
 from faultforge.loading import ModelBundle
-from faultforge.metric import Accuracy, Metric
+from faultforge.metric import (
+    Accuracy,
+    Metric,
+    ScoreDirection,
+)
 from faultforge.progress import Progress
 
 # `_` prefixed to not interpret it as a Test class.
@@ -74,6 +78,47 @@ class _FakeBundle(ModelBundle):
             kind="fake_bundle",
             scalars={"dtype": dtype_name(self._dtype)},
         )
+
+
+class _FixedScore(Metric[int]):
+    """A metric which ignores the model output and always gives the same score."""
+
+    def __init__(self, fixed_score: float) -> None:
+        self._fixed_score = fixed_score
+        self.score_calls = 0
+        """How many times `score` was called."""
+
+    @override
+    def evaluate_batch(
+        self,
+        batch_model_output: Tensor,
+        batch_golden: Tensor,
+        batch_targets: Tensor,
+    ) -> int:
+        _ = batch_model_output, batch_golden, batch_targets
+        return 0
+
+    @override
+    def requires_golden(self) -> bool:
+        return False
+
+    @override
+    def accumulate(self, existing: int, new: int) -> int:
+        return existing + new
+
+    @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.HigherIsBetter
+
+    @override
+    def score(self, result: int) -> float:
+        _ = result
+        self.score_calls += 1
+        return self._fixed_score
+
+    @override
+    def fingerprint(self) -> Fingerprint:
+        return Fingerprint(kind="fixed_score")
 
 
 def _make_experiment(

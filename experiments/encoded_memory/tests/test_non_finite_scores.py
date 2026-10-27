@@ -2,7 +2,6 @@
 
 import json
 import math
-from typing import override
 
 import pytest
 from encoded_memory import (
@@ -14,57 +13,17 @@ from encoded_memory import (
 )
 from hypothesis import given
 from hypothesis import strategies as st
-from torch import Tensor
 
 from faultforge import Fingerprint
-from faultforge.metric import (
-    Metric,
-    ScoreDirection,
-)
 
-from .conftest import _make_experiment
+from .conftest import (
+    _FixedScore,
+    _make_experiment,
+)
 
 NON_FINITE_SCORES = [math.nan, math.inf, -math.inf]
 
 any_float = st.floats(allow_nan=True, allow_infinity=True)
-
-
-class _FixedScore(Metric[int]):
-    """A metric which ignores the model output and always gives the same score."""
-
-    def __init__(self, fixed_score: float) -> None:
-        self._fixed_score = fixed_score
-
-    @override
-    def evaluate_batch(
-        self,
-        batch_model_output: Tensor,
-        batch_golden: Tensor,
-        batch_targets: Tensor,
-    ) -> int:
-        _ = batch_model_output, batch_golden, batch_targets
-        return 0
-
-    @override
-    def requires_golden(self) -> bool:
-        return False
-
-    @override
-    def accumulate(self, existing: int, new: int) -> int:
-        return existing + new
-
-    @override
-    def direction(self) -> ScoreDirection:
-        return ScoreDirection.HigherIsBetter
-
-    @override
-    def score(self, result: int) -> float:
-        _ = result
-        return self._fixed_score
-
-    @override
-    def fingerprint(self) -> Fingerprint:
-        return Fingerprint(kind="fixed_score")
 
 
 def same_scores(left: list[float], right: list[float]) -> bool:

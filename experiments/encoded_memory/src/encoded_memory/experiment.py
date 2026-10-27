@@ -113,6 +113,13 @@ class SavedResult(_ResultModel):
     result: ExperimentResult
     metric_display_name: str
     """The display name of the metric, used for plotting."""
+    golden_score: float | None = None
+    """The metric's score for the fault-free golden model.
+
+    Only computed when an estimator needs it (see
+    `EncodedFaultInjection.golden_score`), so it's `None` otherwise. Can be
+    non-finite, e.g. if the golden model's perplexity overflows.
+    """
 
     @classmethod
     def load(cls, path: AnyPath) -> SavedResult:
@@ -177,6 +184,7 @@ def discard_bitmasks_in_file(path: AnyPath) -> None:
         total_bits=loaded.total_bits,
         result=result,
         metric_display_name=loaded.metric_display_name,
+        golden_score=loaded.golden_score,
     ).model_dump_json()
 
     fd, temp_name = tempfile.mkstemp()
@@ -273,6 +281,8 @@ class EncodedFaultInjection[R](Experiment):
     _fingerprint: Fingerprint
     _show_fault_summary: bool
     _results: SimpleResults | DetailedResults
+    _golden_score: float | None
+    """Computed lazily, see `golden_score`."""
 
     _unencoded_golden: nn.Module | None
 
@@ -301,6 +311,7 @@ class EncodedFaultInjection[R](Experiment):
             if compare_bitwise
             else SimpleResults(results=[])
         )
+        self._golden_score = None
         self._show_fault_summary = fault_summary
         self._last_fault_summary = None
 
@@ -408,6 +419,7 @@ class EncodedFaultInjection[R](Experiment):
             total_bits=self._total_bits,
             result=self._results,
             metric_display_name=self._reliability_metric.display_name() or "",
+            golden_score=self._golden_score,
         ).model_dump_json()
 
     @override
@@ -416,6 +428,31 @@ class EncodedFaultInjection[R](Experiment):
         self._fingerprint.raise_if_differs(loaded.fingerprint)
         self._total_bits = loaded.total_bits
         self._results = loaded.result
+        # NOTE: the fingerprint matches, so a loaded golden score is still
+        # valid. Keep a computed one if the file doesn't have it yet.
+        if loaded.golden_score is not None:
+            self._golden_score = loaded.golden_score
+
+    @override
+    def golden_score(self) -> float:
+        """The metric's score for the fault-free golden model.
+
+        Computed with one inference pass over the dataset on the first call,
+        unless it was loaded from a file, and cached after that. The golden
+        model is the same one the metric compares against, see
+        `golden_is_encoded`.
+        """
+        if self._golden_score is None:
+            golden_model = (
+                self._unencoded_golden
+                if self._unencoded_golden is not None
+                else self._model
+            )
+            with stage(self._progress, "Golden score"):
+                self._golden_score = self._reliability_metric.score(
+                    self._infer(golden_model)
+                )
+        return self._golden_score
 
     def _inject_faults(self) -> EncodedModule:
         """Clone the model and flip `self._faulty_bit_count` unique random bits in it."""
@@ -470,7 +507,7 @@ class EncodedFaultInjection[R](Experiment):
 
         return bitmask
 
-    def _infer(self, model: EncodedModule) -> R:
+    def _infer(self, model: nn.Module) -> R:
         """Run inference on `model` over the dataset, scored by `self._reliability_metric`."""
         result = None
 

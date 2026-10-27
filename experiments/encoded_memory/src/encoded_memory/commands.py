@@ -23,9 +23,13 @@ from faultforge.encoding import (
     SecdedEncoder,
 )
 from faultforge.experiment import (
+    AbsoluteThreshold,
     AdditionalRuns,
+    Estimator,
+    FailureRate,
     MaxRuns,
     Mean,
+    RelativeThreshold,
     SaveConfig,
     Stability,
     StopCondition,
@@ -101,6 +105,76 @@ def _resolve_metric(
             param_hint="--reliability-metric",
         )
     return metric
+
+
+class EstimateChoice(enum.StrEnum):
+    Mean = "mean"
+    FailureRate = "failure-rate"
+
+
+def _resolve_stability(
+    metric: Metric,
+    *,
+    estimate: EstimateChoice,
+    relative_failure_threshold: float | None,
+    absolute_failure_threshold: float | None,
+    max_relative_margin: float | None,
+    max_absolute_margin: float | None,
+    min_runs: int | None,
+) -> Stability | None:
+    """Build the `Stability` condition for the margin options, if any are given."""
+    if max_relative_margin is None and max_absolute_margin is None:
+        for is_set, option in [
+            (estimate != EstimateChoice.Mean, "--estimate"),
+            (relative_failure_threshold is not None, "--relative-failure-threshold"),
+            (absolute_failure_threshold is not None, "--absolute-failure-threshold"),
+        ]:
+            if is_set:
+                raise typer.BadParameter(
+                    f"{option} only applies with --max-relative-margin or "
+                    "--max-absolute-margin",
+                    param_hint=option,
+                )
+        return None
+
+    estimator: Estimator
+    match estimate:
+        case EstimateChoice.Mean:
+            for value, option in [
+                (relative_failure_threshold, "--relative-failure-threshold"),
+                (absolute_failure_threshold, "--absolute-failure-threshold"),
+            ]:
+                if value is not None:
+                    raise typer.BadParameter(
+                        f"{option} only applies to --estimate failure-rate",
+                        param_hint=option,
+                    )
+            estimator = Mean()
+        case EstimateChoice.FailureRate:
+            threshold: RelativeThreshold | AbsoluteThreshold
+            try:
+                match (relative_failure_threshold, absolute_failure_threshold):
+                    case (None, None) | (float(), float()):
+                        raise typer.BadParameter(
+                            "--estimate failure-rate requires exactly one of "
+                            "--relative-failure-threshold or "
+                            "--absolute-failure-threshold",
+                            param_hint="--estimate",
+                        )
+                    case (float(), None):
+                        threshold = RelativeThreshold(relative_failure_threshold)
+                    case (None, float()):
+                        threshold = AbsoluteThreshold(absolute_failure_threshold)
+            except ValueError as error:
+                raise typer.BadParameter(str(error)) from error
+            estimator = FailureRate(threshold, metric.direction())
+
+    return Stability(
+        estimator=estimator,
+        min_samples=min_runs if min_runs is not None else 0,
+        max_absolute_margin=max_absolute_margin,
+        max_relative_margin=max_relative_margin,
+    )
 
 
 def _init_model_bundle(
@@ -435,30 +509,68 @@ def record(
     runs: Annotated[
         int | None,
         typer.Option(
-            help="Run the experiment N additional times on top of any existing results (e.g. loaded via --output). Incompatible with --min-runs and --stability-threshold. Can be combined with --max-runs.",
+            help="Run the experiment N additional times on top of any existing results (e.g. loaded via --output). Incompatible with --min-runs, --max-relative-margin and --max-absolute-margin. Can be combined with --max-runs.",
             rich_help_panel="Recording Settings",
         ),
     ] = None,
     max_runs: Annotated[
         int | None,
         typer.Option(
-            help="Stop once the results contain N runs in total, including any already loaded via --output. Can be combined with --runs or --stability-threshold.",
+            help="Stop once the results contain N runs in total, including any already loaded via --output. Can be combined with --runs or the margin limits.",
             rich_help_panel="Recording Settings",
         ),
     ] = None,
     min_runs: Annotated[
         int | None,
         typer.Option(
-            help="Make sure the results contain at least N runs.",
+            help="Make sure the results contain at least N runs before the margin limits are checked.",
             rich_help_panel="Recording Settings",
         ),
     ] = None,
-    stability_threshold: Annotated[
+    max_relative_margin: Annotated[
         float | None,
         typer.Option(
             min=0.0,
-            max=100.0,
-            help="Run until the mean has a margin of error smaller or equal to N% of the mean value at 95% confidence.",
+            help="Run until the estimate's margin of error at 95% confidence is at most N% of the estimated value. "
+            "Never reached while the value is 0, e.g. a failure rate without failures. "
+            "Can be combined with --max-absolute-margin, whichever is reached first stops.",
+            rich_help_panel="Recording Settings",
+        ),
+    ] = None,
+    max_absolute_margin: Annotated[
+        float | None,
+        typer.Option(
+            min=0.0,
+            help="Run until the estimate's margin of error at 95% confidence is at most N, in the "
+            "estimate's units (percentage points for failure-rate). "
+            "Can be combined with --max-relative-margin, whichever is reached first stops.",
+            rich_help_panel="Recording Settings",
+        ),
+    ] = None,
+    estimate: Annotated[
+        EstimateChoice,
+        typer.Option(
+            help="What the margin limits apply to. `mean` is the mean score; it "
+            "stops with an error at the first non-finite score, e.g. an infinite perplexity. "
+            "`failure-rate` is the percentage of runs whose score is worse than a failure "
+            "threshold; non-finite scores always count as failures.",
+            rich_help_panel="Recording Settings",
+        ),
+    ] = EstimateChoice.Mean,
+    relative_failure_threshold: Annotated[
+        float | None,
+        typer.Option(
+            help="With --estimate failure-rate: a run fails if its score is worse than N times the "
+            "golden model's score, e.g. 2.0 for perplexity or 0.5 for accuracy. The golden score "
+            "is computed once and saved to --output. Requires a finite, positive golden score.",
+            rich_help_panel="Recording Settings",
+        ),
+    ] = None,
+    absolute_failure_threshold: Annotated[
+        float | None,
+        typer.Option(
+            help="With --estimate failure-rate: a run fails if its score is worse than N, in the "
+            "metric's units, e.g. 5.0 for 5% SDC.",
             rich_help_panel="Recording Settings",
         ),
     ] = None,
@@ -471,13 +583,16 @@ def record(
     ] = "cpu",
 ) -> None:
     """Run an encoded memory fault injection experiment and record the results."""
-    metric = _resolve_metric(dataset, reliability_metric)
-    if metric == MetricChoice.Perplexity and stability_threshold is not None:
-        raise typer.BadParameter(
-            "--stability-threshold can't be used with perplexity. A single run with "
-            "an infinite perplexity makes the mean and its margin of error undefined.",
-            param_hint="--stability-threshold",
-        )
+    metric = _resolve_metric(dataset, reliability_metric).into_metric()
+    stability = _resolve_stability(
+        metric,
+        estimate=estimate,
+        relative_failure_threshold=relative_failure_threshold,
+        absolute_failure_threshold=absolute_failure_threshold,
+        max_relative_margin=max_relative_margin,
+        max_absolute_margin=max_absolute_margin,
+        min_runs=min_runs,
+    )
 
     dtype = torch.float16 if f16 else torch.float32
     bundle = _init_model_bundle(
@@ -497,8 +612,10 @@ def record(
         secded=secded,
     )
 
-    if stability_threshold is not None and runs is not None:
-        raise typer.BadParameter("Cannot specify both --stability-threshold and --runs")
+    if stability is not None and runs is not None:
+        raise typer.BadParameter(
+            "Cannot specify both --runs and --max-relative-margin/--max-absolute-margin"
+        )
     if runs is not None and min_runs is not None:
         raise typer.BadParameter("Cannot specify both --runs and --min-runs")
 
@@ -520,7 +637,7 @@ def record(
     experiment = EncodedFaultInjection(
         bundle,
         encoder,
-        reliability_metric=metric.into_metric(),
+        reliability_metric=metric,
         golden_is_encoded=golden_is_encoded,
         faults=faults_,
         compare_bitwise=compare_bitwise,
@@ -549,18 +666,8 @@ def record(
             path=output, interval_seconds=autosave, compressed=effective_compressed
         )
 
-    if stability_threshold is not None:
-        if min_runs is None:
-            min_samples = 0
-        else:
-            min_samples = min_runs
-        stop_conditions.append(
-            Stability(
-                estimator=Mean(),
-                min_samples=min_samples,
-                max_relative_margin=stability_threshold,
-            )
-        )
+    if stability is not None:
+        stop_conditions.append(stability)
 
     if runs is not None:
         stop_conditions.append(AdditionalRuns(runs))

@@ -7,14 +7,30 @@ import typer
 from encoded_memory import commands
 from encoded_memory.commands import (
     DatasetChoice,
+    EstimateChoice,
     MetricChoice,
     _init_model_bundle,
     _resolve_metric,
+    _resolve_stability,
     app,
 )
 from typer.testing import CliRunner
 
+from faultforge.experiment import (
+    AbsoluteThreshold,
+    FailureRate,
+    Mean,
+    RelativeThreshold,
+    Stability,
+)
 from faultforge.loading import Cifar, WikiTextBundle
+from faultforge.metric import (
+    Accuracy,
+    Metric,
+    Perplexity,
+    ScoreDirection,
+    Sdc,
+)
 
 REVISION = "0123456789abcdef0123456789abcdef01234567"
 
@@ -161,7 +177,7 @@ def test_record_requires_batch_size():
     assert "--batch-size" in click.unstyle(result.output)
 
 
-def test_record_rejects_stability_threshold_with_perplexity(resolved_revisions):
+def test_record_rejects_estimate_without_margin_limit(resolved_revisions):
     result = invoke_record(
         "--dataset",
         "wikitext",
@@ -169,11 +185,114 @@ def test_record_rejects_stability_threshold_with_perplexity(resolved_revisions):
         "1",
         "--sequence-length",
         "8",
-        "--stability-threshold",
-        "1",
+        "--estimate",
+        "failure-rate",
     )
 
     assert result.exit_code != 0
-    assert "--stability-threshold" in click.unstyle(result.output)
+    assert "--estimate" in click.unstyle(result.output)
     # Rejected before anything is loaded.
     assert resolved_revisions == []
+
+
+def resolve_stability(
+    metric: Metric | None = None,
+    *,
+    estimate: EstimateChoice = EstimateChoice.Mean,
+    relative_failure_threshold: float | None = None,
+    absolute_failure_threshold: float | None = None,
+    max_relative_margin: float | None = None,
+    max_absolute_margin: float | None = 1.0,
+    min_runs: int | None = None,
+):
+    return _resolve_stability(
+        metric if metric is not None else Perplexity(),
+        estimate=estimate,
+        relative_failure_threshold=relative_failure_threshold,
+        absolute_failure_threshold=absolute_failure_threshold,
+        max_relative_margin=max_relative_margin,
+        max_absolute_margin=max_absolute_margin,
+        min_runs=min_runs,
+    )
+
+
+def test_no_stability_without_margin_limits():
+    assert resolve_stability(max_absolute_margin=None) is None
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"estimate": EstimateChoice.FailureRate},
+        {"relative_failure_threshold": 2.0},
+        {"absolute_failure_threshold": 2.0},
+    ],
+)
+def test_estimate_options_require_a_margin_limit(arguments: dict):
+    with pytest.raises(typer.BadParameter, match="margin"):
+        _ = resolve_stability(max_absolute_margin=None, **arguments)
+
+
+def test_stability_defaults_to_mean():
+    stability = resolve_stability(max_relative_margin=1.0, min_runs=5)
+
+    assert stability == Stability(
+        estimator=Mean(),
+        min_samples=5,
+        max_absolute_margin=1.0,
+        max_relative_margin=1.0,
+    )
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [{"relative_failure_threshold": 2.0}, {"absolute_failure_threshold": 2.0}],
+)
+def test_mean_rejects_failure_thresholds(arguments: dict):
+    with pytest.raises(typer.BadParameter, match="failure-rate"):
+        _ = resolve_stability(estimate=EstimateChoice.Mean, **arguments)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [{}, {"relative_failure_threshold": 2.0, "absolute_failure_threshold": 2.0}],
+)
+def test_failure_rate_requires_exactly_one_threshold(arguments: dict):
+    with pytest.raises(typer.BadParameter, match="exactly one"):
+        _ = resolve_stability(estimate=EstimateChoice.FailureRate, **arguments)
+
+
+@pytest.mark.parametrize(
+    ("metric", "direction"),
+    [
+        (Perplexity(), ScoreDirection.LowerIsBetter),
+        (Accuracy(), ScoreDirection.HigherIsBetter),
+    ],
+)
+def test_failure_rate_direction_comes_from_metric(
+    metric: Metric, direction: ScoreDirection
+):
+    stability = resolve_stability(
+        metric, estimate=EstimateChoice.FailureRate, relative_failure_threshold=2.0
+    )
+
+    assert stability is not None
+    assert stability.estimator == FailureRate(RelativeThreshold(2.0), direction)
+
+
+def test_failure_rate_absolute_threshold():
+    stability = resolve_stability(
+        Sdc(), estimate=EstimateChoice.FailureRate, absolute_failure_threshold=5.0
+    )
+
+    assert stability is not None
+    assert stability.estimator == FailureRate(
+        AbsoluteThreshold(5.0), ScoreDirection.LowerIsBetter
+    )
+
+
+def test_failure_rate_rejects_invalid_threshold():
+    with pytest.raises(typer.BadParameter, match="factor"):
+        _ = resolve_stability(
+            estimate=EstimateChoice.FailureRate, relative_failure_threshold=0.0
+        )

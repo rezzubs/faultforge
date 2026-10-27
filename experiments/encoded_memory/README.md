@@ -154,8 +154,8 @@ into help panels:
 - **Recording Settings**: `--output`, `--autosave` (seconds between
   autosaves), `--compress` (zstd, for new output files), `--overwrite`
   (discard a mismatched existing `--output` instead of aborting), `--runs`/
-  `--max-runs`/`--min-runs`/`--stability-threshold` for controlling how long
-  to run.
+  `--max-runs`/`--min-runs` and the margin limits (see below) for controlling
+  how long to run.
 - **Misc Settings**: `--device`.
 
 ```sh
@@ -163,16 +163,14 @@ encoded-memory record \
   --dataset cifar10 --model resnet20 --batch-size 256 \
   --secded 64 \
   --bit-error-rate 1e-3 \
-  --stability-threshold 1.0 \
+  --max-relative-margin 1.0 \
   --output result.json.zst --compress \
   --fault-summary
 ```
 
 With `wikitext`, `--model` is any causal language model on the HuggingFace
 Hub. `--model-revision` (default `main`) is resolved to a commit hash, which
-is what gets recorded. A single diverged run makes the mean perplexity
-infinite, so `--stability-threshold` isn't available there; use `--runs` or
-`--max-runs` instead:
+is what gets recorded.
 
 ```sh
 encoded-memory record \
@@ -181,6 +179,45 @@ encoded-memory record \
   --secded 64 \
   --bit-error-rate 1e-6 \
   --runs 100 \
+  --output gpt2.json.zst --compress
+```
+
+#### Margin limits
+
+`--max-relative-margin N` and `--max-absolute-margin N` run until an
+estimate's 95% margin of error is at most N, as a percentage of the estimated
+value or in the estimate's own units. With both, whichever is reached first
+stops. `--min-runs` delays the check, `--max-runs` caps the run count.
+`--estimate` picks what the limits apply to:
+
+- `mean` (default) - the mean score. Stops with an error at the first
+  non-finite score, since the mean of scores that can diverge (like an
+  infinite perplexity) isn't meaningful.
+- `failure-rate` - the percentage of runs whose score is worse than a failure
+  threshold, in percentage points for `--max-absolute-margin`. Non-finite
+  scores always count as failures, so it works for scores that can diverge.
+  Which direction is worse comes from the metric. Takes exactly one of:
+  - `--relative-failure-threshold N` - worse than N times the golden model's
+    score, e.g. `2.0` for perplexity. The golden score is computed once with
+    an extra inference pass and saved to `--output`. It must be finite and
+    positive, so this doesn't work for metrics whose golden score is 0
+    (`accuracy-degradation`, `sdc`, `top1-sdc`).
+  - `--absolute-failure-threshold N` - worse than N in the metric's units,
+    e.g. `5.0` for 5% SDC.
+
+A relative limit is never reached while the estimate is 0, e.g. a failure
+rate without failures. Combine it with `--max-absolute-margin` or
+`--max-runs` in that case. The absolute margin of a failure rate always
+reaches its limit eventually.
+
+```sh
+encoded-memory record \
+  --dataset wikitext --model openai-community/gpt2 \
+  --batch-size 8 --sequence-length 1024 \
+  --secded 64 \
+  --bit-error-rate 1e-6 \
+  --estimate failure-rate --relative-failure-threshold 2.0 \
+  --max-absolute-margin 2.0 \
   --output gpt2.json.zst --compress
 ```
 
