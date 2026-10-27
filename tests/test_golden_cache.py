@@ -9,7 +9,11 @@ from torch.utils.data import Dataset
 
 from faultforge._impl.dataset import BatchedDataset
 from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.metric import GoldenCache, Metric
+from faultforge._impl.metric import (
+    GoldenCache,
+    Metric,
+    ScoreDirection,
+)
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 
@@ -82,6 +86,10 @@ class _StubMetric(Metric[int]):
     @override
     def accumulate(self, existing: int, new: int) -> int:
         return existing + new
+
+    @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.HigherIsBetter
 
     @override
     def score(self, result: int) -> float:

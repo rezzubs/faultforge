@@ -14,7 +14,8 @@ Here's the full list of built-in metrics that this module provides:
 - [`Top1Sdc`]
 
 Every [`Metric`] is also a [`ScoreDisplay`], which describes how to present a
-score.
+score. [`Metric.direction`] tells whether higher or lower scores are better, as
+a [`ScoreDirection`].
 
 In addition to metrics, this module provides a [`GoldenCache`] type. This cache
 is meant to simplify working with metrics which rely on outputs from a golden
@@ -30,6 +31,7 @@ from faultforge._impl.metric import (
     Metric,
     Perplexity,
     PerplexityResult,
+    ScoreDirection,
     Sdc,
     SdcResult,
     Top1Sdc,
@@ -44,6 +46,7 @@ __all__ = [
     "Metric",
     "Perplexity",
     "PerplexityResult",
+    "ScoreDirection",
     "Sdc",
     "SdcResult",
     "Top1Sdc",

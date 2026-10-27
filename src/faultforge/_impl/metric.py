@@ -1,6 +1,7 @@
 """See [`faultforge.metric`]"""
 
 import abc
+import enum
 import math
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -16,6 +17,15 @@ from faultforge._impl.dataset import (
 from faultforge._impl.experiment.config import ScoreDisplay
 from faultforge._impl.fingerprint import Fingerprint
 from faultforge._impl.progress import Progress, stage
+
+
+class ScoreDirection(enum.Enum):
+    """Which direction of a score is better."""
+
+    HigherIsBetter = enum.auto()
+    """Higher scores are better, e.g. accuracy."""
+    LowerIsBetter = enum.auto()
+    """Lower scores are better, e.g. perplexity or SDC."""
 
 
 class Metric[R](ScoreDisplay, abc.ABC):
@@ -119,6 +129,16 @@ class Metric[R](ScoreDisplay, abc.ABC):
     @abc.abstractmethod
     def score(self, result: R) -> float:
         """Give a numeric "score" for the result."""
+
+    @abc.abstractmethod
+    def direction(self) -> ScoreDirection:
+        """Whether higher or lower scores of [`score`] are better.
+
+        The return value of this function is assumed to be constant for any
+        specific `Metric`.
+
+        [`score`]: Metric.score
+        """
 
     @abc.abstractmethod
     def fingerprint(self) -> Fingerprint:
@@ -267,6 +287,10 @@ class Accuracy(Metric[AccuracyResult]):
         return ratio_to_percent(result.correct_count / result.total_count)
 
     @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.HigherIsBetter
+
+    @override
     def fingerprint(self) -> Fingerprint:
         return Fingerprint(kind="accuracy")
 
@@ -359,6 +383,10 @@ class AccuracyDegradation(Metric[AccuracyDegradationResult]):
         )
 
     @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.LowerIsBetter
+
+    @override
     def fingerprint(self) -> Fingerprint:
         return Fingerprint(kind="accuracy_degredation")
 
@@ -431,6 +459,10 @@ class Sdc(Metric[SdcResult]):
         return ratio_to_percent(result.non_matching_count / result.total_count)
 
     @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.LowerIsBetter
+
+    @override
     def fingerprint(self) -> Fingerprint:
         return Fingerprint(kind="sdc")
 
@@ -482,6 +514,10 @@ class Top1Sdc(Metric[SdcResult]):
     @override
     def score(self, result: SdcResult) -> float:
         return Sdc().score(result)
+
+    @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.LowerIsBetter
 
     @override
     def fingerprint(self) -> Fingerprint:
@@ -679,6 +715,10 @@ class Perplexity(Metric[PerplexityResult]):
             return math.exp(result.cross_entropy_sum / result.token_count)
         except OverflowError:
             return math.inf
+
+    @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.LowerIsBetter
 
     @override
     def fingerprint(self) -> Fingerprint:

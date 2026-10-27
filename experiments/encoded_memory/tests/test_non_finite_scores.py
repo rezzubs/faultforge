@@ -17,7 +17,10 @@ from hypothesis import strategies as st
 from torch import Tensor
 
 from faultforge import Fingerprint
-from faultforge.metric import Metric
+from faultforge.metric import (
+    Metric,
+    ScoreDirection,
+)
 
 from .conftest import _make_experiment
 
@@ -49,6 +52,10 @@ class _FixedScore(Metric[int]):
     @override
     def accumulate(self, existing: int, new: int) -> int:
         return existing + new
+
+    @override
+    def direction(self) -> ScoreDirection:
+        return ScoreDirection.HigherIsBetter
 
     @override
     def score(self, result: int) -> float:
