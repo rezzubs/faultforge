@@ -9,6 +9,14 @@ from faultforge._impl.experiment.config import (
     SaveConfig,
     ScoreDisplay,
 )
+from faultforge._impl.experiment.estimate import (
+    AbsoluteThreshold,
+    Estimate,
+    Estimator,
+    FailureRate,
+    Mean,
+    RelativeThreshold,
+)
 from faultforge._impl.experiment.helper import relative_margin_of_error
 from faultforge._impl.experiment.stop import (
     AdditionalRuns,
@@ -18,10 +26,16 @@ from faultforge._impl.experiment.stop import (
 )
 
 __all__ = [
+    "AbsoluteThreshold",
     "AdditionalRuns",
+    "Estimate",
+    "Estimator",
     "Experiment",
     "ExperimentDisplay",
+    "FailureRate",
     "MaxRuns",
+    "Mean",
+    "RelativeThreshold",
     "SaveConfig",
     "ScoreDisplay",
     "Stability",
