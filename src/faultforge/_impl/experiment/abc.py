@@ -161,7 +161,11 @@ class Experiment(abc.ABC):
         stop_conditions: Sequence[StopCondition] = (),
         save_config: SaveConfig | None = None,
     ) -> None:
-        """Keep running until a stop condition is met, including Ctrl+C."""
+        """Keep running until a stop condition is met, including Ctrl+C.
+
+        If `save_config` is given, the results are also saved when an exception
+        stops the loop.
+        """
 
         interrupted = Interrupted()
         all_conditions = [*self.stop_conditions(), *stop_conditions, interrupted]
@@ -170,33 +174,39 @@ class Experiment(abc.ABC):
         passed_seconds = 0.0
         start = time.monotonic()
 
-        with interrupted:
-            while True:
-                reason = first_stop_reason(all_conditions, self)
-                if reason is not None:
-                    logger.info(reason)
-                    break
+        # NOTE: the final save also happens when the loop raises, so the runs
+        # recorded since the last autosave aren't lost.
+        try:
+            with interrupted:
+                while True:
+                    reason = first_stop_reason(all_conditions, self)
+                    if reason is not None:
+                        logger.info(reason)
+                        break
 
-                self.run()
-                print(self.format_status(all_conditions))
-                dirty = True
+                    self.run()
+                    dirty = True
+                    print(self.format_status(all_conditions))
 
-                if save_config is not None and save_config.interval_seconds is not None:
-                    now = time.monotonic()
-                    passed_seconds += now - start
-                    start = now
+                    if (
+                        save_config is not None
+                        and save_config.interval_seconds is not None
+                    ):
+                        now = time.monotonic()
+                        passed_seconds += now - start
+                        start = now
 
-                    if save_config.interval_seconds < passed_seconds:
-                        logger.debug(
-                            f"Passed {save_config.interval_seconds}s ({passed_seconds}) since last save"
-                        )
-                        self.save_atomic(
-                            save_config.path, compressed=save_config.compressed
-                        )
-                        passed_seconds = 0.0
-
-        if dirty and save_config is not None:
-            self.save_atomic(save_config.path, compressed=save_config.compressed)
+                        if save_config.interval_seconds < passed_seconds:
+                            logger.debug(
+                                f"Passed {save_config.interval_seconds}s ({passed_seconds}) since last save"
+                            )
+                            self.save_atomic(
+                                save_config.path, compressed=save_config.compressed
+                            )
+                            passed_seconds = 0.0
+        finally:
+            if dirty and save_config is not None:
+                self.save_atomic(save_config.path, compressed=save_config.compressed)
 
     def margin_of_error(self) -> float | None:
         """Return the margin of error (half-width of the 95% confidence interval)

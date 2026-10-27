@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from faultforge.experiment import AdditionalRuns, SaveConfig
+from faultforge.experiment import (
+    AdditionalRuns,
+    Experiment,
+    SaveConfig,
+)
 
 from .conftest import _TestResult, make
 
@@ -95,6 +99,39 @@ def test_run_loop_saves_at_end(tmp_path: Path):
     loaded = make()
     loaded.load_from(path)
     assert loaded.run_count() == 3
+
+
+def test_run_loop_saves_when_interrupted_by_an_exception(tmp_path: Path):
+    def fail_after_three_runs(experiment: Experiment) -> str | None:
+        if experiment.run_count() == 3:
+            raise RuntimeError("stop")
+        return None
+
+    exp = make()
+    path = tmp_path / "experiment.json"
+    with pytest.raises(RuntimeError, match="stop"):
+        exp.run_loop(
+            stop_conditions=[fail_after_three_runs],
+            save_config=SaveConfig(path=path, interval_seconds=None),
+        )
+    loaded = make()
+    loaded.load_from(path)
+    assert loaded.run_count() == 3
+
+
+def test_run_loop_does_not_save_without_new_runs(tmp_path: Path):
+    def fail_immediately(experiment: Experiment) -> str | None:
+        _ = experiment
+        raise RuntimeError("stop")
+
+    exp = make()
+    path = tmp_path / "experiment.json"
+    with pytest.raises(RuntimeError, match="stop"):
+        exp.run_loop(
+            stop_conditions=[fail_immediately],
+            save_config=SaveConfig(path=path, interval_seconds=None),
+        )
+    assert not path.exists()
 
 
 def test_parameter_mismatch(tmp_path: Path):
