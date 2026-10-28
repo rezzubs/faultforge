@@ -8,7 +8,7 @@ for recording results.
 `EncodedFaultInjection` runs a model whose parameters are stored through an
 [`Encoder`](../../docs/library.md#encoder--encoding), injects bit flips (or
 stuck-at faults) into that encoded memory, and scores the result according to
-a `ReliabilityMetric`: `Accuracy`, `AccuracyDegradation`, `Sdc` (Silent Data
+a [`Metric`](../../src/faultforge/metric.py): `Accuracy`, `AccuracyDegradation`, `Sdc` (Silent Data
 Corruption - any output logit changed vs. a golden model), `Top1Sdc`
 (Critical SDC - the top-1 prediction changed vs. a golden model) or
 `Perplexity` (for language models). `AccuracyDegradation`, `Sdc` and
@@ -257,7 +257,7 @@ experiment.run_loop(stop_conditions=[MaxRuns(total=50)])
 experiment.save_atomic("result.json")
 ```
 
-`ReliabilityMetric.Sdc`/`Top1Sdc`/`AccuracyDegradation` each additionally run
+`Sdc`, `Top1Sdc` and `AccuracyDegradation` each additionally run
 a golden (by default unencoded; pass `golden_is_encoded=True` to compare
 against the non-faulty *encoded* model instead) reference pass to score
 against.
@@ -270,12 +270,12 @@ from encoded_memory import SavedResult
 
 saved = SavedResult.load("result.json")
 saved.scores()  # every recorded run's score, in run order
-saved.reliability_metric()  # the ReliabilityMetric it was recorded with
+saved.metric_display_name  # the name of the metric it was recorded with
 saved.bit_error_rate()  # faults / total_bits
 ```
 
-When `compare_bitwise=True`, results are `DetailedResult` (per-run bitmasks
-included) rather than `SimpleResult`; `DetailedResult.discard_bitmasks()` (or
+When `compare_bitwise=True`, results are `DetailedResults` (per-run bitmasks
+included) rather than `SimpleResults`; `DetailedResults.discard_bitmasks()` (or
 the module-level `discard_bitmasks_in_file(path)`, which rewrites a saved
 file in place) drops them once they're no longer needed, shrinking the
-result down to a `SimpleResult`.
+result down to a `SimpleResults`.

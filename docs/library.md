@@ -208,13 +208,11 @@ fails with a precise reason instead of silently mixing incompatible data.
 ## Putting it together
 
 ```python
-from encoded_memory import (
-    EncodedFaultInjection,
-    ReliabilityMetric,
-)
+from encoded_memory import EncodedFaultInjection
 from faultforge.encoding import SecdedEncoder
 from faultforge.experiment import MaxRuns, Mean, SaveConfig, Stability
 from faultforge.loading import Cifar, CifarDataset, CifarModel
+from faultforge.metric import Accuracy
 
 bundle = Cifar(model=CifarModel.ResNet20, dataset=CifarDataset.Cifar10)
 encoder = SecdedEncoder(bits_per_chunk=64)
@@ -222,7 +220,8 @@ encoder = SecdedEncoder(bits_per_chunk=64)
 experiment = EncodedFaultInjection(
     bundle,
     encoder,
-    ReliabilityMetric.Accuracy,
+    Accuracy(),
+    batch_size=256,
     faults=1e-3,
 )
 
