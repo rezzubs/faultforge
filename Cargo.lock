@@ -46,7 +46,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "bindings"
-version = "0.0.0"
+version = "0.3.0"
 dependencies = [
  "memory",
  "numpy",
@@ -432,7 +432,7 @@ checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
 name = "memory"
-version = "0.0.0"
+version = "0.3.0"
 dependencies = [
  "criterion",
  "numpy",
@@ -526,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "picker"
-version = "0.0.0"
+version = "0.3.0"
 dependencies = [
  "proptest",
  "rand 0.10.1",

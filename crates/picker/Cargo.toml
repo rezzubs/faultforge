@@ -1,6 +1,7 @@
 [package]
 name = "picker"
 version.workspace = true
+publish = false
 edition.workspace = true
 
 [dependencies]
