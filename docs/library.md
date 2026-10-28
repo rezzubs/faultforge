@@ -18,7 +18,8 @@ from faultforge.loading import Cifar, CifarDataset, CifarModel
 bundle = Cifar(model=CifarModel.ResNet20, dataset=CifarDataset.Cifar10)
 ```
 
-`Cifar` and `ImageNet` are the two built-in bundles (`faultforge.loading`).
+`Cifar`, `ImageNet` and `WikiTextBundle` are the built-in bundles
+(`faultforge.loading`).
 To support a new model source, subclass `ModelBundle` and implement:
 
 - `load_model(device, *, dtype, progress) -> nn.Module`

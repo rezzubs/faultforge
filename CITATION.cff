@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: >-
+  If you use FaultForge in your work, please cite it as below. For the
+  techniques implemented in it, see docs/publications.md.
+type: software
+title: FaultForge
+abstract: >-
+  A toolkit for reproducible hardware fault-injection experiments on PyTorch
+  models.
+authors:
+  - family-names: Roots
+    given-names: Marten
+  - family-names: Loorits
+    given-names: Sven-Markus
+repository-code: https://github.com/rezzubs/faultforge
+license: UPL-1.0
+keywords:
+  - fault injection
+  - reliability
+  - error correcting codes
+  - deep neural networks
+  - pytorch

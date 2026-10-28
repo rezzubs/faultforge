@@ -3,7 +3,7 @@
 A [FaultForge](https://github.com/rezzubs/faultforge) experiment: fault
 injection into ECC-protected model parameters. Installing it provides both
 the `EncodedFaultInjection` library API and an `encoded-memory` CLI command
-for recording and plotting results.
+for recording results.
 
 `EncodedFaultInjection` runs a model whose parameters are stored through an
 [`Encoder`](../../docs/library.md#encoder--encoding), injects bit flips (or
@@ -33,7 +33,7 @@ this subdirectory of whichever repository revision you want:
 pip install 'encoded-memory @ git+https://github.com/rezzubs/faultforge.git@latest#subdirectory=experiments/encoded_memory'
 
 # a specific released version
-pip install 'encoded-memory @ git+https://github.com/rezzubs/faultforge.git@v0.2.1#subdirectory=experiments/encoded_memory'
+pip install 'encoded-memory @ git+https://github.com/rezzubs/faultforge.git@vX.Y.Z#subdirectory=experiments/encoded_memory'
 
 # a specific commit
 pip install 'encoded-memory @ git+https://github.com/rezzubs/faultforge.git@<commit-sha>#subdirectory=experiments/encoded_memory'
@@ -50,7 +50,7 @@ environment on first use and reuses that environment on later calls:
 uvx --from 'git+https://github.com/rezzubs/faultforge.git#subdirectory=experiments/encoded_memory' encoded-memory <command> --help
 ```
 
-Swap in `@latest`, `@v0.2.1`, or `@<commit-sha>` the same way as the `pip
+Swap in `@latest`, `@vX.Y.Z`, or `@<commit-sha>` the same way as the `pip
 install` variants above to pin a revision.
 
 Requires Python 3.14 or newer.
@@ -145,7 +145,7 @@ into help panels:
   `perplexity` for `wikitext` and `accuracy` otherwise).
 - **Fault Injection**: `--bit-error-rate`/`--ber` and `--faults` (mutually
   exclusive - a rate or an exact count), `--compare-bitwise` (record
-  per-run XOR bitmasks against the golden model; required by `heatmap`),
+  per-run XOR bitmasks against the golden model),
   `--fault-summary` (print a per-run histogram of bits flipped and, with
   `--compare-bitwise`, affected/masked counts).
 - **Encoding Settings**: `--secded N`, `--mset`, `--cep` (with
@@ -220,31 +220,6 @@ encoded-memory record \
   --max-absolute-margin 2.0 \
   --output gpt2.json.zst --compress
 ```
-
-### `compare`
-
-Plots reliability score vs. bit error rate, one line per configuration:
-
-```sh
-encoded-memory compare result-a.json result-b.json=Unprotected --row-by model
-```
-
-Accepts result files and/or directories (searched recursively), and
-automatically clusters results into "configurations" - everything in their
-`Fingerprint` matching except the bit error rate - so several recorded bit
-error rates of the same model/encoder/dtype become one line regardless of
-which file they came from. `--row-by`/`--col-by` facet the plot grid by a
-fingerprint-derived key (`Model`, `Dtype`, `Dataset`, `Metric`); `--percentile`
-plots a percentile instead of the mean; `--log-x` and `--output` control the
-axis scale and where the figure is saved (shown interactively otherwise).
-
-### `heatmap`
-
-Plots per-run score density: one panel against total residual (post-decode)
-faults, one against the faulty bit position. Requires results recorded with
-`--compare-bitwise`. Options include `--bins`, `--min-score`/`--max-score`
-and `--max-total-faults` (drop outlier runs), `--skip-multi-bit-faults`, and
-`--output`.
 
 ### `discard-bitmasks`
 

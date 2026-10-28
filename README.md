@@ -1,166 +1,118 @@
 # FaultForge
 
 [![CI](https://github.com/rezzubs/faultforge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rezzubs/faultforge/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Frezzubs%2Ffaultforge%2Fmain%2Fpyproject.toml&query=%24.project.license&label=license)](LICENSE)
+[![License](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Frezzubs%2Ffaultforge%2Fmain%2Fpyproject.toml&query=%24.project.license&label=license)](https://github.com/rezzubs/faultforge/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/faultforge)](https://pypi.org/project/faultforge/)
-[![Python](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Frezzubs%2Ffaultforge%2Fmain%2Fpyproject.toml&query=%24.project%5B%27requires-python%27%5D&label=python)](pyproject.toml)
+[![Python](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Frezzubs%2Ffaultforge%2Fmain%2Fpyproject.toml&query=%24.project%5B%27requires-python%27%5D&label=python)](https://github.com/rezzubs/faultforge/blob/main/pyproject.toml)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Built with Nix](https://img.shields.io/badge/built%20with-Nix-5277C3?logo=nixos&logoColor=white)](https://builtwithnix.org)
 
-A framework for running reproducible hardware fault-injection experiments on
-PyTorch models - with error-corrected memory reliability testing built in as
-its first experiment.
+A toolkit for reproducible hardware fault-injection experiments on PyTorch
+models.
 
-> [!NOTE]
-> `main` is the active development branch. For the latest release, see the [`latest`](https://github.com/rezzubs/faultforge/tree/latest) branch.
+## Design principles
+
+- **Standalone parts.** Each component is useful by itself. Encode a tensor,
+  inject faults into it, or summarize a list of scores without setting up
+  anything else.
+- **Built to fit together.** The same parts combine into complete,
+  resumable experiments with little glue code.
+- **Use as much or as little as you need.** Nothing forces you to adopt the
+  rest of the toolkit to use one piece of it.
+- **Extensible.** The built-in models, encodings, metrics and experiments
+  implement public base classes. Your own implementations plug in the same
+  way.
 
 ## Highlights
 
-- A reusable experiment framework ([`Experiment`](docs/library.md#experiment)):
-  automatic run loops, statistical stop conditions (run until a stable mean,
-  a fixed count, or Ctrl+C), and atomic, resumable, optionally
-  zstd-compressed saving.
-- [`Fingerprint`](docs/library.md#fingerprint)-based verification: resuming or
-  comparing a saved result against a changed configuration fails loudly with
-  a precise diff, instead of silently mixing incompatible data.
-- A generic and extensible system for [reliabilty
-  metrics](src/faultforge/metric.py).
-- A composable [encoding framework](experiments/encoded_memory/README.md#encoding-techniques)
-  (`Encoder`/`Encoding`, chainable via `EncoderSequence`) with three built-in
-  ECC-style techniques - SECDED (Hamming codes), MSET, and CEP - usable
-  standalone or combined.
-- An explicit fault model (bit flips and stuck-at faults) with a resumable,
-  repeat-free fault-location sampler, and a batched injection API built for
-  performance.
-- One ready-made experiment today,
-  [`encoded_memory`](experiments/encoded_memory/README.md): fault injection into
-  ECC-protected model parameters, with built-in CIFAR-10/100 and ImageNet
-  model/dataset loading and a CLI for recording and plotting results. It
-  doubles as the reference implementation to follow when adding a new
-  experiment.
-- Performance-critical bit-buffer, encoding, and fault-injection logic is
-  implemented in Rust and exposed to Python via PyO3.
+Building blocks:
+
+- [**Fault model**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#fault-injection-primitives) -
+  bit flips and stuck-at faults, a resumable repeat-free location sampler and
+  batched injection.
+- [**Encodings**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#encoder--encoding) -
+  SECDED (Hamming codes), MSET and CEP, usable alone or chained together, and
+  a wrapper that stores a model's parameters in encoded memory.
+- [**Metrics**](https://github.com/rezzubs/faultforge/blob/main/src/faultforge/metric.py) -
+  a generic system for reliability metrics.
+- [**Model loading**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#modelbundle) -
+  models bundled with their evaluation datasets. Image classifiers on
+  CIFAR-10/100 and ImageNet, and HuggingFace language models on WikiText, are
+  built in.
+
+Experiment harness:
+
+- [**Experiments**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#experiment) -
+  automatic run loops with clean Ctrl+C handling, and atomic, resumable,
+  optionally zstd-compressed saving.
+- [**Estimators**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#estimators) -
+  mean and failure rate, with 95% confidence intervals.
+- [**Stop conditions**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#stop-conditions) -
+  run until an estimate is stable, for a fixed number of runs, or until
+  interrupted.
+- [**Fingerprints**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#fingerprint) -
+  resuming a saved result with a changed configuration fails with a precise
+  diff instead of silently mixing incompatible data.
+
+Performance-critical paths are implemented in Rust.
+
+[`docs/library.md`](https://github.com/rezzubs/faultforge/blob/main/docs/library.md)
+walks through each part and ends with a complete example.
 
 ## Installation
 
-### Prebuilt packages from PyPI
-
-Using pip:
-
 ```sh
 pip install faultforge
-```
-
-Using uv:
-
-```sh
+# or
 uv add faultforge
 ```
 
+See [`docs/installation.md`](https://github.com/rezzubs/faultforge/blob/main/docs/installation.md)
+for building from source and installing specific revisions.
 
-[`faultforge`](https://pypi.org/project/faultforge/) is the only package
-published to PyPI - it's the framework only, with no CLI and no ready-made
-experiments. 
+## Reference experiment
 
-### Installing from source
+[Encoded Memory](https://github.com/rezzubs/faultforge/blob/main/experiments/encoded_memory/README.md)
+injects faults into ECC-protected model parameters. It's a complete
+experiment built on FaultForge and the reference implementation to follow when
+writing your own. It also provides an `encoded-memory` CLI for recording
+results.
 
-Building from source requires a Rust toolchain. Install one with your system
-package manager or via [rustup](https://rustup.rs/). This repository's root
-package is the `faultforge` library. Point pip at whichever revision you want:
+It lives in this repository and is released together with the library, but
+isn't published to PyPI. Its README covers installation.
 
-```sh
+## Stability
 
-# latest release (the latest branch tracks the most recent tagged release)
-pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@latest'
+FaultForge is experimental. Expect breaking changes in most releases, and
+check the [changelog](https://github.com/rezzubs/faultforge/blob/main/CHANGELOG.md)
+when upgrading. Versions follow [semver](https://semver.org/): while the
+version is `0.x`, minor releases can break and patch releases can't. A range
+like `faultforge>=0.3.0,<0.4.0` picks up only compatible releases.
 
-# a specific released version
-pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@v0.2.1'
+- `main` is the development branch and can break at any point. The
+  [`latest`](https://github.com/rezzubs/faultforge/tree/latest) branch tracks
+  the most recent release.
+- The Rust crates in this repository are internal and can change at any time.
+  They aren't published, and their version only mirrors the library's.
 
-# a specific commit
-pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git@<commit-sha>'
+## Publications
 
-# development (main is kept in sync with the newest code, can break at any point)
-pip install 'faultforge @ git+https://github.com/rezzubs/faultforge.git'
-```
+FaultForge has been used to develop and evaluate the techniques in several
+papers. See [`docs/publications.md`](https://github.com/rezzubs/faultforge/blob/main/docs/publications.md)
+for links and citations.
 
-Ready-made experiments (see [Experiments](#experiments) below) aren't published
-to PyPI - install one the same way, pointed at its own subdirectory under
-`experiments/` See each experiment's README for details.
+## License
 
-## Quick example
+FaultForge is licensed under the [Universal Permissive License (UPL),
+Version 1.0](https://github.com/rezzubs/faultforge/blob/main/LICENSE). It's
+an [OSI-approved](https://opensource.org/license/upl) permissive license that
+is about as short as MIT, but:
 
-```python
-from encoded_memory import (
-    EncodedFaultInjection,
-    ReliabilityMetric,
-)
-from faultforge.encoding import SecdedEncoder
-from faultforge.experiment import MaxRuns, Mean
-from faultforge.loading import Cifar, CifarDataset, CifarModel
+- includes an explicit patent grant, like Apache-2.0.
+- is compatible with both GPLv2 and GPLv3. Apache-2.0 isn't compatible with
+  GPLv2, which is why many projects dual-license under "MIT OR Apache-2.0".
+- extends the patent grant to larger works that include the software, not
+  only the software itself.
 
-bundle = Cifar(model=CifarModel.ResNet20, dataset=CifarDataset.Cifar10)
-encoder = SecdedEncoder(bits_per_chunk=64)
-
-experiment = EncodedFaultInjection(
-    bundle,
-    encoder,
-    ReliabilityMetric.Accuracy,
-    faults=1e-3,  # a bit error rate; pass an int instead for an exact fault count
-)
-experiment.run_loop(stop_conditions=[MaxRuns(total=20)])
-
-print("Mean accuracy:", experiment.estimate(Mean()))
-```
-
-See [`docs/library.md`](docs/library.md) for a full walkthrough of the
-framework's pieces and how they compose.
-
-## Experiments
-
-Ready-made experiments live under [`experiments/`](experiments) as their own
-packages, each pinned to a specific `faultforge` version rather than tracking
-`main`. There's one today, serving as the reference implementation for
-adding your own:
-
-- [Encoded Memory](experiments/encoded_memory/README.md) - fault injection into
-  ECC-protected model parameters, covering the available encoding techniques,
-  the `encoded-memory` CLI, and using the experiment directly as a library.
-
-## Citation
-
-### [Encoded Memory](experiments/encoded_memory/README.md)
-
-There are two papers related to the encoded memory experiment.
-
-
-#### Paper in DATE 2026
-
-Introduced the MSET technique as a zero cost alternative to ECCs.
-
-```bibtex
-@inproceedings{ahmadilivani2026late,
-  title={Late Breaking Results: Uncovering the Limits of ECCs in Vision Transformers and a Zero-Cost Reliability Enhancement},
-  author={Ahmadilivani, Mohammad Hasan and Roots, Marten and Restifo, Marco and Loorits, Sven-Markus and Di Mauro, Luca and Raik, Jaan},
-  booktitle={2026 Design, Automation \& Test in Europe Conference (DATE)},
-  pages={1--3},
-  year={2026},
-  organization={IEEE},
-  link={https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=11539549}
-}
-```
-
-
-#### Paper in IOLTS 2026
-
-Introduced the CEP technique:
-
-```bitext
-@article{ahmadilivani2026effective,
-  title={Effective and Memory-Efficient Alternatives to ECC for Reliable Large-Scale DNNs},
-  author={Ahmadilivani, Mohammad Hasan and Roots, Marten and Restifo, Marco and Loorits, Sven-Markus and Di Mauro, Luca and Raik, Jaan},
-  booktitle={The 32nd IEEE International Symposium on On-Line Testing and Robust System Design (IOLTS)},
-  year={2026},
-  organization={IEEE},
-  link={arXiv preprint arXiv:2605.07417}
-}
-```
+The main condition is the same as MIT's: keep the copyright and license notice
+in copies of the software.

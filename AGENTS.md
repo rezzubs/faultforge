@@ -2,8 +2,8 @@
 
 Guidance for agents working in this repository.
 
-This repository contains a library for reproducible hardware fault injection.
-experiments as well as experiments which use that library.
+This repository contains FaultForge, a toolkit for reproducible hardware
+fault-injection experiments, and a reference experiment built on it.
 
 ## Project structure
 
@@ -16,16 +16,24 @@ experiments as well as experiments which use that library.
   consumed as PyO3 extension modules.
   - `crates/bindings` - A PyO3 extension exposed to python as
     `faultforge._rust`.
-- `experiments/` - experiment packages built on `faultforge`.
-  - Each one depends on a semver-compatible range of `faultforge`, written out
-    explicitly (e.g. `>=0.3.0,<0.4` or `>=1.2.3,<2`). Compatible releases are
-    picked up without changes. Installs from outside the repository (e.g. a git
-    tag) get a matching version from PyPI.
-  - Experiments that are uv workspace members use the local `faultforge` source
-    instead, so library changes are checked against them immediately. uv checks
-    the range against the local version.
-  - To decouple an experiment from library changes, remove it from the
-    workspace, drop its `tool.uv.sources` entry and give it its own lockfile.
+  - The crates are internal and unpublished. Breaking changes in them don't
+    need a version bump unless they change the public Python API.
+- `experiments/encoded_memory` - The reference experiment built on
+  `faultforge`.
+  - It depends on a semver-compatible range of `faultforge`, written out
+    explicitly (e.g. `>=0.3.0,<0.4` or `>=1.2.3,<2`). Installs from outside the
+    repository (e.g. a git tag) get a matching version from PyPI.
+  - It's a uv workspace member, so it uses the local `faultforge` source and
+    library changes are checked against it immediately. uv checks the range
+    against the local version. It must stay in the workspace.
+- `docs/` - User-facing documentation. `README.md` uses absolute GitHub URLs
+  because it's also the PyPI description. Other docs use relative links.
+
+## Versioning
+
+The library, the reference experiment and the Rust crates share one version,
+bumped together on release. The release workflow checks that all of them
+match the tag.
 
 ## Commands
 

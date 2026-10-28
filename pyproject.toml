@@ -1,7 +1,7 @@
 [project]
 name = "faultforge"
 version = "0.3.0"
-description = "A framework for reproducible hardware fault-injection experiments on PyTorch models"
+description = "A toolkit for reproducible hardware fault-injection experiments on PyTorch models"
 readme = "README.md"
 license = "UPL-1.0"
 license-files = ["LICENSE"]

@@ -1,4 +1,4 @@
-"""The `encoded-memory` CLI commands (recording and plotting)."""
+"""The `encoded-memory` CLI commands."""
 
 import enum
 import logging
