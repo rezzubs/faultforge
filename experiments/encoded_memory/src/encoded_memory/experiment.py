@@ -283,6 +283,8 @@ class EncodedFaultInjection[R](Experiment):
     _results: SimpleResults | DetailedResults
     _golden_score: float | None
     """Computed lazily, see `golden_score`."""
+    _golden_score_unsaved: bool
+    """Whether `_golden_score` was computed since the last save."""
 
     _unencoded_golden: nn.Module | None
 
@@ -312,6 +314,7 @@ class EncodedFaultInjection[R](Experiment):
             else SimpleResults(results=[])
         )
         self._golden_score = None
+        self._golden_score_unsaved = False
         self._show_fault_summary = fault_summary
         self._last_fault_summary = None
 
@@ -452,7 +455,16 @@ class EncodedFaultInjection[R](Experiment):
                 self._golden_score = self._reliability_metric.score(
                     self._infer(golden_model)
                 )
+            self._golden_score_unsaved = True
         return self._golden_score
+
+    @override
+    def has_unsaved_changes(self) -> bool:
+        return self._golden_score_unsaved
+
+    @override
+    def on_saved(self) -> None:
+        self._golden_score_unsaved = False
 
     def _inject_faults(self) -> EncodedModule:
         """Clone the model and flip `self._faulty_bit_count` unique random bits in it."""

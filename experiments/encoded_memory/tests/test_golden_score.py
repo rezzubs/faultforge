@@ -131,3 +131,51 @@ def test_run_loop_rejects_non_finite_golden_score_before_any_runs():
     with pytest.raises(ValueError, match="golden"):
         experiment.run_loop(stop_conditions=[stability])
     assert experiment.run_count() == 0
+
+
+def test_run_loop_saves_golden_score_without_new_runs(tmp_path):
+    path = tmp_path / "result.json"
+    experiment = _make_experiment(
+        compare_bitwise=False, reliability_metric=_FixedScore(3.0)
+    )
+    stability = Stability(
+        estimator=FailureRate(RelativeThreshold(2.0), ScoreDirection.LowerIsBetter),
+        max_absolute_margin=1.0,
+    )
+
+    experiment.run_loop(
+        stop_conditions=[stability, MaxRuns(0)],
+        save_config=SaveConfig(path=path, interval_seconds=None),
+    )
+
+    loaded = SavedResult.load(path)
+    assert loaded.scores() == []
+    assert loaded.golden_score == 3.0
+
+
+def test_computed_golden_score_is_unsaved_until_saved(tmp_path):
+    experiment = _make_experiment(
+        compare_bitwise=False, reliability_metric=_FixedScore(3.0)
+    )
+    assert not experiment.has_unsaved_changes()
+
+    _ = experiment.golden_score()
+    assert experiment.has_unsaved_changes()
+
+    experiment.save(tmp_path / "result.json")
+    assert not experiment.has_unsaved_changes()
+
+
+def test_loaded_golden_score_isnt_unsaved():
+    source = _make_experiment(
+        compare_bitwise=False, reliability_metric=_FixedScore(3.0)
+    )
+    _ = source.golden_score()
+
+    experiment = _make_experiment(
+        compare_bitwise=False, reliability_metric=_FixedScore(3.0)
+    )
+    experiment.deserialize(source.serialize())
+    _ = experiment.golden_score()
+
+    assert not experiment.has_unsaved_changes()
