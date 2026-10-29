@@ -1,6 +1,7 @@
 """The `encoded-memory` CLI commands."""
 
 import enum
+import json
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -11,9 +12,10 @@ import typer
 import faultforge.metric as m
 from encoded_memory import (
     EncodedFaultInjection,
+    StabilityLimits,
+    check_saved,
     discard_bitmasks_in_file,
 )
-from encoded_memory.stability import StabilityLimits
 from faultforge.encoding import (
     CepEncoder,
     CepScheme,
@@ -702,6 +704,83 @@ def record(
             )
 
     experiment.run_loop(stop_conditions=stop_conditions, save_config=save_config)
+
+
+class _CheckExitCode(enum.IntEnum):
+    """The exit codes of `check`, from best to worst."""
+
+    Done = 0
+    ShouldRun = 1
+    # NOTE: 2 is click's exit code for bad arguments.
+    Error = 3
+
+
+@app.command(no_args_is_help=True)
+def check(
+    paths: Annotated[
+        list[Path],
+        typer.Argument(
+            help="Result files to check, as written by record --output. "
+            "A file that doesn't exist is reported as missing.",
+        ),
+    ],
+    max_runs: _MaxRunsOption = None,
+    min_runs: _MinRunsOption = None,
+    max_relative_margin: _MaxRelativeMarginOption = None,
+    max_absolute_margin: _MaxAbsoluteMarginOption = None,
+    estimate: _EstimateOption = EstimateChoice.Mean,
+    relative_failure_threshold: _RelativeFailureThresholdOption = None,
+    absolute_failure_threshold: _AbsoluteFailureThresholdOption = None,
+) -> None:
+    """Check whether saved result files need more runs to reach the limits.
+
+    Takes the same stop conditions as record. Doesn't load the model or
+    dataset.
+
+    Prints a JSON list to stdout, with one object per path. The status is one
+    of stable, max-runs, incomplete, missing or error.
+
+    Exit codes:
+
+    - 0: no file needs more runs.
+    - 1: a file is incomplete or missing.
+    - 3: a file couldn't be checked.
+
+    The worst one wins.
+    """
+    stability_limits = _resolve_stability_limits(
+        estimate=estimate,
+        relative_failure_threshold=relative_failure_threshold,
+        absolute_failure_threshold=absolute_failure_threshold,
+        max_relative_margin=max_relative_margin,
+        max_absolute_margin=max_absolute_margin,
+        min_runs=min_runs,
+    )
+    if stability_limits is None and max_runs is None:
+        raise typer.BadParameter(
+            "check requires --max-relative-margin, --max-absolute-margin or --max-runs"
+        )
+
+    entries: list[dict[str, object]] = []
+    exit_code = _CheckExitCode.Done
+    for path in paths:
+        try:
+            result = check_saved(path, stability=stability_limits, max_runs=max_runs)
+        # NOTE: one bad file shouldn't hide the status of the others. The
+        # error is reported in its entry, in the log and through the exit
+        # code, so nothing is swallowed.
+        except Exception as error:
+            logger.exception(f"Failed to check {path}")
+            entries.append({"path": str(path), "status": "error", "error": str(error)})
+            exit_code = max(exit_code, _CheckExitCode.Error)
+            continue
+
+        entries.append(result.to_dict())
+        if result.should_run():
+            exit_code = max(exit_code, _CheckExitCode.ShouldRun)
+
+    typer.echo(json.dumps(entries, indent=2))
+    raise typer.Exit(exit_code)
 
 
 @app.command()
