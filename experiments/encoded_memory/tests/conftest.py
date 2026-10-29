@@ -1,10 +1,15 @@
 """Shared test doubles for the encoded_memory experiment tests."""
 
 import json
+from pathlib import Path
 from typing import override
 
 import torch
-from encoded_memory import EncodedFaultInjection
+from encoded_memory import (
+    EncodedFaultInjection,
+    SavedResult,
+    SimpleResults,
+)
 from torch import Tensor, nn
 from torch.utils.data import TensorDataset
 
@@ -17,6 +22,7 @@ from faultforge.metric import (
     Accuracy,
     Metric,
     ScoreDirection,
+    Sdc,
 )
 from faultforge.progress import Progress
 
@@ -151,3 +157,33 @@ def _make_experiment(
 
 def _result(experiment: EncodedFaultInjection) -> dict:
     return json.loads(experiment.serialize())["result"]
+
+
+def _saved_result(
+    scores: list[float],
+    *,
+    metric: Metric | None = None,
+    golden_score: float | None = None,
+) -> SavedResult:
+    """A saved result that `metric` (SDC by default) scored, with `scores`."""
+    metric = metric if metric is not None else Sdc()
+    return SavedResult(
+        fingerprint=Fingerprint(
+            kind="encoded_memory_fault_injection",
+            scalars={"faults": 1},
+            children={"reliability_metric": [metric.fingerprint()]},
+        ),
+        total_bits=8,
+        result=SimpleResults(results=scores),
+        metric_display_name=metric.display_name() or "",
+        golden_score=golden_score,
+    )
+
+
+def _write_saved(
+    directory: Path, saved: SavedResult, name: str = "result.json"
+) -> Path:
+    """Write `saved` to the file `name` in `directory`."""
+    path = directory / name
+    _ = path.write_text(saved.model_dump_json())
+    return path
