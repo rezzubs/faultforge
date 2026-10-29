@@ -164,7 +164,11 @@ failure_rate = experiment.estimate(
 ### Stop conditions
 
 Stop conditions (`faultforge.experiment`) are plain callables you pass to
-`run_loop`:
+`run_loop`. They take a `RecordedRuns`, the part of `Experiment` that holds
+`scores()`, `golden_score()`, `estimate()`, `display()` and `run_count()`. So
+a condition can also be checked against runs that aren't a live experiment,
+e.g. results loaded from a file, by subclassing `RecordedRuns` and
+implementing `scores()`.
 
 - `Stability(*, estimator, min_samples=0, max_absolute_margin=None,
   max_relative_margin=None)` - stop once the estimate's margin is at most

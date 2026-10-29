@@ -11,6 +11,7 @@ from faultforge.experiment import (
     AdditionalRuns,
     Experiment,
     MaxRuns,
+    RecordedRuns,
     SaveConfig,
 )
 
@@ -104,8 +105,8 @@ def test_run_loop_saves_at_end(tmp_path: Path):
 
 
 def test_run_loop_saves_when_interrupted_by_an_exception(tmp_path: Path):
-    def fail_after_three_runs(experiment: Experiment) -> str | None:
-        if experiment.run_count() == 3:
+    def fail_after_three_runs(runs: RecordedRuns) -> str | None:
+        if runs.run_count() == 3:
             raise RuntimeError("stop")
         return None
 
@@ -122,8 +123,8 @@ def test_run_loop_saves_when_interrupted_by_an_exception(tmp_path: Path):
 
 
 def test_run_loop_does_not_save_without_new_runs(tmp_path: Path):
-    def fail_immediately(experiment: Experiment) -> str | None:
-        _ = experiment
+    def fail_immediately(runs: RecordedRuns) -> str | None:
+        _ = runs
         raise RuntimeError("stop")
 
     exp = make()

@@ -21,7 +21,7 @@ class SaveConfig:
 class ExperimentDisplay:
     """Formats an `Experiment`'s status line for `run_loop`.
 
-    Returned by `Experiment.display`; nothing here is stored on the experiment,
+    Returned by `RecordedRuns.display`; nothing here is stored on the experiment,
     it's computed on demand. Override any piece to customize; the default
     renders `[Run n]: name = score | condition status | ...`, where each
     condition status comes from a stop condition subclassing

@@ -1,6 +1,7 @@
 """The `Experiment` base class and related types.
 
-See `Experiment` for the full overview.
+See `Experiment` for the full overview. `RecordedRuns` is the part of it that
+stop conditions see.
 """
 
 from faultforge._impl.experiment.abc import Experiment
@@ -17,6 +18,7 @@ from faultforge._impl.experiment.estimate import (
     Mean,
     RelativeThreshold,
 )
+from faultforge._impl.experiment.recorded import RecordedRuns
 from faultforge._impl.experiment.stop import (
     AdditionalRuns,
     MaxRuns,
@@ -35,6 +37,7 @@ __all__ = [
     "FailureRate",
     "MaxRuns",
     "Mean",
+    "RecordedRuns",
     "RelativeThreshold",
     "SaveConfig",
     "ScoreDisplay",
