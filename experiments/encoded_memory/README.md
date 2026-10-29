@@ -234,6 +234,9 @@ encoded-memory check results/*.json.zst \
   --max-absolute-margin 2.0 --max-runs 1000
 ```
 
+A directory checks every `.json`, `.json.zst` and `.json.zstd` file below it,
+in sorted order. Symlinked directories aren't followed.
+
 It prints a JSON list to stdout, with one object per path:
 
 ```json
@@ -254,7 +257,8 @@ The `status` is one of:
 - `max-runs` - `--max-runs` is reached.
 - `incomplete` - neither is reached yet. If the margins need a golden score
   that the file doesn't have yet, the `reason` says so.
-- `missing` - the file doesn't exist.
+- `missing` - the file doesn't exist. Only for paths given directly, since a
+  directory only lists files that exist.
 - `error` - the file couldn't be checked. The object has an `error` message
   instead of the other fields.
 

@@ -7,6 +7,7 @@ import click
 from encoded_memory.commands import app
 from typer.testing import CliRunner
 
+from faultforge.io import open_text
 from faultforge.metric import Perplexity
 
 from .conftest import (
@@ -119,3 +120,64 @@ def test_rejects_runs(tmp_path: Path):
     result = invoke_check(tmp_path / "result.json", "--runs", "3")
 
     assert result.exit_code == 2
+
+
+def test_directory_includes_result_files_recursively(tmp_path: Path):
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    plain = _write_saved(tmp_path, _saved_result([2.0] * 3), "b.json")
+    compressed = tmp_path / "a.json.zst"
+    with open_text(compressed, "wt", compressed=True) as file:
+        _ = file.write(_saved_result([2.0] * 3).model_dump_json())
+    deep = _write_saved(nested, _saved_result([2.0] * 3), "c.json")
+    _ = (tmp_path / "notes.txt").write_text("not a result")
+
+    result = invoke_check(tmp_path, "--max-runs", "3")
+
+    assert result.exit_code == 0
+    assert [entry["path"] for entry in json.loads(result.stdout)] == [
+        str(compressed),
+        str(plain),
+        str(deep),
+    ]
+
+
+def test_directory_keeps_its_position_among_paths(tmp_path: Path):
+    directory = tmp_path / "directory"
+    directory.mkdir()
+    inside = _write_saved(directory, _saved_result([2.0] * 3))
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+
+    result = invoke_check(before, directory, after, "--max-runs", "3")
+
+    assert [entry["path"] for entry in json.loads(result.stdout)] == [
+        str(before),
+        str(inside),
+        str(after),
+    ]
+
+
+def test_unreadable_json_in_a_directory_is_an_error(tmp_path: Path):
+    _ = (tmp_path / "config.json").write_text("{}")
+
+    result = invoke_check(tmp_path, "--max-runs", "3")
+
+    assert result.exit_code == 3
+    assert json.loads(result.stdout)[0]["status"] == "error"
+
+
+def test_empty_directory_has_no_entries(tmp_path: Path):
+    result = invoke_check(tmp_path, "--max-runs", "3")
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == []
+
+
+def test_symlinked_directories_are_not_followed(tmp_path: Path):
+    _ = _write_saved(tmp_path, _saved_result([2.0] * 3))
+    (tmp_path / "loop").symlink_to(tmp_path, target_is_directory=True)
+
+    result = invoke_check(tmp_path, "--max-runs", "3")
+
+    assert len(json.loads(result.stdout)) == 1

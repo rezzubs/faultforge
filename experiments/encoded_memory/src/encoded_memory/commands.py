@@ -706,6 +706,29 @@ def record(
     experiment.run_loop(stop_conditions=stop_conditions, save_config=save_config)
 
 
+_RESULT_SUFFIXES = (".json", ".json.zst", ".json.zstd")
+"""File name endings of the results `record --output` writes."""
+
+
+def _expand_directories(paths: list[Path]) -> list[Path]:
+    """Replace each directory in `paths` with the result files below it, sorted."""
+    expanded: list[Path] = []
+    for path in paths:
+        if not path.expanduser().is_dir():
+            expanded.append(path)
+            continue
+        # NOTE: `rglob` doesn't follow symlinked directories, so a link cycle
+        # can't make this loop forever.
+        expanded.extend(
+            sorted(
+                found
+                for found in path.expanduser().rglob("*")
+                if found.name.endswith(_RESULT_SUFFIXES) and found.is_file()
+            )
+        )
+    return expanded
+
+
 class _CheckExitCode(enum.IntEnum):
     """The exit codes of `check`, from best to worst."""
 
@@ -721,7 +744,8 @@ def check(
         list[Path],
         typer.Argument(
             help="Result files to check, as written by record --output. "
-            "A file that doesn't exist is reported as missing.",
+            "A directory includes every .json, .json.zst and .json.zstd file below it. "
+            "A file given directly that doesn't exist is reported as missing.",
         ),
     ],
     max_runs: _MaxRunsOption = None,
@@ -735,7 +759,7 @@ def check(
     """Check whether saved result files need more runs to reach the limits.
 
     Takes the same stop conditions as record. Doesn't load the model or
-    dataset.
+    dataset. A directory is searched recursively for result files.
 
     Prints a JSON list to stdout, with one object per path. The status is one
     of stable, max-runs, incomplete, missing or error.
@@ -763,7 +787,7 @@ def check(
 
     entries: list[dict[str, object]] = []
     exit_code = _CheckExitCode.Done
-    for path in paths:
+    for path in _expand_directories(paths):
         try:
             result = check_saved(path, stability=stability_limits, max_runs=max_runs)
         # NOTE: one bad file shouldn't hide the status of the others. The
