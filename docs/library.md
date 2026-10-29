@@ -127,6 +127,11 @@ A subclass can also implement `golden_score() -> float | None`, the score of a
 fault-free reference run. Estimators that compare runs against it request it
 only when needed, so it can be computed lazily.
 
+State that changes outside of `run()`, such as a lazily computed golden score,
+isn't a new run, so `run_loop` doesn't know to save it. Override
+`has_unsaved_changes() -> bool` to report it and `on_saved() -> None` to reset
+it. `run_loop` then saves at the end even without new runs.
+
 ### Estimators
 
 An `Estimator` (`faultforge.experiment`) summarizes many scores as an
@@ -159,7 +164,11 @@ failure_rate = experiment.estimate(
 ### Stop conditions
 
 Stop conditions (`faultforge.experiment`) are plain callables you pass to
-`run_loop`:
+`run_loop`. They take a `RecordedRuns`, the part of `Experiment` that holds
+`scores()`, `golden_score()`, `estimate()`, `display()` and `run_count()`. So
+a condition can also be checked against runs that aren't a live experiment,
+e.g. results loaded from a file, by subclassing `RecordedRuns` and
+implementing `scores()`.
 
 - `Stability(*, estimator, min_samples=0, max_absolute_margin=None,
   max_relative_margin=None)` - stop once the estimate's margin is at most

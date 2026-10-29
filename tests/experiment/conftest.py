@@ -33,6 +33,8 @@ class _TestExperiment(Experiment):
     _golden_score: float | None
     golden_requests: int
     """How many times `golden_score` was called."""
+    unsaved: bool
+    """Reported by `has_unsaved_changes`, reset by `on_saved`."""
 
     def __init__(
         self,
@@ -45,6 +47,7 @@ class _TestExperiment(Experiment):
         self._intrinsic_stop_conditions = []
         self._golden_score = golden_score
         self.golden_requests = 0
+        self.unsaved = False
 
     def add_stop_condition(self, condition: StopCondition) -> None:
         """Contribute an additional intrinsic condition, as if a subclass had
@@ -59,6 +62,14 @@ class _TestExperiment(Experiment):
     def golden_score(self) -> float | None:
         self.golden_requests += 1
         return self._golden_score
+
+    @override
+    def has_unsaved_changes(self) -> bool:
+        return self.unsaved
+
+    @override
+    def on_saved(self) -> None:
+        self.unsaved = False
 
     @override
     def scores(self) -> Sequence[float]:

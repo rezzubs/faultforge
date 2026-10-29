@@ -153,9 +153,9 @@ into help panels:
   *encoded* model instead of the unencoded one).
 - **Recording Settings**: `--output`, `--autosave` (seconds between
   autosaves), `--compress` (zstd, for new output files), `--overwrite`
-  (discard a mismatched existing `--output` instead of aborting), `--runs`/
-  `--max-runs`/`--min-runs` and the margin limits (see below) for controlling
-  how long to run.
+  (discard a mismatched existing `--output` instead of aborting).
+- **Stop Conditions**: `--runs`/`--max-runs`/`--min-runs` and the margin
+  limits (see below) for controlling how long to run.
 - **Misc Settings**: `--device`.
 
 ```sh
@@ -219,6 +219,65 @@ encoded-memory record \
   --estimate failure-rate --relative-failure-threshold 2.0 \
   --max-absolute-margin 2.0 \
   --output gpt2.json.zst --compress
+```
+
+### `check`
+
+Reports whether saved result files need more runs, without loading the model
+or dataset. It takes the stop conditions of `record` (except `--runs`) and
+applies them to every file. At least one of the margin limits or `--max-runs`
+is required. Useful before submitting jobs to a queue:
+
+```sh
+encoded-memory check results/*.json.zst \
+  --estimate failure-rate --relative-failure-threshold 2.0 \
+  --max-absolute-margin 2.0 --max-runs 1000
+```
+
+A directory checks every `.json`, `.json.zst` and `.json.zstd` file below it,
+in sorted order. Symlinked directories aren't followed.
+
+It prints a JSON list to stdout, with one object per path:
+
+```json
+[
+  {
+    "path": "results/secded.json.zst",
+    "status": "stable",
+    "reason": "Reached absolute margin of error 2.00% (1.85%)",
+    "run_count": 412,
+    "estimate": {"value": 3.4, "lower": 1.9, "upper": 5.25}
+  }
+]
+```
+
+The `status` is one of:
+
+- `stable` - the margin limits are reached.
+- `max-runs` - `--max-runs` is reached.
+- `incomplete` - neither is reached yet. If the margins need a golden score
+  that the file doesn't have yet, the `reason` says so.
+- `missing` - the file doesn't exist. Only for paths given directly, since a
+  directory only lists files that exist.
+- `error` - the file couldn't be checked. The object has an `error` message
+  instead of the other fields.
+
+The exit code is 0 if no file needs more runs, 1 if any is `incomplete` or
+`missing` and 3 if any is an `error`. The worst one wins. 2 means invalid
+arguments.
+
+From Python, `check_saved` does the same for one file:
+
+```python
+from encoded_memory import StabilityLimits, check_saved
+from faultforge.experiment import RelativeThreshold
+
+limits = StabilityLimits(
+    failure_threshold=RelativeThreshold(2.0), max_absolute_margin=2.0
+)
+result = check_saved("results/secded.json.zst", stability=limits, max_runs=1000)
+if result.should_run():
+    ...
 ```
 
 ### `discard-bitmasks`

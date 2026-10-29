@@ -205,7 +205,8 @@ def _bit_histogram(bitmask: Sequence[int]) -> dict[int, int]:
 
 @dataclass(slots=True, frozen=True)
 class _FaultInjectionSummary:
-    """A single run's fault-injection stats, for display via `_Display.extra`.
+    """A single run's fault-injection stats, for display via
+    `EncodedFaultInjectionDisplay.extra`.
 
     Not part of any serialized result - purely a display-time snapshot of the
     latest run.
@@ -248,11 +249,15 @@ class _FaultInjectionSummary:
         return "\n".join(lines)
 
 
-class _Display(ExperimentDisplay):
-    """`EncodedFaultInjection`'s display: names/units the score per metric."""
+class EncodedFaultInjectionDisplay(ExperimentDisplay):
+    """`EncodedFaultInjection`'s display.
+
+    - Names and units the score per metric.
+    - Adds the latest run's fault summary to the status, if there is one.
+    """
 
     def __init__(
-        self, metric: Metric, fault_summary: _FaultInjectionSummary | None
+        self, metric: Metric, fault_summary: _FaultInjectionSummary | None = None
     ) -> None:
         self._metric = metric
         self._fault_summary = fault_summary
@@ -283,6 +288,8 @@ class EncodedFaultInjection[R](Experiment):
     _results: SimpleResults | DetailedResults
     _golden_score: float | None
     """Computed lazily, see `golden_score`."""
+    _golden_score_unsaved: bool
+    """Whether `_golden_score` was computed since the last save."""
 
     _unencoded_golden: nn.Module | None
 
@@ -312,6 +319,7 @@ class EncodedFaultInjection[R](Experiment):
             else SimpleResults(results=[])
         )
         self._golden_score = None
+        self._golden_score_unsaved = False
         self._show_fault_summary = fault_summary
         self._last_fault_summary = None
 
@@ -401,7 +409,9 @@ class EncodedFaultInjection[R](Experiment):
 
     @override
     def display(self) -> ExperimentDisplay:
-        return _Display(self._reliability_metric, self._last_fault_summary)
+        return EncodedFaultInjectionDisplay(
+            self._reliability_metric, self._last_fault_summary
+        )
 
     def discard_bitmasks(self) -> None:
         """Drop any recorded bitmasks, converting to the simpler result kind.
@@ -452,7 +462,16 @@ class EncodedFaultInjection[R](Experiment):
                 self._golden_score = self._reliability_metric.score(
                     self._infer(golden_model)
                 )
+            self._golden_score_unsaved = True
         return self._golden_score
+
+    @override
+    def has_unsaved_changes(self) -> bool:
+        return self._golden_score_unsaved
+
+    @override
+    def on_saved(self) -> None:
+        self._golden_score_unsaved = False
 
     def _inject_faults(self) -> EncodedModule:
         """Clone the model and flip `self._faulty_bit_count` unique random bits in it."""

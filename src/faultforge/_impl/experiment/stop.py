@@ -5,22 +5,19 @@ from dataclasses import (
     dataclass,
     field,
 )
-from typing import (
-    TYPE_CHECKING,
-    override,
-)
+from typing import override
 
 from faultforge._impl.experiment.config import ScoreDisplay
 from faultforge._impl.experiment.estimate import (
     CONFIDENCE_LEVEL,
     Estimator,
 )
+from faultforge._impl.experiment.recorded import RecordedRuns
 
-if TYPE_CHECKING:
-    from faultforge._impl.experiment.abc import Experiment
+type StopCondition = Callable[[RecordedRuns], str | None]
+"""Decides whether a series of runs should stop.
 
-type StopCondition = Callable[[Experiment], str | None]
-"""A check run by `Experiment.run_loop` each iteration, before `run`.
+`Experiment.run_loop` checks it each iteration, before `run`.
 
 Returns a human-readable reason to stop, or `None` to keep going.
 
@@ -35,10 +32,10 @@ class StatusReporter(abc.ABC):
     """
 
     @abc.abstractmethod
-    def status(self, experiment: Experiment, score_display: ScoreDisplay) -> str | None:
+    def status(self, runs: RecordedRuns, score_display: ScoreDisplay) -> str | None:
         """The fragment to show, or `None` to show nothing.
 
-        `score_display` is the experiment's [`ScoreDisplay`].
+        `score_display` is the [`ScoreDisplay`] of `runs`.
         """
 
 
@@ -47,7 +44,7 @@ class Stability(StatusReporter):
     """A `StopCondition`: stop once an estimate's margin of error is small enough.
 
     The margin of error is [`Estimate.margin`] of `estimator`'s estimate over
-    the experiment's scores. It can be limited in absolute terms, relative to
+    the recorded scores. It can be limited in absolute terms, relative to
     the estimated value, or both, in which case whichever limit is reached
     first stops the experiment. At least one limit is required. Limits must be
     finite and not negative.
@@ -88,16 +85,16 @@ class Stability(StatusReporter):
             if limit is not None and not (math.isfinite(limit) and limit >= 0):
                 raise ValueError(f"{name} must be finite and >= 0, got {limit}")
 
-    def __call__(self, experiment: Experiment) -> str | None:
+    def __call__(self, runs: RecordedRuns) -> str | None:
         # NOTE: estimated before checking `min_samples` so that problems such
         # as an unusable golden score are reported before the first run.
-        estimate = experiment.estimate(self.estimator)
-        if experiment.run_count() < self.min_samples or estimate is None:
+        estimate = runs.estimate(self.estimator)
+        if runs.run_count() < self.min_samples or estimate is None:
             return None
 
         margin = estimate.margin()
         if self.max_absolute_margin is not None and margin <= self.max_absolute_margin:
-            score_display = experiment.display().score_display()
+            score_display = runs.display().score_display()
             limit = self._format_value(self.max_absolute_margin, score_display)
             return (
                 f"Reached absolute margin of error {limit} "
@@ -117,13 +114,13 @@ class Stability(StatusReporter):
         return None
 
     @override
-    def status(self, experiment: Experiment, score_display: ScoreDisplay) -> str | None:
+    def status(self, runs: RecordedRuns, score_display: ScoreDisplay) -> str | None:
         """Show the estimate and the margins checked against the limits.
 
         For example `mean 1.00 [0.90, 1.10] (95% CI) | margin 0.10 (limit
         0.05)`. Nothing is shown while there's no estimate.
         """
-        estimate = experiment.estimate(self.estimator)
+        estimate = runs.estimate(self.estimator)
         if estimate is None:
             return None
 
@@ -168,10 +165,10 @@ class AdditionalRuns:
     count: int
     _baseline: int | None = field(default=None, init=False, repr=False)
 
-    def __call__(self, experiment: Experiment) -> str | None:
+    def __call__(self, runs: RecordedRuns) -> str | None:
         if self._baseline is None:
-            self._baseline = experiment.run_count()
-        if experiment.run_count() - self._baseline >= self.count:
+            self._baseline = runs.run_count()
+        if runs.run_count() - self._baseline >= self.count:
             return f"Reached requested additional run count (+{self.count})"
         return None
 
@@ -188,7 +185,7 @@ class MaxRuns:
 
     total: int
 
-    def __call__(self, experiment: Experiment) -> str | None:
-        if experiment.run_count() >= self.total:
+    def __call__(self, runs: RecordedRuns) -> str | None:
+        if runs.run_count() >= self.total:
             return f"Reached max run count ({self.total})"
         return None

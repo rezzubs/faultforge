@@ -9,14 +9,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import IO, Self
 
-from faultforge._impl.experiment.config import (
-    ExperimentDisplay,
-    SaveConfig,
-)
-from faultforge._impl.experiment.estimate import (
-    Estimate,
-    Estimator,
-)
+from faultforge._impl.experiment.config import SaveConfig
+from faultforge._impl.experiment.recorded import RecordedRuns
 from faultforge._impl.experiment.stop import (
     StatusReporter,
     StopCondition,
@@ -33,21 +27,24 @@ COMPRESSED_SUFFIXES = (".zst", ".zstd")
 """File extensions that we expect for compressed results."""
 
 
-class Experiment(abc.ABC):
+class Experiment(RecordedRuns):
     """The behavior of a repeatable, scoreable unit of work.
 
     Subclasses own the shape of their own results (a list, a dict keyed
     however makes sense, ...) and how that state is persisted; this class only
-    prescribes what's needed to drive and monitor a series of runs:
+    prescribes what's needed to drive and monitor a series of runs. On top of
+    what [`RecordedRuns`] requires:
 
     - `run`: perform one iteration and record it internally, any way you like.
-    - `scores`: report every recorded score so far, in run order, as plain
-      floats. Together with `golden_score` this is the only view the generic
-      machinery below needs, so it never has to know your result type.
-    - `golden_score` (optional): the score of a fault-free reference run, for
-      estimators that compare runs against it (e.g. `FailureRate` with a
-      `RelativeThreshold`).
-    - `display`: describe how to format your score, via `ExperimentDisplay`.
+    - `scores` (from `RecordedRuns`): report every recorded score so far, in
+      run order, as plain floats. Together with `golden_score` this is the
+      only view the generic machinery below needs, so it never has to know
+      your result type.
+    - `golden_score` (optional, from `RecordedRuns`): if you compute it
+      lazily, also include the value in `serialize`, so resuming from a file
+      doesn't recompute it, and report it through `has_unsaved_changes`.
+    - `display` (optional, from `RecordedRuns`): describe how to format your
+      score, via `ExperimentDisplay`.
     - `serialize` / `deserialize`: turn your own state into a string and back.
       That's the only shape-specific part of persistence; `save`/`save_file`/
       `save_atomic`/`load_from`/`load_from_file` handle the file mechanics
@@ -58,6 +55,9 @@ class Experiment(abc.ABC):
       own `Fingerprint` in `serialize`'s output and check it in `deserialize`
       via `Fingerprint.raise_if_differs`, which raises `FingerprintError` on
       a mismatch.
+    - `has_unsaved_changes` / `on_saved` (optional): track state that changes
+      outside of `run`, e.g. a lazily computed golden score, so `run_loop`
+      saves it even without new runs.
 
     `estimate` summarizes the scores with an `Estimator`, such as `Mean` or
     `FailureRate`.
@@ -79,41 +79,6 @@ class Experiment(abc.ABC):
     @abc.abstractmethod
     def run(self) -> None:
         """Run a single iteration and record its result internally."""
-
-    @abc.abstractmethod
-    def scores(self) -> Sequence[float]:
-        """Every score recorded so far, in the order the runs happened."""
-
-    def golden_score(self) -> float | None:
-        """The score of a fault-free reference run, or `None` if there is none.
-
-        Only requested when an `Estimator` needs it (see
-        `Estimator.requires_golden`), so an experiment may compute it lazily on
-        the first call. If it does, it should also include the value in
-        `serialize`, so resuming from a file doesn't recompute it. The default
-        implementation provides no golden score.
-        """
-        return None
-
-    def estimate(self, estimator: Estimator) -> Estimate | None:
-        """Summarize the current scores with `estimator`.
-
-        Requests `golden_score` only if `estimator` requires it. Raises a
-        `ValueError` if it's required but this experiment has none.
-        """
-        golden_score = None
-        if estimator.requires_golden():
-            golden_score = self.golden_score()
-            if golden_score is None:
-                raise ValueError(
-                    f"{estimator.name()} requires a golden score but "
-                    f"{type(self).__name__} doesn't provide one"
-                )
-        return estimator.estimate(self.scores(), golden_score)
-
-    def display(self) -> ExperimentDisplay:
-        """Describes how `format_status` should render this experiment's score."""
-        return ExperimentDisplay()
 
     def stop_conditions(self) -> Sequence[StopCondition]:
         """Stop conditions intrinsic to this experiment.
@@ -154,6 +119,7 @@ class Experiment(abc.ABC):
         See `save` for a version that takes a path.
         """
         file.write(self.serialize())
+        self.on_saved()
 
     def save_atomic(self, path: AnyPath, *, compressed: bool = False) -> None:
         """Save current results to `path`, atomically.
@@ -169,6 +135,22 @@ class Experiment(abc.ABC):
         with open_text(temp_name, "wt", compressed=compressed) as temp:
             temp.write(self.serialize())
         os.replace(temp_name, destination)
+        self.on_saved()
+
+    def has_unsaved_changes(self) -> bool:
+        """Whether state changed outside of `run` since the last save.
+
+        `run_loop` saves at the end if this is `True`, even without new runs.
+        Track it yourself and reset it in `on_saved`. The default reports no
+        changes.
+        """
+        return False
+
+    def on_saved(self) -> None:
+        """Called after `save_file` or `save_atomic` wrote the results.
+
+        `save` goes through `save_file`. The default does nothing.
+        """
 
     def load_from(self, path: AnyPath) -> None:
         """Restore results from `path`, previously written by `save`/`save_atomic`.
@@ -189,10 +171,6 @@ class Experiment(abc.ABC):
         """
         self.deserialize(file.read())
 
-    def run_count(self) -> int:
-        """Return the number of recorded runs."""
-        return len(self.scores())
-
     def run_loop(
         self,
         *,
@@ -201,8 +179,9 @@ class Experiment(abc.ABC):
     ) -> None:
         """Keep running until a stop condition is met, including Ctrl+C.
 
-        If `save_config` is given, the results are also saved when an exception
-        stops the loop.
+        If `save_config` is given, the results are saved at the end if there
+        are new runs or `has_unsaved_changes` is `True`. That also happens
+        when an exception stops the loop.
         """
 
         interrupted = Interrupted()
@@ -243,7 +222,7 @@ class Experiment(abc.ABC):
                             )
                             passed_seconds = 0.0
         finally:
-            if dirty and save_config is not None:
+            if save_config is not None and (dirty or self.has_unsaved_changes()):
                 self.save_atomic(save_config.path, compressed=save_config.compressed)
 
     def format_status(
@@ -307,17 +286,17 @@ class Interrupted:
         )
         _ = signal.signal(signal.SIGINT, self._original_handler)
 
-    def __call__(self, experiment: Experiment) -> str | None:
-        _ = experiment
+    def __call__(self, runs: RecordedRuns) -> str | None:
+        _ = runs
         return "Interrupted by Ctrl+C" if self._triggered else None
 
 
 def first_stop_reason(
-    conditions: Sequence[StopCondition], experiment: Experiment
+    conditions: Sequence[StopCondition], runs: RecordedRuns
 ) -> str | None:
     """The reason given by the first condition in `conditions` that wants to stop, if any."""
     for condition in conditions:
-        if (reason := condition(experiment)) is not None:
+        if (reason := condition(runs)) is not None:
             return reason
     return None
 

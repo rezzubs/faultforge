@@ -1,6 +1,7 @@
 """Tests for Experiment.save/save_atomic/load_from round-trip behavior."""
 
 import os
+from collections.abc import Callable
 from os import PathLike
 from pathlib import Path
 
@@ -9,6 +10,8 @@ import pytest
 from faultforge.experiment import (
     AdditionalRuns,
     Experiment,
+    MaxRuns,
+    RecordedRuns,
     SaveConfig,
 )
 
@@ -102,8 +105,8 @@ def test_run_loop_saves_at_end(tmp_path: Path):
 
 
 def test_run_loop_saves_when_interrupted_by_an_exception(tmp_path: Path):
-    def fail_after_three_runs(experiment: Experiment) -> str | None:
-        if experiment.run_count() == 3:
+    def fail_after_three_runs(runs: RecordedRuns) -> str | None:
+        if runs.run_count() == 3:
             raise RuntimeError("stop")
         return None
 
@@ -120,8 +123,8 @@ def test_run_loop_saves_when_interrupted_by_an_exception(tmp_path: Path):
 
 
 def test_run_loop_does_not_save_without_new_runs(tmp_path: Path):
-    def fail_immediately(experiment: Experiment) -> str | None:
-        _ = experiment
+    def fail_immediately(runs: RecordedRuns) -> str | None:
+        _ = runs
         raise RuntimeError("stop")
 
     exp = make()
@@ -132,6 +135,42 @@ def test_run_loop_does_not_save_without_new_runs(tmp_path: Path):
             save_config=SaveConfig(path=path, interval_seconds=None),
         )
     assert not path.exists()
+
+
+def test_run_loop_saves_unsaved_changes_without_new_runs(tmp_path: Path):
+    exp = make([1.0])
+    exp.unsaved = True
+    path = tmp_path / "experiment.json"
+
+    exp.run_loop(
+        stop_conditions=[MaxRuns(1)],
+        save_config=SaveConfig(path=path, interval_seconds=None),
+    )
+
+    assert path.read_text() == exp.serialize()
+    assert not exp.unsaved
+
+
+@pytest.mark.parametrize("save", [Experiment.save, Experiment.save_atomic])
+def test_saving_resets_unsaved_changes(
+    tmp_path: Path, save: Callable[[Experiment, Path], None]
+):
+    exp = make([1.0])
+    exp.unsaved = True
+
+    save(exp, tmp_path / "experiment.json")
+
+    assert not exp.unsaved
+
+
+def test_saving_to_a_file_object_resets_unsaved_changes(tmp_path: Path):
+    exp = make([1.0])
+    exp.unsaved = True
+
+    with open(tmp_path / "experiment.json", "w") as file:
+        exp.save_file(file)
+
+    assert not exp.unsaved
 
 
 def test_parameter_mismatch(tmp_path: Path):

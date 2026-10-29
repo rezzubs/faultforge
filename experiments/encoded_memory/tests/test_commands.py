@@ -11,7 +11,7 @@ from encoded_memory.commands import (
     MetricChoice,
     _init_model_bundle,
     _resolve_metric,
-    _resolve_stability,
+    _resolve_stability_limits,
     app,
 )
 from typer.testing import CliRunner
@@ -205,8 +205,7 @@ def resolve_stability(
     max_absolute_margin: float | None = 1.0,
     min_runs: int | None = None,
 ):
-    return _resolve_stability(
-        metric if metric is not None else Perplexity(),
+    limits = _resolve_stability_limits(
         estimate=estimate,
         relative_failure_threshold=relative_failure_threshold,
         absolute_failure_threshold=absolute_failure_threshold,
@@ -214,6 +213,9 @@ def resolve_stability(
         max_absolute_margin=max_absolute_margin,
         min_runs=min_runs,
     )
+    if limits is None:
+        return None
+    return limits.stability(metric if metric is not None else Perplexity())
 
 
 def test_no_stability_without_margin_limits():
