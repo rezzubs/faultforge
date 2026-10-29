@@ -153,9 +153,9 @@ into help panels:
   *encoded* model instead of the unencoded one).
 - **Recording Settings**: `--output`, `--autosave` (seconds between
   autosaves), `--compress` (zstd, for new output files), `--overwrite`
-  (discard a mismatched existing `--output` instead of aborting), `--runs`/
-  `--max-runs`/`--min-runs` and the margin limits (see below) for controlling
-  how long to run.
+  (discard a mismatched existing `--output` instead of aborting).
+- **Stop Conditions**: `--runs`/`--max-runs`/`--min-runs` and the margin
+  limits (see below) for controlling how long to run.
 - **Misc Settings**: `--device`.
 
 ```sh
