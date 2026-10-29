@@ -9,7 +9,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 from faultforge._impl.dataset import BatchedDataset
-from faultforge._impl.progress import ProgressStage
+from faultforge._impl.progress import _ProgressStage
 from faultforge.progress import Progress
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
@@ -62,13 +62,13 @@ def test_precompute_calls_advance_once_per_batch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[int] = []
-    original = ProgressStage.advance
+    original = _ProgressStage.advance
 
-    def counting_advance(self: ProgressStage, n: int = 1) -> None:
+    def counting_advance(self: _ProgressStage, n: int = 1) -> None:
         calls.append(n)
         original(self, n)
 
-    monkeypatch.setattr(ProgressStage, "advance", counting_advance)
+    monkeypatch.setattr(_ProgressStage, "advance", counting_advance)
 
     dataset = BatchedDataset.from_dataset(_SizedDataset(5), batch_size=1)
     _ = dataset.precompute(progress=Progress())

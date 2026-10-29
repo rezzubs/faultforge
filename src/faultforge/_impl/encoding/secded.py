@@ -20,7 +20,7 @@ from faultforge._impl.progress import Progress, stage
 from faultforge._impl.tensor import tensor_list_dtype
 from faultforge._rust import secded
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -92,9 +92,9 @@ class SecdedEncoding(Encoding):
     @override
     def decode(self) -> list[torch.Tensor]:
         if not self._needs_recompute:
-            logger.debug("Using cached decoded tensors")
+            _logger.debug("Using cached decoded tensors")
             return self._decoded_tensors
-        logger.debug("Recomputing decoded tensors")
+        _logger.debug("Recomputing decoded tensors")
 
         match self._dtype:
             case EncodingDtype.F32:
@@ -130,7 +130,7 @@ class SecdedEncoding(Encoding):
 
     def _invalidate_decoded_cache(self) -> None:
         if not self._needs_recompute:
-            logger.debug("Invalidating decoded tensor cache due to fault injection.")
+            _logger.debug("Invalidating decoded tensor cache due to fault injection.")
         self._needs_recompute = True
 
     @override

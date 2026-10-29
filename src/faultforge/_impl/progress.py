@@ -10,9 +10,9 @@ import time
 from types import TracebackType
 from typing import Self, final, override
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
-DEFAULT_MIN_LOG_INTERVAL = 5.0
+_DEFAULT_MIN_LOG_INTERVAL = 5.0
 """Default minimum number of seconds between progress log lines."""
 
 
@@ -57,7 +57,7 @@ class StageHandle(abc.ABC):
 
 
 @final
-class NullStageHandle(StageHandle):
+class _NullStageHandle(StageHandle):
     """A no-op `StageHandle`, used when progress reporting is disabled."""
 
     @override
@@ -74,7 +74,7 @@ class NullStageHandle(StageHandle):
         pass
 
 
-_NULL_STAGE = NullStageHandle()
+_NULL_STAGE = _NullStageHandle()
 
 
 def _format_duration(seconds: float) -> str:
@@ -89,7 +89,7 @@ def _format_duration(seconds: float) -> str:
     return f"{hours}h{minutes}m"
 
 
-def _format_frame(frame: ProgressStage, now: float) -> str:
+def _format_frame(frame: _ProgressStage, now: float) -> str:
     """Format one stack frame as it appears within a breadcrumb line."""
     duration = _format_duration(now - frame._start)
     if frame.total is not None:
@@ -100,13 +100,13 @@ def _format_frame(frame: ProgressStage, now: float) -> str:
     return f"{frame.name} {duration}"
 
 
-def _format_breadcrumb(stack: list[ProgressStage], now: float) -> str:
+def _format_breadcrumb(stack: list[_ProgressStage], now: float) -> str:
     """Format every open stage, outermost first, as one composed line."""
     return " > ".join(_format_frame(frame, now) for frame in stack)
 
 
 @final
-class ProgressStage(StageHandle):
+class _ProgressStage(StageHandle):
     """The `StageHandle` implementation returned by `Progress.stage`.
 
     When `total` is known, rendering includes a throttled `current/total (%)`
@@ -137,7 +137,7 @@ class ProgressStage(StageHandle):
 
         if self._is_root:
             self._progress._last_render = self._start
-            logger.info(f"{self.name}: started")
+            _logger.info(f"{self.name}: started")
 
             if self.total is None:
                 self._stop_heartbeat = threading.Event()
@@ -181,7 +181,7 @@ class ProgressStage(StageHandle):
         elapsed = time.monotonic() - self._start
         if exc_type is not None:
             if self._is_root:
-                logger.info(f"{self.name}: failed after {_format_duration(elapsed)}")
+                _logger.info(f"{self.name}: failed after {_format_duration(elapsed)}")
             self._progress._stack.pop()
             return
 
@@ -189,9 +189,9 @@ class ProgressStage(StageHandle):
             suffix = f" ({self.current}/{self.total})" if self.total is not None else ""
             message = f"{self.name}: done{suffix}, {_format_duration(elapsed)} elapsed"
             if elapsed > self._progress.min_log_interval:
-                logger.info(message)
+                _logger.info(message)
             else:
-                logger.debug(message)
+                _logger.debug(message)
         else:
             # Render before popping, so the completed leaf still appears with
             # its final duration; still subject to the shared throttle, so a
@@ -216,9 +216,9 @@ class Progress:
 
     __slots__ = ("_last_render", "_stack", "min_log_interval")
 
-    def __init__(self, min_log_interval: float = DEFAULT_MIN_LOG_INTERVAL) -> None:
+    def __init__(self, min_log_interval: float = _DEFAULT_MIN_LOG_INTERVAL) -> None:
         self.min_log_interval: float = min_log_interval
-        self._stack: list[ProgressStage] = []
+        self._stack: list[_ProgressStage] = []
         self._last_render: float = 0.0
 
     def stage(self, name: str, total: int | None = None) -> StageHandle:
@@ -229,7 +229,7 @@ class Progress:
         `current/total (%)` reporting); `None` means unknowable, which falls
         back to a periodic heartbeat if this becomes the root stage.
         """
-        return ProgressStage(self, name, total)
+        return _ProgressStage(self, name, total)
 
     def _render(self) -> None:
         """Log the current stack as one throttled breadcrumb line."""
@@ -239,7 +239,7 @@ class Progress:
         if now - self._last_render < self.min_log_interval:
             return
         self._last_render = now
-        logger.info(_format_breadcrumb(self._stack, now))
+        _logger.info(_format_breadcrumb(self._stack, now))
 
 
 def stage(

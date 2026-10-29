@@ -21,9 +21,9 @@ from faultforge._impl.io import (
     open_text,
 )
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
-COMPRESSED_SUFFIXES = (".zst", ".zstd")
+_COMPRESSED_SUFFIXES = (".zst", ".zstd")
 """File extensions that we expect for compressed results."""
 
 
@@ -109,7 +109,7 @@ class Experiment(RecordedRuns):
         stdlib) instead of plain text - `serialize()`'s output itself never
         changes, only how it's stored on disk.
         """
-        warn_on_extension_mismatch(path, compressed=compressed)
+        _warn_on_extension_mismatch(path, compressed=compressed)
         with open_text(path, "wt", compressed=compressed) as f:
             self.save_file(f)
 
@@ -128,7 +128,7 @@ class Experiment(RecordedRuns):
         `compressed=True` to write through zstd instead of plain text, same
         as `save`.
         """
-        warn_on_extension_mismatch(path, compressed=compressed)
+        _warn_on_extension_mismatch(path, compressed=compressed)
         destination = Path(path).expanduser()
         fd, temp_name = tempfile.mkstemp(dir=destination.parent)
         os.close(fd)
@@ -184,7 +184,7 @@ class Experiment(RecordedRuns):
         when an exception stops the loop.
         """
 
-        interrupted = Interrupted()
+        interrupted = _Interrupted()
         all_conditions = [*self.stop_conditions(), *stop_conditions, interrupted]
 
         dirty = False
@@ -196,9 +196,9 @@ class Experiment(RecordedRuns):
         try:
             with interrupted:
                 while True:
-                    reason = first_stop_reason(all_conditions, self)
+                    reason = _first_stop_reason(all_conditions, self)
                     if reason is not None:
-                        logger.info(reason)
+                        _logger.info(reason)
                         break
 
                     self.run()
@@ -214,7 +214,7 @@ class Experiment(RecordedRuns):
                         start = now
 
                         if save_config.interval_seconds < passed_seconds:
-                            logger.debug(
+                            _logger.debug(
                                 f"Passed {save_config.interval_seconds}s ({passed_seconds}) since last save"
                             )
                             self.save_atomic(
@@ -253,7 +253,7 @@ class Experiment(RecordedRuns):
         )
 
 
-class Interrupted:
+class _Interrupted:
     """A `StopCondition` that fires once Ctrl+C has been received.
 
     Used as a context manager for the duration of `run_loop`: entering
@@ -281,7 +281,7 @@ class Interrupted:
     def _handle(self, sig: int, frame: types.FrameType | None) -> None:
         _ = sig, frame
         self._triggered = True
-        logger.info(
+        _logger.info(
             "Received Ctrl+C. Finishing current run before stopping. Use Ctrl+C again to force quit."
         )
         _ = signal.signal(signal.SIGINT, self._original_handler)
@@ -291,7 +291,7 @@ class Interrupted:
         return "Interrupted by Ctrl+C" if self._triggered else None
 
 
-def first_stop_reason(
+def _first_stop_reason(
     conditions: Sequence[StopCondition], runs: RecordedRuns
 ) -> str | None:
     """The reason given by the first condition in `conditions` that wants to stop, if any."""
@@ -301,19 +301,19 @@ def first_stop_reason(
     return None
 
 
-def warn_on_extension_mismatch(path: AnyPath, *, compressed: bool) -> None:
+def _warn_on_extension_mismatch(path: AnyPath, *, compressed: bool) -> None:
     """Advisory-only: log a warning if `compressed` disagrees with `path`'s name.
 
     Never changes what path is actually written to - purely a hint that the
     file's contents and its name disagree about whether it's zstd-compressed,
     which would otherwise confuse tools like `cat`/`jq` reading it later.
     """
-    looks_compressed = Path(path).name.endswith(COMPRESSED_SUFFIXES)
+    looks_compressed = Path(path).name.endswith(_COMPRESSED_SUFFIXES)
     if compressed and not looks_compressed:
-        logger.warning(
+        _logger.warning(
             f"Saving compressed data to {path!r}, whose name doesn't end in .zst/.zstd."
         )
     elif not compressed and looks_compressed:
-        logger.warning(
+        _logger.warning(
             f"Saving uncompressed data to {path!r}, whose name ends in .zst/.zstd."
         )

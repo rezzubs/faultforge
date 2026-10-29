@@ -258,7 +258,7 @@ class Accuracy(Metric[AccuracyResult]):
     ) -> AccuracyResult:
         _ = batch_golden
 
-        top1_logit = top1_logit_from_output(batch_model_output)
+        top1_logit = _top1_logit_from_output(batch_model_output)
 
         # NOTE: sum implicitly converts bools to ints.
         correct_count = (top1_logit == batch_targets).sum().item()
@@ -284,7 +284,7 @@ class Accuracy(Metric[AccuracyResult]):
 
     @override
     def score(self, result: AccuracyResult) -> float:
-        return ratio_to_percent(result.correct_count / result.total_count)
+        return _ratio_to_percent(result.correct_count / result.total_count)
 
     @override
     def direction(self) -> ScoreDirection:
@@ -339,7 +339,7 @@ class AccuracyDegradation(Metric[AccuracyDegradationResult]):
     ) -> AccuracyDegradationResult:
         _ = batch_golden
 
-        top1_logit = top1_logit_from_output(batch_model_output)
+        top1_logit = _top1_logit_from_output(batch_model_output)
 
         # NOTE: sum implicitly converts bools to ints.
         correct_count_faulty = (top1_logit == batch_targets).sum().item()
@@ -357,7 +357,7 @@ class AccuracyDegradation(Metric[AccuracyDegradationResult]):
 
     @override
     def preprocess_golden(self, golden: Tensor) -> Tensor:
-        return top1_logit_from_output(golden)
+        return _top1_logit_from_output(golden)
 
     @override
     def requires_golden(self) -> bool:
@@ -377,7 +377,7 @@ class AccuracyDegradation(Metric[AccuracyDegradationResult]):
 
     @override
     def score(self, result: AccuracyDegradationResult) -> float:
-        return ratio_to_percent(
+        return _ratio_to_percent(
             (result.correct_count_golden - result.correct_count_faulty)
             / result.total_count
         )
@@ -456,7 +456,7 @@ class Sdc(Metric[SdcResult]):
 
     @override
     def score(self, result: SdcResult) -> float:
-        return ratio_to_percent(result.non_matching_count / result.total_count)
+        return _ratio_to_percent(result.non_matching_count / result.total_count)
 
     @override
     def direction(self) -> ScoreDirection:
@@ -495,13 +495,13 @@ class Top1Sdc(Metric[SdcResult]):
         batch_golden: Tensor,
         batch_targets: Tensor,
     ) -> SdcResult:
-        top1_logits = top1_logit_from_output(batch_model_output)
+        top1_logits = _top1_logit_from_output(batch_model_output)
 
         return Sdc().evaluate_batch(top1_logits, batch_golden, batch_targets)
 
     @override
     def preprocess_golden(self, golden: Tensor) -> Tensor:
-        return top1_logit_from_output(golden)
+        return _top1_logit_from_output(golden)
 
     @override
     def requires_golden(self) -> bool:
@@ -733,11 +733,11 @@ class Perplexity(Metric[PerplexityResult]):
         return None
 
 
-def ratio_to_percent(ratio: float) -> float:
+def _ratio_to_percent(ratio: float) -> float:
     return ratio * 100
 
 
-def top1_logit_from_output(batch_model_output: Tensor) -> Tensor:
+def _top1_logit_from_output(batch_model_output: Tensor) -> Tensor:
     """Extract the top-1 logit from the model output (batched).
 
     Input n-d, output (n-1)-d

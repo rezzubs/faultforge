@@ -21,7 +21,7 @@ from faultforge._impl.loading.abc import ModelBundle
 from faultforge._impl.loading.transform import dtype_transforms
 from faultforge._impl.progress import Progress, stage
 
-CACHE_DIRECTORY = Path("~/.cache/faultforge/").expanduser()
+_CACHE_DIRECTORY = Path("~/.cache/faultforge/").expanduser()
 
 
 class CifarModel(enum.StrEnum):
@@ -88,7 +88,7 @@ class CifarDataset(enum.StrEnum):
                         ]
                     )
                     dataset = torchvision.datasets.CIFAR10(
-                        root=CACHE_DIRECTORY,
+                        root=_CACHE_DIRECTORY,
                         train=False,
                         download=True,
                         transform=transform,
@@ -105,7 +105,7 @@ class CifarDataset(enum.StrEnum):
                     )
 
                     dataset = torchvision.datasets.CIFAR100(
-                        root=CACHE_DIRECTORY,
+                        root=_CACHE_DIRECTORY,
                         train=False,
                         download=True,
                         transform=transform,

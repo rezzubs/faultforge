@@ -22,7 +22,7 @@ from faultforge._impl.tensor import (
     tensor_list_faults,
 )
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class Encoder(abc.ABC):
@@ -220,7 +220,7 @@ class InPlaceEncoding(TensorEncoding):
 
     def _invalidate_decoded_cache(self) -> None:
         if self._decoded_tensors is not None:
-            logger.debug("Invalidating decoded tensors due to fault injection")
+            _logger.debug("Invalidating decoded tensors due to fault injection")
         self._decoded_tensors = None
 
     @override

@@ -6,10 +6,10 @@ import torch
 from torch import Tensor
 from torchvision.transforms import v2
 
-type TensorTransform = Callable[[Tensor], Tensor]
+type _TensorTransform = Callable[[Tensor], Tensor]
 
 
-def dtype_transforms(dtype: torch.dtype | None) -> list[TensorTransform]:
+def dtype_transforms(dtype: torch.dtype | None) -> list[_TensorTransform]:
     """Transform steps casting an image tensor to `dtype`, or none if `dtype` is `None`.
 
     Meant to be spliced onto the end of a `Compose` pipeline. Only casts; the
