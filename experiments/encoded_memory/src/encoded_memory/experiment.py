@@ -205,7 +205,8 @@ def _bit_histogram(bitmask: Sequence[int]) -> dict[int, int]:
 
 @dataclass(slots=True, frozen=True)
 class _FaultInjectionSummary:
-    """A single run's fault-injection stats, for display via `_Display.extra`.
+    """A single run's fault-injection stats, for display via
+    `EncodedFaultInjectionDisplay.extra`.
 
     Not part of any serialized result - purely a display-time snapshot of the
     latest run.
@@ -248,11 +249,15 @@ class _FaultInjectionSummary:
         return "\n".join(lines)
 
 
-class _Display(ExperimentDisplay):
-    """`EncodedFaultInjection`'s display: names/units the score per metric."""
+class EncodedFaultInjectionDisplay(ExperimentDisplay):
+    """`EncodedFaultInjection`'s display.
+
+    - Names and units the score per metric.
+    - Adds the latest run's fault summary to the status, if there is one.
+    """
 
     def __init__(
-        self, metric: Metric, fault_summary: _FaultInjectionSummary | None
+        self, metric: Metric, fault_summary: _FaultInjectionSummary | None = None
     ) -> None:
         self._metric = metric
         self._fault_summary = fault_summary
@@ -404,7 +409,9 @@ class EncodedFaultInjection[R](Experiment):
 
     @override
     def display(self) -> ExperimentDisplay:
-        return _Display(self._reliability_metric, self._last_fault_summary)
+        return EncodedFaultInjectionDisplay(
+            self._reliability_metric, self._last_fault_summary
+        )
 
     def discard_bitmasks(self) -> None:
         """Drop any recorded bitmasks, converting to the simpler result kind.
