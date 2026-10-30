@@ -35,6 +35,18 @@ def bitwise_xor(a: Tensor, b: Tensor) -> Tensor:
             return torch.bitwise_xor(a, b)
 
 
+def to_owned_numpy(t: Tensor) -> np.ndarray:
+    """Copy a tensor into a new numpy array.
+
+    Unlike `Tensor.numpy(force=True)`, the result never shares memory with
+    `t`, so modifying it doesn't affect `t`.
+    """
+    with torch.no_grad():
+        # `copy=True` makes `to` copy even when `t` is already on the CPU. A
+        # copy to numpy afterwards would copy CUDA tensors twice.
+        return t.detach().to("cpu", copy=True).numpy()
+
+
 def tensor_list_dtype(ts: Sequence[torch.Tensor]) -> torch.dtype | None:
     """Confirms that all tensors in `ts` have the same datatype.
 

@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
+import torch
 from torch import Tensor
 
 from faultforge._impl.dtype import EncodingDtype
@@ -35,7 +36,9 @@ class IdentityEncoder(TensorEncoder):
             raise ValueError("Cannot encode an empty list")
         dtype = EncodingDtype.from_torch(dtype)
         bit_count = sum(t.numel() for t in ts) * dtype.bit_count()
-        return IdentityEncoding(_tensors=list(ts), _bit_count=bit_count)
+        with torch.no_grad():
+            tensors = [t.detach().clone() for t in ts]
+        return IdentityEncoding(_tensors=tensors, _bit_count=bit_count)
 
 
 @dataclass

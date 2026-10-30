@@ -55,8 +55,11 @@ class SecdedEncoder(Encoder):
             raise ValueError("Cannot encode an empty buffer")
         dtype = EncodingDtype.from_torch(dtype)
 
-        # Store decoded tensor copies
-        decoded_tensors = [t.clone() for t in ts]
+        # SECDED is lossless, so copies of the inputs are the decode of the
+        # encoding without faults. The inputs themselves can't be kept, see
+        # `Encoder.encode`.
+        with torch.no_grad():
+            decoded_tensors = [t.detach().clone() for t in ts]
 
         with stage(progress, "Encoding (SECDED)"):
             match dtype:

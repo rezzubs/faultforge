@@ -30,7 +30,12 @@ class Encoder(abc.ABC):
 
     @abc.abstractmethod
     def encode(self, ts: list[Tensor], *, progress: Progress | None = None) -> Encoding:
-        """Encode a list of tensors."""
+        """Encode a list of tensors.
+
+        The inputs are only read. Implementations must not modify them or keep
+        references to them. The caller can keep using the inputs, and changes
+        to them don't affect the encoding.
+        """
         ...
 
     @abc.abstractmethod
@@ -126,12 +131,18 @@ class InPlaceEncoder(TensorEncoder):
 
     @abc.abstractmethod
     def encode_float32(self, t: Tensor) -> Tensor:
-        """Encode a float32 tensor."""
+        """Encode a float32 tensor into a new tensor.
+
+        `t` must not be modified, see `Encoder.encode`.
+        """
         ...
 
     @abc.abstractmethod
     def encode_float16(self, t: Tensor) -> Tensor:
-        """Encode a float16 tensor."""
+        """Encode a float16 tensor into a new tensor.
+
+        `t` must not be modified, see `Encoder.encode`.
+        """
         ...
 
     @abc.abstractmethod

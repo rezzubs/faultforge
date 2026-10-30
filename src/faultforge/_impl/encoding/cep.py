@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from typing import override
 
+import numpy as np
 import torch
 from torch import Tensor
 
@@ -15,6 +16,7 @@ from faultforge._impl.encoding.abc import (
     TensorEncoding,
 )
 from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.tensor import to_owned_numpy
 from faultforge._rust import cep
 
 _logger = logging.getLogger(__name__)
@@ -64,15 +66,13 @@ class CepEncoder(InPlaceEncoder):
 
     @override
     def encode_float32(self, t: Tensor) -> Tensor:
-        with torch.no_grad():
-            t_np = t.numpy(force=True)
+        t_np = to_owned_numpy(t)
         cep.encode_f32(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np)
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
-        with torch.no_grad():
-            t_np = t.view(torch.uint16).numpy(force=True)
+        t_np = to_owned_numpy(t).view(np.uint16)
         cep.encode_u16(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np).view(torch.float16)
 
