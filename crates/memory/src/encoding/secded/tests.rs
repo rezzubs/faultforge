@@ -170,6 +170,46 @@ fn every_single_and_double_fault() {
     }
 }
 
+#[test]
+fn encode_into_overwrites_destination() {
+    for data_bit_count in 1..=72 {
+        let data = data_buffer(data_bit_count);
+        let encoded_bit_count = encoded_bit_count(data_bit_count).unwrap();
+
+        let mut destination = Limited::bytes(encoded_bit_count);
+        for i in 0..encoded_bit_count {
+            destination.set_1(i);
+        }
+        encode_into(&data, &mut destination).unwrap();
+
+        assert_eq!(destination, encode(&data).unwrap());
+    }
+}
+
+#[test]
+fn decode_into_leaves_buffers_as_is_on_error() {
+    let data = data_buffer(16);
+    let mut faulty = encode(&data).unwrap();
+    // A single error that a successful decode would correct.
+    faulty.flip_bit(5);
+
+    let mut source = faulty.clone();
+    let mut dest = data_buffer(17);
+    assert!(matches!(
+        decode_into(&mut source, &mut dest),
+        Err(DecodeError::LengthMismatch { .. })
+    ));
+    assert_eq!(source, faulty);
+    assert_eq!(dest, data_buffer(17));
+
+    let mut dest = Limited::bytes(0);
+    assert_eq!(
+        decode_into(&mut source, &mut dest),
+        Err(DecodeError::DestEmpty)
+    );
+    assert_eq!(source, faulty);
+}
+
 const RANGE: RangeInclusive<usize> = 1..=512;
 
 proptest! {

@@ -163,7 +163,8 @@ pub enum EncodeIntoError {
 ///
 /// The destination buffer needs to have an exact size to fit the data + parity
 /// bits. This can be computed using [`encoded_bit_count`]. Use [`Limited`] to
-/// restrict the size of the destination buffer if necessary.
+/// restrict the size of the destination buffer if necessary. Every bit of the
+/// destination is overwritten, so its previous contents don't matter.
 ///
 /// See [`encode`] for an automatically allocated destination buffer.
 ///
@@ -185,10 +186,11 @@ where
         });
     }
 
+    // Parity positions are cleared here and filled in below.
     let mut input_index = 0;
-    // Starting from 3 because 0, 1, 2 are all reserved for parity.
-    for output_index in 3..encoded_bit_count {
+    for output_index in 0..encoded_bit_count {
         if is_parity_index(output_index) {
+            destination.set_0(output_index);
             continue;
         }
 
@@ -201,19 +203,17 @@ where
         input_index += 1;
     }
 
-    // Data bits are never at power of two positions. Flipping the parity bit
+    // With all parity bits at 0, the syndrome only depends on the data bits.
+    // Data bits are never at power of two positions, so setting the parity bit
     // at `2^i` for every set bit `i` of the syndrome makes the syndrome 0.
-    let bits_to_toggle =
-        u64::try_from(syndrome(destination)).expect("the syndrome is smaller than the buffer");
-
+    let data_syndrome = syndrome(destination);
     for i in 0..error_correction_bit_count {
-        let parity_bit = 1 << i;
-
-        if bits_to_toggle.is_1(i) {
-            destination.flip_bit(parity_bit);
+        if data_syndrome & (1 << i) != 0 {
+            destination.set_1(1 << i);
         }
     }
 
+    // Bit 0 is still 0, so setting it makes the overall parity even.
     if !destination.total_parity_is_even() {
         destination.set_1(0);
     }
@@ -266,7 +266,7 @@ pub enum DecodeError {
 /// Decode an encoded buffer to the original representation.
 ///
 /// The decoding process will correct single-bit-errors which will modify the
-/// source buffer.
+/// source buffer. If an error is returned, neither buffer is modified.
 ///
 /// See module docs for error semantics.
 pub fn decode_into<S, D>(source: &mut S, dest: &mut D) -> Result<DoubleErrorDetection, DecodeError>
@@ -274,8 +274,6 @@ where
     S: BitBuffer + std::fmt::Debug,
     D: BitBuffer,
 {
-    let double_error_detection = correct_error(source);
-
     let encoded_bit_count = encoded_bit_count(dest.bit_count()).ok_or(DecodeError::DestEmpty)?;
 
     if source.bit_count() != encoded_bit_count {
@@ -284,6 +282,9 @@ where
             actual: source.bit_count(),
         });
     }
+
+    // Only after the checks, so `source` is left as is on error.
+    let double_error_detection = correct_error(source);
 
     let mut output_index = 0;
     for input_index in 3..encoded_bit_count {
