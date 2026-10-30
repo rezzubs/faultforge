@@ -130,13 +130,11 @@ fn byte_chunked_encoding() {
 
     {
         let non_faulty = encoded.clone();
-        let (raw_decoded, ded_results) = non_faulty
+        let (raw_decoded, double_error_chunks) = non_faulty
             .decode_chunks_with_double_errors(chunk_size)
             .unwrap();
 
-        for success in ded_results {
-            assert!(success);
-        }
+        assert!(double_error_chunks.is_empty());
 
         let raw_decoded = match raw_decoded {
             Chunks::Byte(byte_chunks) => byte_chunks,
@@ -157,7 +155,7 @@ fn byte_chunked_encoding() {
         }
         assert_ne!(encoded, faulty);
 
-        let (raw_decoded, ded_results) =
+        let (raw_decoded, double_error_chunks) =
             faulty.decode_chunks_with_double_errors(chunk_size).unwrap();
 
         let raw_decoded = match raw_decoded {
@@ -166,9 +164,10 @@ fn byte_chunked_encoding() {
         };
 
         if fault_index == 0 {
-            assert!(ded_results.into_iter().all(|x| !x));
+            let all_chunks = (0..encoded.chunk_count()).collect::<Vec<_>>();
+            assert_eq!(double_error_chunks, all_chunks);
         } else {
-            assert!(ded_results.into_iter().all(|x| x));
+            assert!(double_error_chunks.is_empty());
         }
 
         let mut target = [0f32; 4];
@@ -201,13 +200,11 @@ fn dyn_chunked_encoding() {
 
         {
             let non_faulty = encoded.clone();
-            let (raw_decoded, ded_results) = non_faulty
+            let (raw_decoded, double_error_chunks) = non_faulty
                 .decode_chunks_with_double_errors(chunk_size)
                 .unwrap();
 
-            for success in ded_results {
-                assert!(success);
-            }
+            assert!(double_error_chunks.is_empty());
 
             if let Chunks::Byte(byte_chunks) = raw_decoded {
                 panic!("Expected dyn chunks, got {:?}", byte_chunks)
@@ -231,7 +228,7 @@ fn dyn_chunked_encoding() {
             }
             assert_ne!(encoded, faulty);
 
-            let (raw_decoded, ded_results) =
+            let (raw_decoded, double_error_chunks) =
                 faulty.decode_chunks_with_double_errors(chunk_size).unwrap();
 
             let raw_decoded = match raw_decoded {
@@ -242,9 +239,10 @@ fn dyn_chunked_encoding() {
             };
 
             if fault_index == 0 {
-                assert!(ded_results.into_iter().all(|x| !x));
+                let all_chunks = (0..encoded.chunk_count()).collect::<Vec<_>>();
+                assert_eq!(double_error_chunks, all_chunks);
             } else {
-                assert!(ded_results.into_iter().all(|x| x));
+                assert!(double_error_chunks.is_empty());
             }
 
             let mut target = [0f32; 4];
@@ -378,18 +376,13 @@ proptest! {
         encoded_chunks.flip_bit(fault);
         assert_ne!(before_faults, encoded_chunks);
 
-        let (decoded, results) = encoded_chunks.decode_chunks_with_double_errors(chunk_size).unwrap();
+        let (decoded, double_error_chunks) =
+            encoded_chunks.decode_chunks_with_double_errors(chunk_size).unwrap();
 
-        dbg!(&results);
-        for (i, success) in results.into_iter().enumerate() {
-            let hit_bit_0 =  fault % encoded_chunk_size == 0;
-            let hit_chunk = fault / encoded_chunk_size == i;
-
-            if hit_bit_0 && hit_chunk {
-                assert!(!success);
-            } else {
-                assert!(success);
-            }
+        if fault % encoded_chunk_size == 0 {
+            assert_eq!(double_error_chunks, vec![fault / encoded_chunk_size]);
+        } else {
+            assert!(double_error_chunks.is_empty());
         }
 
         assert_eq!(chunks, decoded);
@@ -424,12 +417,26 @@ proptest! {
         }
 
         let without = encoded_chunks.clone().decode_chunks(chunk_size).unwrap();
-        let (with, results) = encoded_chunks
+        let (with, double_error_chunks) = encoded_chunks
             .clone()
             .decode_chunks_with_double_errors(chunk_size)
             .unwrap();
 
         assert_eq!(without, with);
-        assert_eq!(results.len(), encoded_chunks.chunk_count());
+
+        // Sequential reference for the parallel index collection.
+        let expected_double_error_chunks = encoded_chunks
+            .0
+            .inner()
+            .iter()
+            .enumerate()
+            .filter_map(|(chunk_index, chunk)| {
+                let mut source = chunk.clone();
+                let mut dest = Limited::bytes(chunk_size);
+                let no_double_error = decode_into(&mut source, &mut dest).unwrap();
+                (!no_double_error).then_some(chunk_index)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(double_error_chunks, expected_double_error_chunks);
     }
 }

@@ -15,7 +15,7 @@ use pyo3::{
 /// The decoded arrays and the optional double error detection results.
 ///
 /// See [`PyEncoding::decode_generic`].
-type DecodeOutput<'py, T> = (Vec<OutputArr<'py, T>>, Option<Vec<bool>>);
+type DecodeOutput<'py, T> = (Vec<OutputArr<'py, T>>, Option<OutputArr<'py, u64>>);
 
 #[pyclass(name = "Encoding")]
 pub struct PyEncoding {
@@ -32,8 +32,8 @@ impl PyEncoding {
     /// Decode into `output_buffer`.
     ///
     /// The double error detection results are only collected (and returned
-    /// as [`Some`]) if `collect_double_errors` is set. See
-    /// [`DynChunks::decode_chunks_with_double_errors`] for their meaning.
+    /// as [`Some`]) if `collect_double_errors` is set. They're the indices of
+    /// the chunks in which a double error was detected, in ascending order.
     pub fn decode_generic<'py, T>(
         &self,
         py: Python<'py>,
@@ -48,13 +48,13 @@ impl PyEncoding {
         let decoded = if collect_double_errors {
             input_chunks
                 .decode_chunks_with_double_errors(self.data_bit_count)
-                .map(|(chunks, double_error_results)| (chunks, Some(double_error_results)))
+                .map(|(chunks, double_error_chunks)| (chunks, Some(double_error_chunks)))
         } else {
             input_chunks
                 .decode_chunks(self.data_bit_count)
                 .map(|chunks| (chunks, None))
         };
-        let (output_chunks, double_error_results) = decoded.unwrap_or_else(|err| match err {
+        let (output_chunks, double_error_chunks) = decoded.unwrap_or_else(|err| match err {
             DecodeError::InvalidDataBitsCount(_) => {
                 panic!("The data bits count is immutable from the python side and should be correct yet: {}", err);
             }
@@ -78,13 +78,23 @@ impl PyEncoding {
             "these must match because the chunked buffer can potentially only have more bits, not less.",
         );
 
+        let double_error_chunks = double_error_chunks.map(|double_error_chunks| {
+            PyArray1::from_iter(
+                py,
+                double_error_chunks.into_iter().map(|chunk_index| {
+                    u64::try_from(chunk_index)
+                        .expect("usize is at most 64 bits on supported targets")
+                }),
+            )
+        });
+
         Ok((
             output_buffer
                 .0
                 .into_iter()
                 .map(|vec| PyArray1::from_vec(py, vec))
                 .collect(),
-            double_error_results,
+            double_error_chunks,
         ))
     }
 
