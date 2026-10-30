@@ -12,6 +12,11 @@ use pyo3::{
     types::{PyBytes, PyList},
 };
 
+/// The decoded arrays and the optional double error detection results.
+///
+/// See [`PyEncoding::decode_generic`].
+type DecodeOutput<'py, T> = (Vec<OutputArr<'py, T>>, Option<Vec<bool>>);
+
 #[pyclass(name = "Encoding")]
 pub struct PyEncoding {
     /// A list of the encoded chunks. Guaranteed to store [`PyBytes`] elements.
@@ -24,23 +29,39 @@ pub struct PyEncoding {
 }
 
 impl PyEncoding {
+    /// Decode into `output_buffer`.
+    ///
+    /// The double error detection results are only collected (and returned
+    /// as [`Some`]) if `collect_double_errors` is set. See
+    /// [`DynChunks::decode_chunks_with_double_errors`] for their meaning.
     pub fn decode_generic<'py, T>(
         &self,
         py: Python<'py>,
         mut output_buffer: NonUniformSequence<Vec<Vec<T>>>,
-    ) -> PyResult<(Vec<OutputArr<'py, T>>, Vec<bool>)>
+        collect_double_errors: bool,
+    ) -> PyResult<DecodeOutput<'py, T>>
     where
         T: SizedBitBuffer + numpy::Element + ByteBuffer,
     {
         let input_chunks = self.to_rust(py)?;
 
-        let (output_chunks, decoding_results) = input_chunks
-            .decode_chunks(self.data_bit_count)
-            .unwrap_or_else(|err| match err {
-                DecodeError::InvalidDataBitsCount(_) => {
-                    panic!("The data bits count is immutable from the python side and should be correct yet: {}", err);
-                }
-            });
+        let decoded = if collect_double_errors {
+            input_chunks
+                .decode_chunks_with_double_errors(self.data_bit_count)
+                .map(|(chunks, double_error_results)| (chunks, Some(double_error_results)))
+        } else {
+            input_chunks
+                .decode_chunks(self.data_bit_count)
+                .map(|chunks| (chunks, None))
+        };
+        let (output_chunks, double_error_results) = decoded.unwrap_or_else(|err| match err {
+            DecodeError::InvalidDataBitsCount(_) => {
+                panic!("The data bits count is immutable from the python side and should be correct yet: {}", err);
+            }
+            DecodeError::OutputCountMismatch { .. } => {
+                unreachable!("`decode_chunks` creates one output per chunk: {}", err);
+            }
+        });
 
         let bits_copied = match output_chunks {
             Chunks::Byte(byte_chunks) => {
@@ -63,7 +84,7 @@ impl PyEncoding {
                 .into_iter()
                 .map(|vec| PyArray1::from_vec(py, vec))
                 .collect(),
-            decoding_results,
+            double_error_results,
         ))
     }
 
@@ -127,10 +148,14 @@ impl PyEncoding {
 #[pymethods]
 impl PyEncoding {
     /// Decode a list of float32 values.
+    ///
+    /// See [`PyEncoding::decode_generic`] for `collect_double_errors`.
+    #[pyo3(signature = (*, collect_double_errors = false))]
     pub fn decode_f32<'py>(
         &self,
         py: Python<'py>,
-    ) -> PyResult<(Vec<OutputArr<'py, f32>>, Vec<bool>)> {
+        collect_double_errors: bool,
+    ) -> PyResult<DecodeOutput<'py, f32>> {
         let output_buffer = NonUniformSequence(
             self.item_counts
                 .iter()
@@ -138,13 +163,18 @@ impl PyEncoding {
                 .collect::<Vec<_>>(),
         );
 
-        self.decode_generic(py, output_buffer)
+        self.decode_generic(py, output_buffer, collect_double_errors)
     }
 
+    /// Decode a list of 16 bit unsigned integers.
+    ///
+    /// See [`PyEncoding::decode_generic`] for `collect_double_errors`.
+    #[pyo3(signature = (*, collect_double_errors = false))]
     pub fn decode_u16<'py>(
         &self,
         py: Python<'py>,
-    ) -> PyResult<(Vec<OutputArr<'py, u16>>, Vec<bool>)> {
+        collect_double_errors: bool,
+    ) -> PyResult<DecodeOutput<'py, u16>> {
         let output_buffer = NonUniformSequence(
             self.item_counts
                 .iter()
@@ -152,7 +182,7 @@ impl PyEncoding {
                 .collect::<Vec<_>>(),
         );
 
-        self.decode_generic(py, output_buffer)
+        self.decode_generic(py, output_buffer, collect_double_errors)
     }
 
     pub fn apply_fault<'py>(

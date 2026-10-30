@@ -96,13 +96,15 @@ class SecdedEncoding(Encoding):
             return self._decoded_tensors
         _logger.debug("Recomputing decoded tensors")
 
+        # NOTE: Double error detection results aren't collected because nothing
+        # uses them yet. At scale, collecting them can cost a lot of memory.
         match self._dtype:
             case EncodingDtype.F32:
-                decoded, ded_results = self._encoded_data.decode_f32()
+                decoded, _ = self._encoded_data.decode_f32()
                 torch_decoded = [torch.from_numpy(t) for t in decoded]
 
             case EncodingDtype.F16:
-                decoded, ded_results = self._encoded_data.decode_u16()
+                decoded, _ = self._encoded_data.decode_u16()
                 torch_decoded = [
                     torch.from_numpy(t).view(torch.float16) for t in decoded
                 ]
@@ -111,10 +113,6 @@ class SecdedEncoding(Encoding):
         for cached, decoded in zip(self._decoded_tensors, torch_decoded, strict=True):
             with torch.no_grad():
                 _ = cached.flatten().copy_(decoded)
-
-        # We're discarding the double error detection results for now but may
-        # want to do something with them in the future.
-        _ = ded_results
 
         self._needs_recompute = False
         return self._decoded_tensors

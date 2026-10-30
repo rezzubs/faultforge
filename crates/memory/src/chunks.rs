@@ -52,6 +52,8 @@ pub enum DecodeError {
         "The data bits count must be invalid because a length mismatch was detected during decoding: {0}"
     )]
     InvalidDataBitsCount(#[source] crate::encoding::secded::DecodeError),
+    #[error("Expected one output per chunk ({expected}), got {actual} outputs")]
+    OutputCountMismatch { expected: usize, actual: usize },
 }
 
 /// A [`BitBuffer`] that's chunked into chunks that are multiples of 8 bits.
@@ -181,41 +183,88 @@ same unless they have been tampered with after creation. Got error {err}",
         }))
     }
 
+    /// Decode the chunks in parallel into `output_buffer`.
+    ///
+    /// Requirements for `output_buffer`:
+    /// - It has exactly one output per chunk. Otherwise
+    ///   [`DecodeError::OutputCountMismatch`] is returned.
+    /// - Every output has exactly `chunk_data_bit_count` bits, the data bit
+    ///   count the chunks were encoded with. Otherwise
+    ///   [`DecodeError::InvalidDataBitsCount`] is returned.
+    ///
+    /// The second element is [`Some`] only if `collect_double_errors` is set.
+    /// See [`DynChunks::decode_chunks_with_double_errors`] for its contents.
+    /// Otherwise no per-chunk results are allocated at all.
+    pub fn decode_chunks_into<D>(
+        self,
+        output_buffer: Vec<D>,
+        collect_double_errors: bool,
+    ) -> Result<(Vec<D>, Option<Vec<bool>>), DecodeError>
+    where
+        D: BitBuffer + Send,
+    {
+        // Checked explicitly because `zip` below silently stops at the shorter
+        // side, which would drop chunks without any error.
+        let chunk_count = self.chunk_count();
+        if output_buffer.len() != chunk_count {
+            return Err(DecodeError::OutputCountMismatch {
+                expected: chunk_count,
+                actual: output_buffer.len(),
+            });
+        }
+
+        let decoded =
+            self.0
+                .into_inner()
+                .into_par_iter()
+                .zip(output_buffer)
+                .map(|(mut source, mut dest)| {
+                    // `decode_into` corrects single bit errors in `source` itself.
+                    // That's fine here because `self` is consumed.
+                    let no_double_error =
+                        decode_into(&mut source, &mut dest).map_err(|err| match err {
+                            crate::encoding::secded::DecodeError::DestEmpty => {
+                                unreachable!("There is always at least one chunk")
+                            }
+                            crate::encoding::secded::DecodeError::LengthMismatch { .. } => {
+                                DecodeError::InvalidDataBitsCount(err)
+                            }
+                        })?;
+
+                    Ok((dest, no_double_error))
+                });
+
+        if collect_double_errors {
+            let (decoded_output, double_error_results) =
+                decoded.collect::<Result<(Vec<_>, Vec<_>), DecodeError>>()?;
+            Ok((decoded_output, Some(double_error_results)))
+        } else {
+            let decoded_output = decoded
+                .map(|result| result.map(|(dest, _)| dest))
+                .collect::<Result<Vec<_>, DecodeError>>()?;
+            Ok((decoded_output, None))
+        }
+    }
+
     /// Decode the chunks in parallel.
     ///
     /// The output is guaranteed to be [`DynChunks`].
     ///
-    /// The second `Vec` records double error detections.
+    /// The second element is [`Some`] only if `collect_double_errors` is set.
+    /// See [`DynChunks::decode_chunks_with_double_errors`] for its contents.
     ///
     /// See also:
-    /// - `DynChunks::decode_chunks_byte` (private, for byte-aligned output)
+    /// - [`DynChunks::decode_chunks_byte`]
     /// - [`DynChunks::decode_chunks`]
     pub fn decode_chunks_dyn(
         self,
         chunk_data_bit_count: usize,
-    ) -> Result<(DynChunks, Vec<bool>), DecodeError> {
+        collect_double_errors: bool,
+    ) -> Result<(DynChunks, Option<Vec<bool>>), DecodeError> {
         let chunk_count = self.chunk_count();
-
         let output_buffer = vec![Limited::bytes(chunk_data_bit_count); chunk_count];
-        let (decoded_output, double_error_detections) = self
-            .0
-            .into_inner()
-            .into_par_iter()
-            .zip(output_buffer)
-            .map(|(mut source, mut dest)| {
-                let double_error_detected =
-                    decode_into(&mut source, &mut dest).map_err(|err| match err {
-                        crate::encoding::secded::DecodeError::DestEmpty => {
-                            unreachable!("There is always at least one chunk")
-                        }
-                        crate::encoding::secded::DecodeError::LengthMismatch { .. } => {
-                            DecodeError::InvalidDataBitsCount(err)
-                        }
-                    })?;
-
-                Ok((dest, double_error_detected))
-            })
-            .collect::<Result<(Vec<_>, Vec<_>), DecodeError>>()?;
+        let (decoded_output, double_error_results) =
+            self.decode_chunks_into(output_buffer, collect_double_errors)?;
 
         Ok((
             DynChunks(UniformSequence::new_unchecked(
@@ -223,7 +272,7 @@ same unless they have been tampered with after creation. Got error {err}",
                 chunk_data_bit_count,
                 chunk_count,
             )),
-            double_error_detections,
+            double_error_results,
         ))
     }
 
@@ -231,36 +280,21 @@ same unless they have been tampered with after creation. Got error {err}",
     ///
     /// The output is guaranteed to be [`ByteChunks`].
     ///
-    /// The second `Vec` records double error detections.
+    /// The second element is [`Some`] only if `collect_double_errors` is set.
+    /// See [`DynChunks::decode_chunks_with_double_errors`] for its contents.
     ///
     /// See also:
     /// - [`DynChunks::decode_chunks_dyn`]
     /// - [`DynChunks::decode_chunks`]
-    fn decode_chunks_byte(
+    pub fn decode_chunks_byte(
         self,
         chunk_data_byte_count: usize,
-    ) -> Result<(ByteChunks, Vec<bool>), DecodeError> {
+        collect_double_errors: bool,
+    ) -> Result<(ByteChunks, Option<Vec<bool>>), DecodeError> {
         let chunk_count = self.chunk_count();
         let output_buffer = vec![vec![0u8; chunk_data_byte_count]; chunk_count];
-        let (decoded_output, double_error_detections) = self
-            .0
-            .into_inner()
-            .into_par_iter()
-            .zip(output_buffer)
-            .map(|(mut source, mut dest)| {
-                let double_error_detected =
-                    decode_into(&mut source, &mut dest).map_err(|err| match err {
-                        crate::encoding::secded::DecodeError::DestEmpty => {
-                            unreachable!("There is always at least one chunk")
-                        }
-                        crate::encoding::secded::DecodeError::LengthMismatch { .. } => {
-                            DecodeError::InvalidDataBitsCount(err)
-                        }
-                    })?;
-
-                Ok((dest, double_error_detected))
-            })
-            .collect::<Result<(Vec<_>, Vec<_>), DecodeError>>()?;
+        let (decoded_output, double_error_results) =
+            self.decode_chunks_into(output_buffer, collect_double_errors)?;
 
         Ok((
             ByteChunks(UniformSequence::new_unchecked(
@@ -268,34 +302,66 @@ same unless they have been tampered with after creation. Got error {err}",
                 chunk_data_byte_count * 8,
                 chunk_count,
             )),
-            double_error_detections,
+            double_error_results,
         ))
+    }
+
+    /// Picks the output format and decodes. See [`DynChunks::decode_chunks`].
+    fn decode_chunks_impl(
+        self,
+        chunk_data_bit_count: usize,
+        collect_double_errors: bool,
+    ) -> Result<(Chunks, Option<Vec<bool>>), DecodeError> {
+        Ok(if chunk_data_bit_count.is_multiple_of(8) {
+            let data_byte_count = chunk_data_bit_count / 8;
+            let (chunks, double_error_results) =
+                self.decode_chunks_byte(data_byte_count, collect_double_errors)?;
+            (Chunks::Byte(chunks), double_error_results)
+        } else {
+            let (chunks, double_error_results) =
+                self.decode_chunks_dyn(chunk_data_bit_count, collect_double_errors)?;
+            (Chunks::Dyn(chunks), double_error_results)
+        })
     }
 
     /// Decode all chunks in parallel.
     ///
-    /// Automatically determines the appropriate output format. For manual selection see:
+    /// The output is [`Chunks::Byte`] if `chunk_data_bit_count` is a multiple
+    /// of 8 and [`Chunks::Dyn`] otherwise. To select the output format manually see:
     /// - [`DynChunks::decode_chunks_dyn`]
-    /// - `DynChunks::decode_chunks_byte` (private, for byte-aligned output)
-    ///
-    /// The second `Vec` records double error detections.
+    /// - [`DynChunks::decode_chunks_byte`]
     ///
     /// While it's simple to compute the number of required parity bits to protect a number of data
     /// bits. There is no straightforward way to compute the number of data bits from the number
     /// of encoded bits. Approximations or a brute force method will need to be used. That's why
     /// `data_bits` is given again instead.
-    pub fn decode_chunks(
+    ///
+    /// See [`DynChunks::decode_chunks_with_double_errors`] to also get the
+    /// double error detection results.
+    pub fn decode_chunks(self, chunk_data_bit_count: usize) -> Result<Chunks, DecodeError> {
+        let (chunks, double_error_results) =
+            self.decode_chunks_impl(chunk_data_bit_count, false)?;
+        debug_assert!(double_error_results.is_none());
+        Ok(chunks)
+    }
+
+    /// Like [`DynChunks::decode_chunks`] but also returns the double error
+    /// detection result of every chunk.
+    ///
+    /// The second element has one entry per chunk:
+    /// - `true` if no double error was detected.
+    /// - `false` if a double error was detected.
+    ///
+    /// The decoded chunks are identical to [`DynChunks::decode_chunks`].
+    pub fn decode_chunks_with_double_errors(
         self,
         chunk_data_bit_count: usize,
     ) -> Result<(Chunks, Vec<bool>), DecodeError> {
-        Ok(if chunk_data_bit_count.is_multiple_of(8) {
-            let data_byte_count = chunk_data_bit_count / 8;
-            let (chunks, double_error_detections) = self.decode_chunks_byte(data_byte_count)?;
-            (Chunks::Byte(chunks), double_error_detections)
-        } else {
-            let (chunks, double_error_detections) = self.decode_chunks_dyn(chunk_data_bit_count)?;
-            (Chunks::Dyn(chunks), double_error_detections)
-        })
+        let (chunks, double_error_results) = self.decode_chunks_impl(chunk_data_bit_count, true)?;
+        Ok((
+            chunks,
+            double_error_results.expect("requested double error collection"),
+        ))
     }
 
     /// Get the number of chunks.

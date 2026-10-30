@@ -130,7 +130,9 @@ fn byte_chunked_encoding() {
 
     {
         let non_faulty = encoded.clone();
-        let (raw_decoded, ded_results) = non_faulty.decode_chunks(chunk_size).unwrap();
+        let (raw_decoded, ded_results) = non_faulty
+            .decode_chunks_with_double_errors(chunk_size)
+            .unwrap();
 
         for success in ded_results {
             assert!(success);
@@ -155,7 +157,8 @@ fn byte_chunked_encoding() {
         }
         assert_ne!(encoded, faulty);
 
-        let (raw_decoded, ded_results) = faulty.decode_chunks(chunk_size).unwrap();
+        let (raw_decoded, ded_results) =
+            faulty.decode_chunks_with_double_errors(chunk_size).unwrap();
 
         let raw_decoded = match raw_decoded {
             Chunks::Byte(byte_chunks) => byte_chunks,
@@ -198,7 +201,9 @@ fn dyn_chunked_encoding() {
 
         {
             let non_faulty = encoded.clone();
-            let (raw_decoded, ded_results) = non_faulty.decode_chunks(chunk_size).unwrap();
+            let (raw_decoded, ded_results) = non_faulty
+                .decode_chunks_with_double_errors(chunk_size)
+                .unwrap();
 
             for success in ded_results {
                 assert!(success);
@@ -226,7 +231,8 @@ fn dyn_chunked_encoding() {
             }
             assert_ne!(encoded, faulty);
 
-            let (raw_decoded, ded_results) = faulty.decode_chunks(chunk_size).unwrap();
+            let (raw_decoded, ded_results) =
+                faulty.decode_chunks_with_double_errors(chunk_size).unwrap();
 
             let raw_decoded = match raw_decoded {
                 Chunks::Byte(byte_chunks) => {
@@ -303,6 +309,27 @@ fn bits_per_chunk() {
     }
 }
 
+#[test]
+fn decode_chunks_into_rejects_wrong_output_count() {
+    let chunk_size = 16;
+    let encoded = [0u32; 4].to_chunks(chunk_size).unwrap().encode_chunks();
+    let chunk_count = encoded.chunk_count();
+
+    for output_count in [0, chunk_count - 1, chunk_count + 1] {
+        let outputs = vec![vec![0u8; chunk_size / 8]; output_count];
+        assert_eq!(
+            encoded.clone().decode_chunks_into(outputs, false),
+            Err(DecodeError::OutputCountMismatch {
+                expected: chunk_count,
+                actual: output_count,
+            })
+        );
+    }
+
+    let outputs = vec![vec![0u8; chunk_size / 8]; chunk_count];
+    assert!(encoded.decode_chunks_into(outputs, false).is_ok());
+}
+
 const RANGE: RangeInclusive<usize> = 1..=256;
 
 proptest! {
@@ -351,7 +378,7 @@ proptest! {
         encoded_chunks.flip_bit(fault);
         assert_ne!(before_faults, encoded_chunks);
 
-        let (decoded, results) = encoded_chunks.decode_chunks(chunk_size).unwrap();
+        let (decoded, results) = encoded_chunks.decode_chunks_with_double_errors(chunk_size).unwrap();
 
         dbg!(&results);
         for (i, success) in results.into_iter().enumerate() {
@@ -380,5 +407,29 @@ proptest! {
         assert_eq!(bits_copied, buf.bit_count());
 
         assert_eq!(output_buffer, buf);
+    }
+    #[test]
+    fn decode_without_double_errors_matches_with(
+        (buf, faults) in (RANGE).prop_flat_map(|len| {
+            prop::collection::vec(any::<u32>(), len).prop_flat_map(|v| {
+                let fault_max = 8 * v.len();
+                (Just(v), prop::collection::vec(0..fault_max, 0..8))
+            })
+        }),
+        chunk_size in RANGE,
+    ) {
+        let mut encoded_chunks = buf.to_chunks(chunk_size).unwrap().encode_chunks();
+        for fault in faults {
+            encoded_chunks.flip_bit(fault);
+        }
+
+        let without = encoded_chunks.clone().decode_chunks(chunk_size).unwrap();
+        let (with, results) = encoded_chunks
+            .clone()
+            .decode_chunks_with_double_errors(chunk_size)
+            .unwrap();
+
+        assert_eq!(without, with);
+        assert_eq!(results.len(), encoded_chunks.chunk_count());
     }
 }
