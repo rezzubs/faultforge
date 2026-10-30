@@ -50,134 +50,174 @@ fn bit_count() {
     assert_eq!(error_correction_bit_count(512).unwrap(), 10);
 }
 
+/// Map an encoded bit position to the index of the data bit stored there.
+///
+/// Returns `None` for parity positions.
+fn data_index(position: usize) -> Option<usize> {
+    // Below a data position there are `ilog2(position) + 2` parity positions:
+    // index 0 and every power of two.
+    let parity_positions_below =
+        usize::try_from(position.checked_ilog2()?).expect("the log of a usize fits in a usize") + 2;
+    (!is_parity_index(position)).then(|| position - parity_positions_below)
+}
+
+/// Create a buffer of `bit_count` data bits with an irregular bit pattern.
+fn data_buffer(bit_count: usize) -> Limited<Vec<u8>> {
+    let mut buffer = Limited::bytes(bit_count);
+    for i in 0..bit_count {
+        if (i * 7 + i / 3) % 5 < 2 {
+            buffer.set_1(i);
+        }
+    }
+    buffer
+}
+
+/// Turn two random indices into two distinct positions in `0..bit_count`.
+fn distinct_positions(
+    first: prop::sample::Index,
+    second: prop::sample::Index,
+    bit_count: usize,
+) -> [usize; 2] {
+    let first = first.index(bit_count);
+    let second = second.index(bit_count - 1);
+    // Skip over `first` so the positions never collide.
+    let second = if second >= first { second + 1 } else { second };
+    [first, second]
+}
+
+/// Check the decoding guarantees for up to two distinct faults at encoded
+/// bit positions.
+///
+/// - Every encoded buffer has a syndrome of 0 and an even parity.
+/// - No faults: nothing is detected and the data is intact.
+/// - One fault anywhere, including the overall parity bit: it's corrected in
+///   the encoded buffer, nothing is detected and the data is intact.
+/// - Two faults anywhere: a double error is detected, the encoded buffer is
+///   left as is and the data is decoded as stored.
+///
+/// There are no guarantees for three or more faults.
+///
+/// Data is compared by bits because faults can turn floats into NaN.
+fn check_decode<B>(data: &B, faults: &[usize])
+where
+    B: BitBuffer + Clone,
+{
+    let encoded = encode(data).expect("the data is never empty");
+    assert_eq!(syndrome(&encoded), 0);
+    assert!(encoded.total_parity_is_even());
+
+    let mut faulty = encoded.clone();
+    for &fault in faults {
+        faulty.flip_bit(fault);
+    }
+
+    // Start from the inverted data so a decode that doesn't write every bit
+    // can't pass by accident.
+    let mut decoded = data.clone();
+    for i in 0..decoded.bit_count() {
+        decoded.flip_bit(i);
+    }
+
+    let mut stored = faulty.clone();
+    let double_error_detection = decode_into(&mut stored, &mut decoded).unwrap();
+
+    match faults {
+        [] | [_] => {
+            assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
+            assert_eq!(stored, encoded);
+            assert_eq!(decoded.bit_string(), data.bit_string());
+        }
+        [_, _] => {
+            assert_eq!(double_error_detection, DoubleErrorDetection::Detected);
+            assert_eq!(stored, faulty);
+
+            let mut expected = data.clone();
+            for &fault in faults {
+                if let Some(data_index) = data_index(fault) {
+                    expected.flip_bit(data_index);
+                }
+            }
+            assert_eq!(decoded.bit_string(), expected.bit_string());
+        }
+        _ => panic!("there are no guarantees for three or more faults"),
+    }
+}
+
+#[test]
+fn data_index_skips_parity_positions() {
+    let data_positions = [3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17];
+    for (expected, position) in data_positions.into_iter().enumerate() {
+        assert_eq!(data_index(position), Some(expected));
+    }
+    for position in [0, 1, 2, 4, 8, 16, 32] {
+        assert_eq!(data_index(position), None);
+    }
+}
+
+#[test]
+fn every_single_and_double_fault() {
+    for data_bit_count in 1..=72 {
+        let data = data_buffer(data_bit_count);
+        let encoded_bit_count = encoded_bit_count(data_bit_count).unwrap();
+
+        check_decode(&data, &[]);
+        for first in 0..encoded_bit_count {
+            check_decode(&data, &[first]);
+            for second in first + 1..encoded_bit_count {
+                check_decode(&data, &[first, second]);
+            }
+        }
+    }
+}
+
 const RANGE: RangeInclusive<usize> = 1..=512;
 
 proptest! {
     #[test]
-    fn encode_decode_u8_zero_fault(
-        (buf, mut decoded) in (RANGE).prop_flat_map(|len| {
-            (
-                prop::collection::vec(any::<u8>(), len),
-                prop::collection::vec(any::<u8>(), len),
-            )
-        })
-    ) {
-        let mut encoded = encode(&buf).unwrap();
-
-        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
-
-        assert_eq!(buf, decoded);
+    fn u8_zero_faults(buf in prop::collection::vec(any::<u8>(), RANGE)) {
+        check_decode(&buf, &[]);
     }
 
     #[test]
-    fn encode_decode_u8_single_fault(
-        ((buf, fault), mut decoded) in (RANGE).prop_flat_map(|len| {
-            (
-                prop::collection::vec(any::<u8>(), len).prop_flat_map(|v| {
-                    let fault_max = 8 * v.len();
-                    (Just(v), 1..=fault_max)
-                }),
-                prop::collection::vec(any::<u8>(), len),
-            )
-        })
+    fn u8_single_fault(
+        buf in prop::collection::vec(any::<u8>(), RANGE),
+        fault in any::<prop::sample::Index>(),
     ) {
-        let mut encoded = encode(&buf).expect("we own the output buffer");
-
-        encoded.flip_bit(fault);
-
-        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
-
-        assert_eq!(buf, decoded);
+        let encoded_bit_count = encoded_bit_count(buf.bit_count()).unwrap();
+        check_decode(&buf, &[fault.index(encoded_bit_count)]);
     }
 
     #[test]
-    fn encode_decode_u8_bit0_fault(
-        (buf, mut decoded) in (RANGE).prop_flat_map(|len| {
-            (
-                prop::collection::vec(any::<u8>(), len),
-                prop::collection::vec(any::<u8>(), len),
-            )
-        })
+    fn u8_two_faults(
+        buf in prop::collection::vec(any::<u8>(), RANGE),
+        first in any::<prop::sample::Index>(),
+        second in any::<prop::sample::Index>(),
     ) {
-        let mut encoded = encode(&buf).unwrap();
-
-        encoded.flip_bit(0);
-
-        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
-        // Bit zero faults always trigger a double error detection.
-        assert_eq!(double_error_detection, DoubleErrorDetection::Detected);
-
-        assert_eq!(buf, decoded);
+        let encoded_bit_count = encoded_bit_count(buf.bit_count()).unwrap();
+        check_decode(&buf, &distinct_positions(first, second, encoded_bit_count));
     }
 
     #[test]
-    fn encode_decode_f32_zero_fault(
-        (buf, mut decoded) in (RANGE).prop_flat_map(|len| {
-            (
-                prop::collection::vec(any::<f32>(), len),
-                prop::collection::vec(any::<f32>(), len),
-            )
-        })
-    ) {
-        let mut encoded = encode(&buf).unwrap();
-
-        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
-
-        assert_eq!(buf, decoded);
+    fn f32_zero_faults(buf in prop::collection::vec(any::<f32>(), RANGE)) {
+        check_decode(&buf, &[]);
     }
 
     #[test]
-    fn encode_decode_f32_single_fault(
-        ((buf, fault), mut decoded) in (RANGE).prop_flat_map(|len| {
-            (
-                prop::collection::vec(any::<f32>(), len).prop_flat_map(|v| {
-                    let fault_max = 8 * v.len();
-                    (Just(v), 1..=fault_max)
-                }),
-                prop::collection::vec(any::<f32>(), len),
-            )
-        })
+    fn f32_single_fault(
+        buf in prop::collection::vec(any::<f32>(), RANGE),
+        fault in any::<prop::sample::Index>(),
     ) {
-        let mut encoded = encode(&buf).unwrap();
-
-        encoded.flip_bit(fault);
-
-        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
-
-        assert_eq!(buf, decoded);
+        let encoded_bit_count = encoded_bit_count(buf.bit_count()).unwrap();
+        check_decode(&buf, &[fault.index(encoded_bit_count)]);
     }
 
     #[test]
-    fn encode_decode_f32_two_faults(
-        ((buf, (fault1, fault2)), mut decoded) in (RANGE).prop_flat_map(|len| (
-            prop::collection::vec(any::<f32>(), len).prop_flat_map(|v| {
-                let fault_max = 8 * v.len();
-                (Just(v), (1..=fault_max, 1..=fault_max).prop_filter("must differ", |(a, b)| a != b))
-            }),
-            prop::collection::vec(any::<f32>(), len),
-        ))
+    fn f32_two_faults(
+        buf in prop::collection::vec(any::<f32>(), RANGE),
+        first in any::<prop::sample::Index>(),
+        second in any::<prop::sample::Index>(),
     ) {
-        let encoded = encode(&buf).unwrap();
-
-        let mut faulty = encoded.clone();
-        faulty.flip_bit(fault1);
-        faulty.flip_bit(fault2);
-
-        assert_ne!(faulty, encoded);
-
-        // A two bit flip will always be marked as unsuccessful even if in
-        // reality the data matches. See [`correct_error`].
-        let double_error_detection = decode_into(&mut faulty, &mut decoded).unwrap();
-        assert_eq!(double_error_detection, DoubleErrorDetection::Detected);
-
-        // If only parity bits were hit then the original data is safe. The decoding
-        // algorithm must still call a failure because there's no way to tell which bits
-        // were hit.
-        if is_parity_index(fault1) && is_parity_index(fault2) {
-            assert_eq!(buf, decoded);
-        }        }
+        let encoded_bit_count = encoded_bit_count(buf.bit_count()).unwrap();
+        check_decode(&buf, &distinct_positions(first, second, encoded_bit_count));
+    }
 }

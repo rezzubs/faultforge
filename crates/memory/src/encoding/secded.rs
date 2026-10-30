@@ -1,24 +1,41 @@
 //! Single error correction (SEC), double error detection (DED) encoding.
 //!
-//! This scheme embeds parity bits in power of two positions and shifts all
-//! other bits accordingly. Bit zero is used as a global parity check for the
-//! whole buffer.
+//! This is an extended Hamming code. In the encoded buffer:
+//! - Bit 0 is the overall parity bit. It makes the number of 1 bits in the
+//!   whole buffer even.
+//! - Bits at power of two positions (1, 2, 4, 8, ...) are Hamming parity bits.
+//! - All other positions hold the data bits in order.
 //!
 //! # Error semantics
 //!
-//! This scheme can recover from all single-bit errors and can detect any
-//! multiple of two number of errors (commonly called DED). If DED is triggered
-//! the buffer will not be altered and will be decoded in the faulty state as
-//! is.
+//! Decoding looks at two values:
+//! - The syndrome: the XOR of the indices of all 1 bits. It's 0 for a valid
+//!   buffer. A single flip at index `i` changes it by `i`, so a flip at bit 0
+//!   doesn't change it at all.
+//! - The overall parity. Every single flip, including one at bit 0, makes it
+//!   odd.
 //!
-//! Flips in bit zero will always cause a double error detection but will not
-//! corrupt the data.
+//! | Syndrome      | Parity | Interpretation               | Action                |
+//! |---------------|--------|------------------------------|-----------------------|
+//! | 0             | even   | no error                     | none                  |
+//! | 0             | odd    | single error at bit 0        | corrected             |
+//! | in bounds     | odd    | single error at the syndrome | corrected             |
+//! | out of bounds | odd    | not a single error           | double error detected |
+//! | not 0         | even   | double error                 | double error detected |
 //!
-//! Odd numbers of faults other than 1 will not trigger DED and will trigger an
-//! invalid correction. There is an exception for fault patterns which appear
-//! like a single out of bounds error to the algorithm; these will still trigger
-//! DED because that case is only possible for multi-bit errors. This typically
-//! happens if an odd number of high bits are flipped simultaneously.
+//! Guarantees:
+//! - Every single bit error is corrected.
+//! - Every double bit error is detected. Two flips keep the parity even and
+//!   two different indices never XOR to 0.
+//! - If a double error is detected, the buffer is left as is and decoded in
+//!   its faulty state.
+//!
+//! There are no guarantees for three or more errors:
+//! - An odd number of errors looks like a single error. It's either
+//!   "corrected" at the wrong position, which silently corrupts the data, or
+//!   detected if the syndrome is out of bounds.
+//! - An even number of errors is detected unless the syndrome is 0. Then the
+//!   buffer looks valid, e.g. after flips at 1, 2, 4 and 7.
 
 #[cfg(test)]
 mod tests;
@@ -61,16 +78,15 @@ fn error_correction_bit_count(data_bit_count: usize) -> Option<usize> {
 /// Returns None if `data_bit_count` is 0.
 #[must_use]
 pub fn encoded_bit_count(data_bit_count: usize) -> Option<usize> {
-    // +1 for the 0th double error detection bit.
+    // +1 for the overall parity bit at index 0.
     Some(data_bit_count + error_correction_bit_count(data_bit_count)? + 1)
 }
 
-/// Get the index of a flipped bit in an encoded buffer in case of a single bit
-/// flip.
+/// Compute the syndrome of an encoded buffer: the XOR of the indices of all 1
+/// bits.
 ///
-/// 0 marks a successful case. This means it's not possible to correct a flip on
-/// bit 0. Flips on bit 0 will always trigger a double error detection.
-fn error_index<T>(buffer: &T) -> usize
+/// See module docs for how it's interpreted.
+fn syndrome<T>(buffer: &T) -> usize
 where
     T: BitBuffer,
 {
@@ -89,7 +105,8 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[must_use]
 pub enum DoubleErrorDetection {
-    /// No double error was detected. A single bit error, if any, was corrected.
+    /// No double error was detected. If there was a single bit error, it was
+    /// corrected.
     NotDetected,
     /// A double error was detected. The buffer was left as is.
     Detected,
@@ -110,27 +127,21 @@ fn correct_error<T>(buffer: &mut T) -> DoubleErrorDetection
 where
     T: BitBuffer,
 {
-    // The parity check provides double error detection. During encoding the
-    // 0th bit is set so the parity across all bits is even. For single bit
-    // errors we expect an odd parity.
-    match (error_index(buffer), buffer.total_parity_is_even()) {
-        // We couldn't find an error location and the total parity has not
-        // changed.
+    // An odd parity means an odd number of flips. It's assumed to be a single
+    // flip, located by the syndrome. See the table in the module docs.
+    match (syndrome(buffer), buffer.total_parity_is_even()) {
         (0, true) => DoubleErrorDetection::NotDetected,
-        // We're not detecting any errors but the parity changed therefore
-        // there must be multiple errors which are canceling each other out
-        (0, false) => DoubleErrorDetection::Detected,
-        // We found an error location but the parity didn't change therefore
-        // there must be two or more errors.
+        // The syndrome shows an error but the parity says the number of flips
+        // is even, so it's at least two. It can't be corrected.
         (_, true) => DoubleErrorDetection::Detected,
-        // If only one of our protected bits flipped it will cause the error
-        // index to be in our protected range.
-        (e, false) if e >= buffer.bit_count() => DoubleErrorDetection::Detected,
-        // We found an error location and the parity changed which means we
-        // either have 1 error which we will attempt to correct or an
-        // undetectable odd number of errors.
-        (e, false) => {
-            buffer.flip_bit(e);
+        // A single flip always produces a syndrome within the buffer, so this
+        // must be a multi-bit error. It's possible because the buffer can be
+        // shorter than the largest index its parity bits can address.
+        (error_index, false) if error_index >= buffer.bit_count() => DoubleErrorDetection::Detected,
+        // A single flip at the syndrome. A syndrome of 0 points at the overall
+        // parity bit.
+        (error_index, false) => {
+            buffer.flip_bit(error_index);
             DoubleErrorDetection::NotDetected
         }
     }
@@ -190,8 +201,10 @@ where
         input_index += 1;
     }
 
+    // Data bits are never at power of two positions. Flipping the parity bit
+    // at `2^i` for every set bit `i` of the syndrome makes the syndrome 0.
     let bits_to_toggle =
-        u64::try_from(error_index(destination)).expect("error index out of bounds");
+        u64::try_from(syndrome(destination)).expect("the syndrome is smaller than the buffer");
 
     for i in 0..error_correction_bit_count {
         let parity_bit = 1 << i;

@@ -148,7 +148,7 @@ fn byte_chunked_encoding() {
         assert_eq!(target, source);
     }
 
-    for fault_index in 0..chunk_size {
+    for fault_index in 0..encoded.bits_per_chunk() {
         let mut faulty = encoded.clone();
         for chunk in faulty.0.inner_mut() {
             chunk.flip_bit(fault_index);
@@ -163,12 +163,7 @@ fn byte_chunked_encoding() {
             Chunks::Dyn(dyn_chunks) => panic!("Expected byte chunks, got {:?}", dyn_chunks),
         };
 
-        if fault_index == 0 {
-            let all_chunks = (0..encoded.chunk_count()).collect::<Vec<_>>();
-            assert_eq!(double_error_chunks, all_chunks);
-        } else {
-            assert!(double_error_chunks.is_empty());
-        }
+        assert!(double_error_chunks.is_empty());
 
         let mut target = [0f32; 4];
         let result = raw_decoded.copy_into_chunked(&mut target);
@@ -221,7 +216,7 @@ fn dyn_chunked_encoding() {
             assert_eq!(target, source);
         }
 
-        for fault_index in 0..chunk_size {
+        for fault_index in 0..encoded.bits_per_chunk() {
             let mut faulty = encoded.clone();
             for chunk in faulty.0.inner_mut() {
                 chunk.flip_bit(fault_index);
@@ -238,12 +233,7 @@ fn dyn_chunked_encoding() {
                 Chunks::Dyn(dyn_chunks) => dyn_chunks,
             };
 
-            if fault_index == 0 {
-                let all_chunks = (0..encoded.chunk_count()).collect::<Vec<_>>();
-                assert_eq!(double_error_chunks, all_chunks);
-            } else {
-                assert!(double_error_chunks.is_empty());
-            }
+            assert!(double_error_chunks.is_empty());
 
             let mut target = [0f32; 4];
             let result = raw_decoded.copy_into(&mut target);
@@ -358,32 +348,23 @@ proptest! {
 
     #[test]
     fn encode_decode_u32_single_fault(
-        (buf, fault) in (RANGE).prop_flat_map(|len| {
-            prop::collection::vec(any::<u32>(), len).prop_flat_map(|v| {
-                let fault_max = 8 * v.len();
-                (Just(v), 1..fault_max)
-            })
-        }),
+        buf in prop::collection::vec(any::<u32>(), RANGE),
+        fault in any::<prop::sample::Index>(),
         chunk_size in RANGE,
     ) {
 
         let chunks = buf.to_chunks(chunk_size).unwrap();
 
         let mut encoded_chunks = chunks.encode_chunks();
-        let encoded_chunk_size = encoded_chunks.bits_per_chunk();
         let before_faults = encoded_chunks.clone();
 
-        encoded_chunks.flip_bit(fault);
+        encoded_chunks.flip_bit(fault.index(encoded_chunks.bit_count()));
         assert_ne!(before_faults, encoded_chunks);
 
         let (decoded, double_error_chunks) =
             encoded_chunks.decode_chunks_with_double_errors(chunk_size).unwrap();
 
-        if fault % encoded_chunk_size == 0 {
-            assert_eq!(double_error_chunks, vec![fault / encoded_chunk_size]);
-        } else {
-            assert!(double_error_chunks.is_empty());
-        }
+        assert!(double_error_chunks.is_empty());
 
         assert_eq!(chunks, decoded);
 
