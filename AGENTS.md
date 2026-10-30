@@ -12,6 +12,10 @@ fault-injection experiments, and a reference experiment built on it.
     shims; the real implementation lives in `faultforge/_impl/`. This design
     makes it simple to avoid import errors while keeping the public API shape
     distinct from the one that's convenient for implementation.
+  - Module-level names in `_impl` that aren't used outside their own module
+    get a `_` prefix. Names re-exported by a shim or imported by another
+    `_impl` module don't. Tests may import `_` names.
+    `tests/test_private_names.py` enforces this.
 - `crates/` - Cargo workspace. Rust crates that are either standalone or
   consumed as PyO3 extension modules.
   - `crates/bindings` - A PyO3 extension exposed to python as

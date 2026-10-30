@@ -113,7 +113,7 @@ class ScoreDisplay(Protocol):
 
     def format_score(self, score: float) -> str:
         """Format a single score value."""
-        return default_score_format(score, self.display_unit())
+        return _default_score_format(score, self.display_unit())
 
 
 class _DefaultScoreDisplay(ScoreDisplay):
@@ -123,7 +123,7 @@ class _DefaultScoreDisplay(ScoreDisplay):
     """
 
 
-def default_score_format(score: float, unit: str | None = None) -> str:
+def _default_score_format(score: float, unit: str | None = None) -> str:
     # subjective reasoning: values larger than 1e4 are significantly harder
     # to read. Using powers of 10 improves readablity.
     if score < 1e4:

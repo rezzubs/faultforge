@@ -29,13 +29,13 @@ from faultforge._impl.loading.abc import ModelBundle
 from faultforge._impl.metric import Perplexity
 from faultforge._impl.progress import Progress, stage
 
-WIKITEXT_REPOSITORY = "Salesforce/wikitext"
+_WIKITEXT_REPOSITORY = "Salesforce/wikitext"
 """The HuggingFace dataset repository of WikiText."""
 
-WIKITEXT_REVISION = "b08601e04326c79dfdd32d625aee71d232d685c3"
-"""The pinned commit of [`WIKITEXT_REPOSITORY`] that is loaded."""
+_WIKITEXT_REVISION = "b08601e04326c79dfdd32d625aee71d232d685c3"
+"""The pinned commit of [`_WIKITEXT_REPOSITORY`] that is loaded."""
 
-COMMIT_HASH_PATTERN = re.compile(r"[0-9a-f]{40}")
+_COMMIT_HASH_PATTERN = re.compile(r"[0-9a-f]{40}")
 """A full git commit hash as used by the HuggingFace Hub: 40 lowercase hex characters."""
 
 
@@ -107,12 +107,12 @@ class WikiTextBundle(ModelBundle):
     """Parameter dtype the model is loaded with."""
 
     def __post_init__(self) -> None:
-        if COMMIT_HASH_PATTERN.fullmatch(self.revision) is None:
+        if _COMMIT_HASH_PATTERN.fullmatch(self.revision) is None:
             raise ValueError(
                 f"expected revision to be a full commit hash, got {self.revision!r}"
             )
-        ensure_not_local_model(self.model_id)
-        validate_window(self.sequence_length, self._resolved_stride())
+        _ensure_not_local_model(self.model_id)
+        _validate_window(self.sequence_length, self._resolved_stride())
 
     def _resolved_stride(self) -> int:
         """The stride with the default filled in."""
@@ -127,7 +127,7 @@ class WikiTextBundle(ModelBundle):
             scalars={
                 "model": self.model_id,
                 "model_revision": self.revision,
-                "dataset_revision": WIKITEXT_REVISION,
+                "dataset_revision": _WIKITEXT_REVISION,
                 "dataset_config": self.dataset_config.value,
                 "split": self.split.value,
                 "sequence_length": self.sequence_length,
@@ -143,12 +143,12 @@ class WikiTextBundle(ModelBundle):
         *,
         progress: Progress | None = None,
     ) -> nn.Module:
-        ensure_not_local_model(self.model_id)
+        _ensure_not_local_model(self.model_id)
         with stage(progress, f"Loading model {self.model_id}"):
             model = AutoModelForCausalLM.from_pretrained(
                 self.model_id, revision=self.revision, dtype=self.dtype
             )
-        return HuggingFaceLmWrapper(model).to(device=device)
+        return _HuggingFaceLmWrapper(model).to(device=device)
 
     @override
     def load_dataset(
@@ -160,11 +160,11 @@ class WikiTextBundle(ModelBundle):
         seed: int | None = None,
         progress: Progress | None = None,
     ) -> BatchedDataset:
-        ensure_not_local_model(self.model_id)
+        _ensure_not_local_model(self.model_id)
         with stage(progress, f"Loading dataset {self.dataset_config}"):
-            tokenizer = CausalTokenizer(self.model_id, self.revision)
-            text = load_wikitext(self.dataset_config, self.split)
-            dataset = SlidingWindowDataset(
+            tokenizer = _CausalTokenizer(self.model_id, self.revision)
+            text = _load_wikitext(self.dataset_config, self.split)
+            dataset = _SlidingWindowDataset(
                 token_ids=tokenizer.encode(text),
                 padding_token_id=tokenizer.pad_token_id,
                 sequence_length=self.sequence_length,
@@ -176,7 +176,7 @@ class WikiTextBundle(ModelBundle):
 
 
 @final
-class HuggingFaceLmWrapper(nn.Module):
+class _HuggingFaceLmWrapper(nn.Module):
     """Unwraps a HuggingFace causal LM's output down to a plain logits Tensor.
 
     HuggingFace causal LMs return an object with the logits and other metadata.
@@ -194,7 +194,7 @@ class HuggingFaceLmWrapper(nn.Module):
 
 
 @final
-class CausalTokenizer:
+class _CausalTokenizer:
     """A HuggingFace tokenizer with a guaranteed `pad_token_id`.
 
     If the tokenizer defines no pad token, `pad_token_id` falls back to the
@@ -239,7 +239,7 @@ class CausalTokenizer:
 
 
 @final
-class SlidingWindowDataset(Dataset[tuple[Tensor, Tensor]]):
+class _SlidingWindowDataset(Dataset[tuple[Tensor, Tensor]]):
     """Formats a token stream into `(input, target)` token id pairs for next-token evaluation.
 
     Given one flat sequence of token ids (e.g. a tokenized WikiText split), this
@@ -276,7 +276,7 @@ class SlidingWindowDataset(Dataset[tuple[Tensor, Tensor]]):
         sequence_length: int,
         stride: int,
     ) -> None:
-        validate_window(sequence_length, stride)
+        _validate_window(sequence_length, stride)
         if token_ids.ndim != 1:
             raise ValueError(
                 f"expected a 1D tensor of token ids, got shape {tuple(token_ids.shape)}"
@@ -349,8 +349,8 @@ class SlidingWindowDataset(Dataset[tuple[Tensor, Tensor]]):
         return self._inputs[index], self._targets[index]
 
 
-def validate_window(sequence_length: int, stride: int) -> None:
-    """Checks the sliding window parameters of [`SlidingWindowDataset`]."""
+def _validate_window(sequence_length: int, stride: int) -> None:
+    """Checks the sliding window parameters of [`_SlidingWindowDataset`]."""
     # The last position of a window is never scored because the token it
     # predicts is outside the window. A window of 1 token would score nothing.
     if sequence_length < 2:
@@ -376,22 +376,22 @@ def validate_window(sequence_length: int, stride: int) -> None:
         )
 
 
-def load_wikitext(config: WikiTextConfig, split: WikiTextSplit) -> str:
-    """Loads a WikiText split at [`WIKITEXT_REVISION`] as one string.
+def _load_wikitext(config: WikiTextConfig, split: WikiTextSplit) -> str:
+    """Loads a WikiText split at [`_WIKITEXT_REVISION`] as one string.
 
     Lines are joined exactly like HuggingFace's perplexity recipe (empty lines
     included) so results are comparable to published numbers.
     """
     split_dataset = datasets.load_dataset(
-        WIKITEXT_REPOSITORY,
+        _WIKITEXT_REPOSITORY,
         config.value,
         split=split.value,
-        revision=WIKITEXT_REVISION,
+        revision=_WIKITEXT_REVISION,
     )
     return "\n\n".join(split_dataset["text"])
 
 
-def ensure_not_local_model(model_id: str) -> None:
+def _ensure_not_local_model(model_id: str) -> None:
     """Raises `ValueError` if `model_id` refers to a local directory.
 
     HuggingFace loads a local directory instead of the Hub model when one
@@ -421,11 +421,11 @@ def resolve_huggingface_revision(model_id: str, revision: str = "main") -> str:
       `huggingface_hub.errors.RevisionNotFoundError` if the Hub doesn't know
       the model or revision.
     """
-    if COMMIT_HASH_PATTERN.fullmatch(revision) is not None:
+    if _COMMIT_HASH_PATTERN.fullmatch(revision) is not None:
         return revision
 
     if is_offline_mode():
-        return cached_huggingface_revision(model_id, revision)
+        return _cached_huggingface_revision(model_id, revision)
 
     commit_hash = HfApi().model_info(model_id, revision=revision).sha
     if commit_hash is None:
@@ -433,7 +433,7 @@ def resolve_huggingface_revision(model_id: str, revision: str = "main") -> str:
     return commit_hash
 
 
-def cached_huggingface_revision(model_id: str, revision: str) -> str:
+def _cached_huggingface_revision(model_id: str, revision: str) -> str:
     """Looks up the commit hash of a branch or tag in the local HuggingFace cache."""
     try:
         cache = scan_cache_dir()

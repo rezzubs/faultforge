@@ -50,7 +50,7 @@ class Fingerprint(BaseModel):
         one.
         """
         differences: list[FingerprintDifference] = []
-        collect_differences(self, other, [], differences)
+        _collect_differences(self, other, [], differences)
         return differences
 
     def raise_if_differs(self, other: Fingerprint) -> None:
@@ -63,7 +63,7 @@ class Fingerprint(BaseModel):
             raise FingerprintError(differences)
 
 
-class Absent:
+class _Absent:
     """Marks a value that is present on one side of a diff but not the other."""
 
     @override
@@ -71,7 +71,7 @@ class Absent:
         return "<absent>"
 
 
-ABSENT = Absent()
+ABSENT = _Absent()
 """Singleton used in a `FingerprintDifference` when a value exists on only one side."""
 
 
@@ -112,14 +112,14 @@ class FingerprintError(ValueError):
         )
 
 
-def collect_differences(
+def _collect_differences(
     expected: Fingerprint,
     actual: Fingerprint,
     path: list[str],
     out: list[FingerprintDifference],
 ) -> None:
     """Walk two fingerprints in lockstep, appending every disagreement to `out`."""
-    location = format_path(path)
+    location = _format_path(path)
 
     if expected.kind != actual.kind:
         # Differing kinds make the rest of the subtree incomparable, so report
@@ -137,7 +137,7 @@ def collect_differences(
     for key in sorted(expected.scalars.keys() | actual.scalars.keys()):
         in_expected = key in expected.scalars
         in_actual = key in actual.scalars
-        scalar_path = format_path([*path, key])
+        scalar_path = _format_path([*path, key])
 
         if in_expected and in_actual:
             if expected.scalars[key] != actual.scalars[key]:
@@ -171,7 +171,7 @@ def collect_differences(
     for key in sorted(expected.children.keys() | actual.children.keys()):
         expected_group = expected.children.get(key)
         actual_group = actual.children.get(key)
-        group_path = format_path([*path, key])
+        group_path = _format_path([*path, key])
 
         # only one of the two branches will match at a time.
         if expected_group is None:
@@ -206,7 +206,7 @@ def collect_differences(
             )
 
         for index in range(min(len(expected_group), len(actual_group))):
-            collect_differences(
+            _collect_differences(
                 expected_group[index],
                 actual_group[index],
                 [*path, f"{key}[{index}]"],
@@ -214,6 +214,6 @@ def collect_differences(
             )
 
 
-def format_path(path: list[str]) -> str:
+def _format_path(path: list[str]) -> str:
     """Join path segments into a dotted location, defaulting to the root marker."""
     return ".".join(path) if path else "<root>"

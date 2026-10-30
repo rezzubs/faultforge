@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from faultforge._impl.progress import ProgressStage, _format_duration
+from faultforge._impl.progress import _format_duration, _ProgressStage
 from faultforge.progress import Progress, stage
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
@@ -27,7 +27,7 @@ def test_stage_logs_started_and_done(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     # "done" is only logged at INFO once elapsed time exceeds min_log_interval
-    # (see ProgressStage.__exit__); a fake clock simulates a slow stage so
+    # (see _ProgressStage.__exit__); a fake clock simulates a slow stage so
     # this test doesn't need to actually sleep.
     caplog.set_level(logging.INFO)
     clock = _FakeClock()
@@ -125,13 +125,13 @@ def test_advance_call_count_matches_loop_iterations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[int] = []
-    original = ProgressStage.advance
+    original = _ProgressStage.advance
 
-    def counting_advance(self: ProgressStage, n: int = 1) -> None:
+    def counting_advance(self: _ProgressStage, n: int = 1) -> None:
         calls.append(n)
         original(self, n)
 
-    monkeypatch.setattr(ProgressStage, "advance", counting_advance)
+    monkeypatch.setattr(_ProgressStage, "advance", counting_advance)
 
     with stage(Progress(), "X", total=3) as s:
         for _ in range(3):

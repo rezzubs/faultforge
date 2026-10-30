@@ -21,12 +21,12 @@ REVISION = "0123456789abcdef0123456789abcdef01234567"
 
 def make_windows(
     token_count: int, sequence_length: int = 4, stride: int = 2
-) -> wikitext.SlidingWindowDataset:
+) -> wikitext._SlidingWindowDataset:
     """Build the dataset on the token ids `1..token_count`.
 
     Ids start at 1 so they never collide with the padding token id.
     """
-    return wikitext.SlidingWindowDataset(
+    return wikitext._SlidingWindowDataset(
         torch.arange(1, token_count + 1),
         PADDING_TOKEN_ID,
         sequence_length=sequence_length,
@@ -34,11 +34,11 @@ def make_windows(
     )
 
 
-def all_inputs(dataset: wikitext.SlidingWindowDataset) -> torch.Tensor:
+def all_inputs(dataset: wikitext._SlidingWindowDataset) -> torch.Tensor:
     return torch.stack([dataset[index][0] for index in range(len(dataset))])
 
 
-def all_targets(dataset: wikitext.SlidingWindowDataset) -> torch.Tensor:
+def all_targets(dataset: wikitext._SlidingWindowDataset) -> torch.Tensor:
     return torch.stack([dataset[index][1] for index in range(len(dataset))])
 
 
@@ -46,7 +46,7 @@ def test_fetches_pinned_wikitext_with_config_and_split() -> None:
     with patch.object(
         wikitext.datasets, "load_dataset", return_value={"text": ["abc"]}
     ) as load_dataset:
-        wikitext.load_wikitext(
+        wikitext._load_wikitext(
             wikitext.WikiTextConfig.Raw2, wikitext.WikiTextSplit.Validation
         )
 
@@ -54,7 +54,7 @@ def test_fetches_pinned_wikitext_with_config_and_split() -> None:
         "Salesforce/wikitext",
         "wikitext-2-raw-v1",
         split="validation",
-        revision=wikitext.WIKITEXT_REVISION,
+        revision=wikitext._WIKITEXT_REVISION,
     )
 
 
@@ -65,7 +65,7 @@ def test_text_is_joined_like_huggingface() -> None:
         "load_dataset",
         return_value={"text": ["first", "", "second"]},
     ):
-        text = wikitext.load_wikitext(
+        text = wikitext._load_wikitext(
             wikitext.WikiTextConfig.Raw2, wikitext.WikiTextSplit.Test
         )
 
@@ -99,7 +99,7 @@ def test_fewer_than_two_tokens_are_rejected(token_count: int) -> None:
 
 def test_multidimensional_token_ids_are_rejected() -> None:
     with pytest.raises(ValueError, match="1D"):
-        wikitext.SlidingWindowDataset(
+        wikitext._SlidingWindowDataset(
             torch.ones(2, 4, dtype=torch.int64), PADDING_TOKEN_ID, 4, 2
         )
 
@@ -279,7 +279,7 @@ def test_fingerprint_is_filled_in() -> None:
     assert fingerprint.scalars == {
         "model": "model",
         "model_revision": REVISION,
-        "dataset_revision": wikitext.WIKITEXT_REVISION,
+        "dataset_revision": wikitext._WIKITEXT_REVISION,
         "dataset_config": "wikitext-2-raw-v1",
         "split": "test",
         "sequence_length": 8,
@@ -372,7 +372,7 @@ def test_missing_pad_token_falls_back_to_eos() -> None:
     with patch.object(
         wikitext.AutoTokenizer, "from_pretrained", return_value=tokenizer
     ):
-        causal_tokenizer = wikitext.CausalTokenizer("model", REVISION)
+        causal_tokenizer = wikitext._CausalTokenizer("model", REVISION)
 
     assert causal_tokenizer.pad_token_id == 2
 
@@ -386,6 +386,6 @@ def test_wrapper_returns_only_the_logits() -> None:
             _ = input_ids
             return SimpleNamespace(logits=logits, other_metadata="ignored")
 
-    wrapper = wikitext.HuggingFaceLmWrapper(FakeModel())
+    wrapper = wikitext._HuggingFaceLmWrapper(FakeModel())
 
     assert wrapper(torch.tensor([[1, 2, 3]])) is logits

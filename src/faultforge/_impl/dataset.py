@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from faultforge._impl.progress import Progress, stage
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 type DeviceLike = torch.device | str | int
 
