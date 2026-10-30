@@ -243,7 +243,7 @@ same unless they have been tampered with after creation. Got error {err}",
             .map(|(chunk_index, (mut source, mut dest))| {
                 // `decode_into` corrects single bit errors in `source` itself.
                 // That's fine here because `self` is consumed.
-                let no_double_error =
+                let double_error_detection =
                     decode_into(&mut source, &mut dest).map_err(|err| match err {
                         crate::encoding::secded::DecodeError::DestEmpty => {
                             unreachable!("There is always at least one chunk")
@@ -253,7 +253,9 @@ same unless they have been tampered with after creation. Got error {err}",
                         }
                     })?;
 
-                if !no_double_error && let Some(double_error_chunks) = &double_error_chunks {
+                if double_error_detection.is_detected()
+                    && let Some(double_error_chunks) = &double_error_chunks
+                {
                     double_error_chunks
                         .lock()
                         .expect("pushing an index can't panic, so the lock is never poisoned")

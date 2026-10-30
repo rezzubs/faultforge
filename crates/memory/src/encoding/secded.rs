@@ -83,11 +83,30 @@ where
         .fold(0, |acc, x| acc.bitxor(x))
 }
 
+/// Whether decoding detected a double error.
+///
+/// See module docs for error semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub enum DoubleErrorDetection {
+    /// No double error was detected. A single bit error, if any, was corrected.
+    NotDetected,
+    /// A double error was detected. The buffer was left as is.
+    Detected,
+}
+
+impl DoubleErrorDetection {
+    /// Check if a double error was detected.
+    #[must_use]
+    pub fn is_detected(self) -> bool {
+        self == DoubleErrorDetection::Detected
+    }
+}
+
 /// Correct any single bit flip error in an encoded buffer.
 ///
-/// A return value of `false` signifies a double error detection. See module
-/// docs for error semantics.
-fn correct_error<T>(buffer: &mut T) -> bool
+/// See module docs for error semantics.
+fn correct_error<T>(buffer: &mut T) -> DoubleErrorDetection
 where
     T: BitBuffer,
 {
@@ -97,22 +116,22 @@ where
     match (error_index(buffer), buffer.total_parity_is_even()) {
         // We couldn't find an error location and the total parity has not
         // changed.
-        (0, true) => true,
+        (0, true) => DoubleErrorDetection::NotDetected,
         // We're not detecting any errors but the parity changed therefore
         // there must be multiple errors which are canceling each other out
-        (0, false) => false,
+        (0, false) => DoubleErrorDetection::Detected,
         // We found an error location but the parity didn't change therefore
         // there must be two or more errors.
-        (_, true) => false,
+        (_, true) => DoubleErrorDetection::Detected,
         // If only one of our protected bits flipped it will cause the error
         // index to be in our protected range.
-        (e, false) if e >= buffer.bit_count() => false,
+        (e, false) if e >= buffer.bit_count() => DoubleErrorDetection::Detected,
         // We found an error location and the parity changed which means we
         // either have 1 error which we will attempt to correct or an
         // undetectable odd number of errors.
         (e, false) => {
             buffer.flip_bit(e);
-            true
+            DoubleErrorDetection::NotDetected
         }
     }
 }
@@ -236,15 +255,13 @@ pub enum DecodeError {
 /// The decoding process will correct single-bit-errors which will modify the
 /// source buffer.
 ///
-/// `false` represents a double error detection.
-///
 /// See module docs for error semantics.
-pub fn decode_into<S, D>(source: &mut S, dest: &mut D) -> Result<bool, DecodeError>
+pub fn decode_into<S, D>(source: &mut S, dest: &mut D) -> Result<DoubleErrorDetection, DecodeError>
 where
     S: BitBuffer + std::fmt::Debug,
     D: BitBuffer,
 {
-    let success = correct_error(source);
+    let double_error_detection = correct_error(source);
 
     let encoded_bit_count = encoded_bit_count(dest.bit_count()).ok_or(DecodeError::DestEmpty)?;
 
@@ -270,5 +287,5 @@ where
         output_index += 1;
     }
 
-    Ok(success)
+    Ok(double_error_detection)
 }

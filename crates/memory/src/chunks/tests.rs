@@ -433,8 +433,8 @@ proptest! {
             .filter_map(|(chunk_index, chunk)| {
                 let mut source = chunk.clone();
                 let mut dest = Limited::bytes(chunk_size);
-                let no_double_error = decode_into(&mut source, &mut dest).unwrap();
-                (!no_double_error).then_some(chunk_index)
+                let double_error_detection = decode_into(&mut source, &mut dest).unwrap();
+                double_error_detection.is_detected().then_some(chunk_index)
             })
             .collect::<Vec<_>>();
         assert_eq!(double_error_chunks, expected_double_error_chunks);

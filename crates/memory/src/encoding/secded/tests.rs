@@ -64,8 +64,8 @@ proptest! {
     ) {
         let mut encoded = encode(&buf).unwrap();
 
-        let success = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert!(success);
+        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
+        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
 
         assert_eq!(buf, decoded);
     }
@@ -86,8 +86,8 @@ proptest! {
 
         encoded.flip_bit(fault);
 
-        let success = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert!(success);
+        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
+        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
 
         assert_eq!(buf, decoded);
     }
@@ -105,9 +105,9 @@ proptest! {
 
         encoded.flip_bit(0);
 
-        let success = decode_into(&mut encoded, &mut decoded).unwrap();
+        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
         // Bit zero faults always trigger a double error detection.
-       assert!(!success);
+        assert_eq!(double_error_detection, DoubleErrorDetection::Detected);
 
         assert_eq!(buf, decoded);
     }
@@ -123,8 +123,8 @@ proptest! {
     ) {
         let mut encoded = encode(&buf).unwrap();
 
-        let success = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert!(success);
+        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
+        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
 
         assert_eq!(buf, decoded);
     }
@@ -145,8 +145,8 @@ proptest! {
 
         encoded.flip_bit(fault);
 
-        let success = decode_into(&mut encoded, &mut decoded).unwrap();
-        assert!(success);
+        let double_error_detection = decode_into(&mut encoded, &mut decoded).unwrap();
+        assert_eq!(double_error_detection, DoubleErrorDetection::NotDetected);
 
         assert_eq!(buf, decoded);
     }
@@ -171,8 +171,8 @@ proptest! {
 
         // A two bit flip will always be marked as unsuccessful even if in
         // reality the data matches. See [`correct_error`].
-        let success = decode_into(&mut faulty, &mut decoded).unwrap();
-        assert!(!success);
+        let double_error_detection = decode_into(&mut faulty, &mut decoded).unwrap();
+        assert_eq!(double_error_detection, DoubleErrorDetection::Detected);
 
         // If only parity bits were hit then the original data is safe. The decoding
         // algorithm must still call a failure because there's no way to tell which bits
