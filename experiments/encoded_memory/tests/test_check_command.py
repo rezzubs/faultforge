@@ -3,21 +3,19 @@
 import json
 from pathlib import Path
 
-import click
-from encoded_memory.commands import app
-from typer.testing import CliRunner
-
 from faultforge.io import open_text
 from faultforge.metric import Perplexity
 
 from .conftest import (
+    _CliResult,
+    _invoke,
     _saved_result,
     _write_saved,
 )
 
 
-def invoke_check(*arguments: str | Path):
-    return CliRunner().invoke(app, ["check", *map(str, arguments)])
+def invoke_check(*arguments: str | Path) -> _CliResult:
+    return _invoke("check", *arguments)
 
 
 def test_json_shape(tmp_path: Path):
@@ -113,7 +111,7 @@ def test_requires_a_limit(tmp_path: Path):
     result = invoke_check(tmp_path / "result.json")
 
     assert result.exit_code == 2
-    assert "--max-runs" in click.unstyle(result.output)
+    assert "--max-runs" in result.stderr
 
 
 def test_rejects_runs(tmp_path: Path):

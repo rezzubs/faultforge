@@ -3,9 +3,9 @@
 import math
 
 import pytest
-import typer
+from encoded_memory.args import UsageError
 from encoded_memory.commands import (
-    EstimateChoice,
+    StopConditionOptions,
     _resolve_stability_limits,
 )
 from encoded_memory.stability import StabilityLimits
@@ -35,14 +35,9 @@ def test_rejects_invalid_margins(margin: float):
 
 
 def test_cli_reports_invalid_margins():
-    with pytest.raises(typer.BadParameter, match="finite"):
+    with pytest.raises(UsageError, match="finite"):
         _ = _resolve_stability_limits(
-            estimate=EstimateChoice.Mean,
-            relative_failure_threshold=None,
-            absolute_failure_threshold=None,
-            max_relative_margin=math.inf,
-            max_absolute_margin=None,
-            min_runs=None,
+            StopConditionOptions(max_relative_margin=math.inf)
         )
 
 

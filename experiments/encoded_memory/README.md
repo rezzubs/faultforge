@@ -133,7 +133,7 @@ encoded-memory <command> --help
 ### `record`
 
 Runs an encoded-memory experiment and records the results. Flags are grouped
-into help panels:
+in the help:
 
 - **Model Setup**: `--model`, `--batch-size` (required, since a good value
   depends on the model and the hardware), `--dataset`
@@ -156,7 +156,9 @@ into help panels:
   (discard a mismatched existing `--output` instead of aborting).
 - **Stop Conditions**: `--runs`/`--max-runs`/`--min-runs` and the margin
   limits (see below) for controlling how long to run.
-- **Misc Settings**: `--device`.
+
+`--device` (a PyTorch device string, `cpu` by default) is listed with the
+general options.
 
 ```sh
 encoded-memory record \

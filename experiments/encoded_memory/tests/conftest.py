@@ -1,8 +1,13 @@
 """Shared test doubles for the encoded_memory experiment tests."""
 
+import contextlib
+import io
 import json
+import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import override
+from unittest import mock
 
 import torch
 from encoded_memory import (
@@ -10,6 +15,7 @@ from encoded_memory import (
     SavedResult,
     SimpleResults,
 )
+from encoded_memory.commands import app
 from torch import Tensor, nn
 from torch.utils.data import TensorDataset
 
@@ -187,3 +193,30 @@ def _write_saved(
     path = directory / name
     _ = path.write_text(saved.model_dump_json())
     return path
+
+
+@dataclass(frozen=True)
+class _CliResult:
+    """The outcome of running the `encoded-memory` CLI."""
+
+    exit_code: int
+    """What the process would exit with."""
+    stdout: str
+    """Everything written to stdout."""
+    stderr: str
+    """Everything written to stderr."""
+
+
+def _invoke(*arguments: object) -> _CliResult:
+    """Run the `encoded-memory` CLI with `arguments`, capturing its output."""
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    # NOTE: argparse colors its output if `FORCE_COLOR` is set, as on some CI
+    # runners. The escape codes would get in the way of matching the text.
+    with (
+        mock.patch.dict(os.environ, {"PYTHON_COLORS": "0"}),
+        contextlib.redirect_stdout(stdout),
+        contextlib.redirect_stderr(stderr),
+    ):
+        exit_code = app.run([str(argument) for argument in arguments])
+    return _CliResult(exit_code, stdout.getvalue(), stderr.getvalue())

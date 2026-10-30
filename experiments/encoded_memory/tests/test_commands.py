@@ -1,20 +1,18 @@
 """Tests for the `encoded-memory` CLI's argument handling."""
 
-import click
 import pytest
 import torch
-import typer
 from encoded_memory import commands
+from encoded_memory.args import UsageError
 from encoded_memory.commands import (
     DatasetChoice,
     EstimateChoice,
     MetricChoice,
+    StopConditionOptions,
     _init_model_bundle,
     _resolve_metric,
     _resolve_stability_limits,
-    app,
 )
-from typer.testing import CliRunner
 
 from faultforge.experiment import (
     AbsoluteThreshold,
@@ -30,6 +28,11 @@ from faultforge.metric import (
     Perplexity,
     ScoreDirection,
     Sdc,
+)
+
+from .conftest import (
+    _CliResult,
+    _invoke,
 )
 
 REVISION = "0123456789abcdef0123456789abcdef01234567"
@@ -92,13 +95,13 @@ def test_image_datasets_accept_classification_metrics(
 
 @pytest.mark.parametrize("dataset", IMAGE_DATASETS)
 def test_image_datasets_reject_perplexity(dataset: DatasetChoice):
-    with pytest.raises(typer.BadParameter, match="perplexity"):
+    with pytest.raises(UsageError, match="perplexity"):
         _ = _resolve_metric(dataset, MetricChoice.Perplexity)
 
 
 @pytest.mark.parametrize("metric", CLASSIFICATION_METRICS)
 def test_wikitext_rejects_classification_metrics(metric: MetricChoice):
-    with pytest.raises(typer.BadParameter, match="wikitext"):
+    with pytest.raises(UsageError, match="wikitext"):
         _ = _resolve_metric(DatasetChoice.WikiText, metric)
 
 
@@ -128,14 +131,14 @@ def test_wikitext_bundle_resolves_given_revision(resolved_revisions):
 
 
 def test_wikitext_bundle_requires_sequence_length(resolved_revisions):
-    with pytest.raises(typer.BadParameter, match="--sequence-length"):
+    with pytest.raises(UsageError, match="--sequence-length"):
         _ = init_bundle(DatasetChoice.WikiText)
     assert resolved_revisions == []
 
 
 def test_wikitext_bundle_reports_invalid_window(resolved_revisions):
     _ = resolved_revisions
-    with pytest.raises(typer.BadParameter, match="stride"):
+    with pytest.raises(UsageError, match="stride"):
         _ = init_bundle(DatasetChoice.WikiText, sequence_length=8, stride=8)
 
 
@@ -148,7 +151,7 @@ def test_wikitext_bundle_reports_invalid_window(resolved_revisions):
     ],
 )
 def test_wikitext_options_are_rejected_for_other_datasets(option: str, arguments: dict):
-    with pytest.raises(typer.BadParameter, match=option):
+    with pytest.raises(UsageError, match=option):
         _ = init_bundle(DatasetChoice.Cifar10, model="resnet20", **arguments)
 
 
@@ -158,23 +161,21 @@ def test_other_datasets_accept_missing_wikitext_options():
 
 
 def test_list_models_for_wikitext():
-    result = CliRunner().invoke(app, ["list-models", "--dataset", "wikitext"])
+    result = _invoke("list-models", "--dataset", "wikitext")
 
     assert result.exit_code == 0
-    assert "HuggingFace Hub" in result.output
+    assert "HuggingFace Hub" in result.stdout
 
 
-def invoke_record(*arguments: str):
-    return CliRunner().invoke(app, ["record", "--model", "gpt2", *arguments])
+def invoke_record(*arguments: str) -> _CliResult:
+    return _invoke("record", "--model", "gpt2", *arguments)
 
 
 def test_record_requires_batch_size():
     result = invoke_record("--dataset", "wikitext", "--sequence-length", "8")
 
-    assert result.exit_code != 0
-    # Typer forces styled output when `GITHUB_ACTIONS` is set, and the styling
-    # splits option names apart, so match against the unstyled text.
-    assert "--batch-size" in click.unstyle(result.output)
+    assert result.exit_code == 2
+    assert "--batch-size" in result.stderr
 
 
 def test_record_rejects_estimate_without_margin_limit(resolved_revisions):
@@ -189,8 +190,8 @@ def test_record_rejects_estimate_without_margin_limit(resolved_revisions):
         "failure-rate",
     )
 
-    assert result.exit_code != 0
-    assert "--estimate" in click.unstyle(result.output)
+    assert result.exit_code == 2
+    assert "--estimate" in result.stderr
     # Rejected before anything is loaded.
     assert resolved_revisions == []
 
@@ -206,12 +207,14 @@ def resolve_stability(
     min_runs: int | None = None,
 ):
     limits = _resolve_stability_limits(
-        estimate=estimate,
-        relative_failure_threshold=relative_failure_threshold,
-        absolute_failure_threshold=absolute_failure_threshold,
-        max_relative_margin=max_relative_margin,
-        max_absolute_margin=max_absolute_margin,
-        min_runs=min_runs,
+        StopConditionOptions(
+            estimate=estimate,
+            relative_failure_threshold=relative_failure_threshold,
+            absolute_failure_threshold=absolute_failure_threshold,
+            max_relative_margin=max_relative_margin,
+            max_absolute_margin=max_absolute_margin,
+            min_runs=min_runs,
+        )
     )
     if limits is None:
         return None
@@ -231,7 +234,7 @@ def test_no_stability_without_margin_limits():
     ],
 )
 def test_estimate_options_require_a_margin_limit(arguments: dict):
-    with pytest.raises(typer.BadParameter, match="margin"):
+    with pytest.raises(UsageError, match="margin"):
         _ = resolve_stability(max_absolute_margin=None, **arguments)
 
 
@@ -251,7 +254,7 @@ def test_stability_defaults_to_mean():
     [{"relative_failure_threshold": 2.0}, {"absolute_failure_threshold": 2.0}],
 )
 def test_mean_rejects_failure_thresholds(arguments: dict):
-    with pytest.raises(typer.BadParameter, match="failure-rate"):
+    with pytest.raises(UsageError, match="failure-rate"):
         _ = resolve_stability(estimate=EstimateChoice.Mean, **arguments)
 
 
@@ -260,7 +263,7 @@ def test_mean_rejects_failure_thresholds(arguments: dict):
     [{}, {"relative_failure_threshold": 2.0, "absolute_failure_threshold": 2.0}],
 )
 def test_failure_rate_requires_exactly_one_threshold(arguments: dict):
-    with pytest.raises(typer.BadParameter, match="exactly one"):
+    with pytest.raises(UsageError, match="exactly one"):
         _ = resolve_stability(estimate=EstimateChoice.FailureRate, **arguments)
 
 
@@ -294,7 +297,7 @@ def test_failure_rate_absolute_threshold():
 
 
 def test_failure_rate_rejects_invalid_threshold():
-    with pytest.raises(typer.BadParameter, match="factor"):
+    with pytest.raises(UsageError, match="factor"):
         _ = resolve_stability(
             estimate=EstimateChoice.FailureRate, relative_failure_threshold=0.0
         )
