@@ -12,7 +12,7 @@ from typing import (
 import scipy.stats
 
 from faultforge._impl.experiment.config import ScoreDisplay
-from faultforge._impl.metric import ScoreDirection
+from faultforge._impl.metric.base import ScoreDirection
 
 CONFIDENCE_LEVEL: Final = 0.95
 """The confidence level of every [`Estimate`]'s bounds (95%)."""

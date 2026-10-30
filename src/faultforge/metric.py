@@ -22,20 +22,16 @@ is meant to simplify working with metrics which rely on outputs from a golden
 (non-faulty) model.
 """
 
-from faultforge._impl.metric import (
-    Accuracy,
+from faultforge._impl.metric.accuracy import Accuracy, AccuracyResult
+from faultforge._impl.metric.accuracy_degradation import (
     AccuracyDegradation,
     AccuracyDegradationResult,
-    AccuracyResult,
-    GoldenCache,
-    Metric,
-    Perplexity,
-    PerplexityResult,
-    ScoreDirection,
-    Sdc,
-    SdcResult,
-    Top1Sdc,
 )
+from faultforge._impl.metric.base import Metric, ScoreDirection
+from faultforge._impl.metric.golden_cache import GoldenCache
+from faultforge._impl.metric.perplexity import Perplexity, PerplexityResult
+from faultforge._impl.metric.sdc import Sdc, SdcResult
+from faultforge._impl.metric.top1_sdc import Top1Sdc
 
 __all__ = [
     "Accuracy",

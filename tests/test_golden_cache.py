@@ -1,4 +1,4 @@
-"""Tests for `faultforge._impl.metric.GoldenCache`."""
+"""Tests for `faultforge._impl.metric.golden_cache.GoldenCache`."""
 
 from typing import override
 
@@ -9,11 +9,8 @@ from torch.utils.data import Dataset
 
 from faultforge._impl.dataset import BatchedDataset
 from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.metric import (
-    GoldenCache,
-    Metric,
-    ScoreDirection,
-)
+from faultforge._impl.metric.base import Metric, ScoreDirection
+from faultforge._impl.metric.golden_cache import GoldenCache
 
 # The following classes are `_` prefixed to not interpret them as Test classes.
 

@@ -26,7 +26,7 @@ from faultforge._impl.dataset import BatchedDataset, DeviceLike
 from faultforge._impl.dtype import dtype_name
 from faultforge._impl.fingerprint import Fingerprint
 from faultforge._impl.loading.abc import ModelBundle
-from faultforge._impl.metric import Perplexity
+from faultforge._impl.metric.perplexity import Perplexity
 from faultforge._impl.progress import Progress, stage
 
 _WIKITEXT_REPOSITORY = "Salesforce/wikitext"
