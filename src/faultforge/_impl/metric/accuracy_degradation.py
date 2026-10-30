@@ -95,11 +95,11 @@ class AccuracyDegradation(Metric[AccuracyDegradationResult]):
 
     @override
     def fingerprint(self) -> Fingerprint:
-        return Fingerprint(kind="accuracy_degredation")
+        return Fingerprint(kind="accuracy_degradation")
 
     @override
     def display_name(self) -> str | None:
-        return "Accuracy Degredation"
+        return "Accuracy Degradation"
 
     @override
     def display_unit(self) -> str | None:
