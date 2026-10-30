@@ -10,11 +10,11 @@ is itself a list of tensors. This is what allows them to be composed with
 encoder's input.
 
 `InPlaceEncoder`/`InPlaceEncoding` are a convenience base class for
-`TensorEncoder`/`TensorEncoding` implementations that transform each tensor
-independently and in place, e.g. `CepEncoder` and `MsetEncoder`. Implementing
-`encode_float32`/`encode_float16` (and their `decode_*` counterparts) is enough;
-batching over the input list, dtype dispatch, and bit-count tracking are handled
-by the base class.
+`TensorEncoder`/`TensorEncoding` implementations that encode each tensor
+independently into a tensor of the same shape and dtype, e.g. `CepEncoder` and
+`MsetEncoder`. Implementing `encode_float32`/`encode_float16` (and their
+`decode_*` counterparts) is enough; batching over the input list, dtype
+dispatch, and bit-count tracking are handled by the base class.
 
 `EncodedModule` wraps a `torch.nn.Module` so its parameters are stored through
 an `Encoder`, decoding them on demand and letting faults be applied to the

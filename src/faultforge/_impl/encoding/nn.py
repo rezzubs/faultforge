@@ -38,7 +38,9 @@ class EncodedModule(nn.Module):
     ):
         nn.Module.__init__(self)
         self._module = module
-        parameters: list[Tensor] = [p.clone() for p in module.parameters()]
+        # Encoders don't modify or keep their inputs, so the parameters can be
+        # passed directly.
+        parameters: list[Tensor] = list(module.parameters())
 
         if not inherit_device or len(parameters) == 0:
             self._device = None

@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import final, override
 
+import numpy as np
 import torch
 from torch import Tensor
 
@@ -16,6 +17,7 @@ from faultforge._impl.encoding.abc import (
     TensorEncoding,
 )
 from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.tensor import to_owned_numpy
 from faultforge._rust import mset
 
 _logger = logging.getLogger(__name__)
@@ -36,15 +38,13 @@ class MsetEncoder(InPlaceEncoder):
 
     @override
     def encode_float32(self, t: Tensor) -> Tensor:
-        with torch.no_grad():
-            t_np = t.numpy(force=True)
+        t_np = to_owned_numpy(t)
         mset.encode_f32(t_np)
         return torch.from_numpy(t_np)
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
-        with torch.no_grad():
-            t_np = t.view(torch.uint16).numpy(force=True)
+        t_np = to_owned_numpy(t).view(np.uint16)
         mset.encode_u16(t_np)
         return torch.from_numpy(t_np).view(torch.float16)
 
