@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
@@ -36,9 +37,16 @@ class SecdedEncoder(Encoder):
     bits_per_chunk: int
     """The number of data bits protected by a single hamming code.
 
-    Equivalent to the memory line size in hardware. Can be any positive
-    integer but multiples of 8 bits have better encoding/decoding performance.
+    Equivalent to the memory line size in hardware. Must be a positive
+    multiple of 8.
     """
+
+    def __post_init__(self) -> None:
+        if self.bits_per_chunk <= 0 or self.bits_per_chunk % 8 != 0:
+            raise ValueError(
+                "bits_per_chunk must be a positive multiple of 8, "
+                f"got {self.bits_per_chunk}"
+            )
 
     @override
     def fingerprint(self) -> Fingerprint:
@@ -60,18 +68,17 @@ class SecdedEncoder(Encoder):
         # `Encoder.encode`.
         decoded_tensors = [t.detach().clone() for t in ts]
 
-        with stage(progress, "Encoding (SECDED)"):
-            match dtype:
-                case EncodingDtype.F32:
-                    with torch.no_grad():
-                        rust_input = [t.flatten().numpy(force=True) for t in ts]
-                    encoded_data = secded.encode_f32(rust_input, self.bits_per_chunk)
-                case EncodingDtype.F16:
-                    with torch.no_grad():
-                        rust_input = [
-                            t.flatten().view(torch.uint16).numpy(force=True) for t in ts
-                        ]
-                    encoded_data = secded.encode_u16(rust_input, self.bits_per_chunk)
+        # The encoding only sees the bytes of the tensors in memory. Fault
+        # targets address them in little-endian order, and changing that would
+        # change the results of existing experiments.
+        if sys.byteorder != "little":
+            raise NotImplementedError("SECDED needs a little-endian host")
+
+        with stage(progress, "Encoding (SECDED)"), torch.no_grad():
+            rust_input = [
+                _byte_view(t.detach().flatten()).numpy(force=True) for t in ts
+            ]
+            encoded_data = secded.encode(rust_input, self.bits_per_chunk)
 
         return SecdedEncoding(
             encoded_data,
@@ -98,23 +105,7 @@ class SecdedEncoding(Encoding):
             return self._decoded_tensors
         _logger.debug("Recomputing decoded tensors")
 
-        # NOTE: Double error detection results aren't collected because nothing
-        # uses them yet. At scale, collecting them can cost a lot of memory.
-        match self._dtype:
-            case EncodingDtype.F32:
-                decoded, _ = self._encoded_data.decode_f32()
-                torch_decoded = [torch.from_numpy(t) for t in decoded]
-
-            case EncodingDtype.F16:
-                decoded, _ = self._encoded_data.decode_u16()
-                torch_decoded = [
-                    torch.from_numpy(t).view(torch.float16) for t in decoded
-                ]
-
-        # Update cached decoded tensors in-place
-        for cached, decoded in zip(self._decoded_tensors, torch_decoded, strict=True):
-            with torch.no_grad():
-                _ = cached.flatten().copy_(decoded)
+        _decode_into(self._encoded_data, self._decoded_tensors)
 
         self._needs_recompute = False
         return self._decoded_tensors
@@ -148,3 +139,35 @@ class SecdedEncoding(Encoding):
     @override
     def bit_count(self) -> int:
         return self._encoded_data.bit_count()
+
+
+def _byte_view(t: torch.Tensor) -> torch.Tensor:
+    """View the bytes of a contiguous tensor as a flat uint8 tensor."""
+    assert t.is_contiguous()
+    # `view(-1)` can keep a stride other than 1: torch treats a tensor with a
+    # single element as contiguous whatever its strides are. Its element is
+    # still at the storage offset, so the explicit strides are valid.
+    return t.as_strided((t.numel(),), (1,)).view(torch.uint8)
+
+
+def _decode_into(encoded: secded.Encoding, dest: list[torch.Tensor]) -> None:
+    """Decode `encoded` into `dest`, one tensor per encoded array.
+
+    The bindings can only write into contiguous CPU memory, so every tensor is
+    decoded into a CPU staging buffer first and then copied into place. The
+    buffer is reused, so it only needs to fit the largest tensor. The copy is
+    much faster than the decode.
+
+    `dest` must have the layout of the encoded tensors.
+    """
+    byte_counts = encoded.array_byte_counts()
+    assert len(dest) == len(byte_counts)
+    staging = torch.empty(max(byte_counts), dtype=torch.uint8)
+
+    # NOTE: Double error detection results aren't collected because nothing
+    # uses them yet. At scale, collecting them can cost a lot of memory.
+    with torch.no_grad():
+        for index, (t, byte_count) in enumerate(zip(dest, byte_counts, strict=True)):
+            staged = staging[:byte_count]
+            encoded.decode_into(index, staged.numpy())
+            _ = t.copy_(staged.view(t.dtype).view(t.shape))

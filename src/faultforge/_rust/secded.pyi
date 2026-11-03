@@ -3,29 +3,21 @@ import numpy.typing as npt
 
 from faultforge._rust import Fault
 
-type ListOfArray[T: np.generic] = list[npt.NDArray[T]]
-
 class Encoding:
-    def decode_f32(
+    def decode_into(
         self,
+        array_index: int,
+        dest: npt.NDArray[np.uint8],
         *,
         collect_double_errors: bool = False,
-    ) -> tuple[ListOfArray[np.float32], npt.NDArray[np.uint64] | None]: ...
-    def decode_u16(
-        self,
-        *,
-        collect_double_errors: bool = False,
-    ) -> tuple[ListOfArray[np.uint16], npt.NDArray[np.uint64] | None]: ...
+    ) -> npt.NDArray[np.uint64] | None: ...
+    def array_byte_counts(self) -> list[int]: ...
     def apply_fault(self, fault: Fault, target_bit: int) -> None: ...
     def apply_faults(self, faults: list[tuple[Fault, int]]) -> None: ...
     def clone(self) -> Encoding: ...
     def bit_count(self) -> int: ...
 
-def encode_f32(
-    input: ListOfArray[np.float32],
-    bits_per_chunk: int,
-) -> Encoding: ...
-def encode_u16(
-    input: ListOfArray[np.uint16],
+def encode(
+    input: list[npt.NDArray[np.uint8]],
     bits_per_chunk: int,
 ) -> Encoding: ...

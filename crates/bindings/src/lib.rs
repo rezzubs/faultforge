@@ -19,9 +19,7 @@ mod _rust {
         #[pymodule_export]
         use crate::secded::PyEncoding;
         #[pymodule_export]
-        use crate::secded::encode_f32;
-        #[pymodule_export]
-        use crate::secded::encode_u16;
+        use crate::secded::encode;
     }
 
     #[pymodule]

@@ -350,11 +350,18 @@ def _resolve_encoder(
             return head
         case (None, _):
             assert secded is not None
-            return SecdedEncoder(secded)
+            return _secded_encoder(secded)
         case (_, _):
             assert secded is not None
             assert head is not None
-            return EncoderSequence([head], SecdedEncoder(secded))
+            return EncoderSequence([head], _secded_encoder(secded))
+
+
+def _secded_encoder(bits_per_chunk: int) -> SecdedEncoder:
+    try:
+        return SecdedEncoder(bits_per_chunk)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--secded") from error
 
 
 @app.command()
@@ -516,7 +523,7 @@ def record(
         int | None,
         typer.Option(
             min=1,
-            help="Use a SECDED encoding with n data bits. Multiples of 8 perform better.",
+            help="Use a SECDED encoding with n data bits. Must be a multiple of 8.",
             rich_help_panel="Encoding Settings",
         ),
     ] = None,

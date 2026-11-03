@@ -1,84 +1,74 @@
 use crate::{common::*, fault::PyFault};
 use memory::{
-    BitBuffer, ByteBuffer, Limited, SizedBitBuffer,
-    chunks::{Chunks, ChunksCreationError, DecodeError, DynChunks},
-    encoding::secded::encoded_bit_count,
-    sequence::NonUniformSequence,
+    BitBuffer,
+    encoding::secded::{DecodeChunksError, EncodedChunks},
 };
-use numpy::PyArray1;
+use numpy::{PyArray1, PyReadwriteArrayDyn};
 use pyo3::{
     exceptions::{PyIndexError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyList},
 };
-
-/// The decoded arrays and the optional double error detection results.
-///
-/// See [`PyEncoding::decode_generic`].
-type DecodeOutput<'py, T> = (Vec<OutputArr<'py, T>>, Option<OutputArr<'py, u64>>);
+use std::ops::Range;
 
 #[pyclass(name = "Encoding")]
 pub struct PyEncoding {
-    /// A list of the encoded chunks. Guaranteed to store [`PyBytes`] elements.
-    encoded_chunks: Py<PyList>,
-    /// The number of data bits per chunk, used for bounds in `Limited`.
-    data_bit_count: usize,
-    /// The number of items in each array in the input list for the encoding
-    /// function.
-    item_counts: Vec<usize>,
+    /// The encoding of the bytes of all input arrays, concatenated in input
+    /// order.
+    encoded: EncodedChunks,
+    /// The range of each input array's bytes in the data bytes of `encoded`.
+    array_byte_ranges: Vec<Range<usize>>,
 }
 
+#[pymethods]
 impl PyEncoding {
-    /// Decode into `output_buffer`.
+    /// Decode the bytes of one input array into `dest`.
     ///
-    /// The double error detection results are only collected (and returned
-    /// as [`Some`]) if `collect_double_errors` is set. They're the indices of
-    /// the chunks in which a double error was detected, in ascending order.
-    pub fn decode_generic<'py, T>(
+    /// `dest` must be contiguous and have as many bytes as the input array.
+    ///
+    /// The double error detection results are only collected (and returned)
+    /// if `collect_double_errors` is set. They're the indices of the chunks
+    /// that hold part of the array and in which a double error was detected,
+    /// in ascending order. A chunk can hold the end of one array and the start
+    /// of the next, so decoding both reports it twice.
+    #[pyo3(signature = (array_index, dest, *, collect_double_errors = false))]
+    pub fn decode_into<'py>(
         &self,
         py: Python<'py>,
-        mut output_buffer: NonUniformSequence<Vec<Vec<T>>>,
+        array_index: usize,
+        mut dest: PyReadwriteArrayDyn<'py, u8>,
         collect_double_errors: bool,
-    ) -> PyResult<DecodeOutput<'py, T>>
-    where
-        T: SizedBitBuffer + numpy::Element + ByteBuffer,
-    {
-        let input_chunks = self.to_rust(py)?;
+    ) -> PyResult<Option<OutputArr<'py, u64>>> {
+        let array_byte_range = self
+            .array_byte_ranges
+            .get(array_index)
+            .ok_or_else(|| {
+                PyIndexError::new_err(format!(
+                    "array {array_index} is out of bounds for {} arrays",
+                    self.array_byte_ranges.len()
+                ))
+            })?
+            .clone();
+        let dest = dest
+            .as_slice_mut()
+            .map_err(|_| PyValueError::new_err("`dest` is not contiguous"))?;
 
-        let decoded = if collect_double_errors {
-            input_chunks
-                .decode_chunks_with_double_errors(self.data_bit_count)
-                .map(|(chunks, double_error_chunks)| (chunks, Some(double_error_chunks)))
+        let double_error_chunks = if collect_double_errors {
+            self.encoded
+                .decode_range_into_with_double_errors(array_byte_range, dest)
+                .map(Some)
         } else {
-            input_chunks
-                .decode_chunks(self.data_bit_count)
-                .map(|chunks| (chunks, None))
-        };
-        let (output_chunks, double_error_chunks) = decoded.unwrap_or_else(|err| match err {
-            DecodeError::InvalidDataBitsCount(_) => {
-                panic!("The data bits count is immutable from the python side and should be correct yet: {}", err);
+            self.encoded
+                .decode_range_into(array_byte_range, dest)
+                .map(|()| None)
+        }
+        .map_err(|err| match err {
+            DecodeChunksError::LengthMismatch { .. } => PyValueError::new_err(err.to_string()),
+            DecodeChunksError::InvalidRange { .. } => {
+                unreachable!("the array ranges are within the data bytes: {err}")
             }
-            DecodeError::OutputCountMismatch { .. } => {
-                unreachable!("`decode_chunks` creates one output per chunk: {}", err);
-            }
-        });
+        })?;
 
-        let bits_copied = match output_chunks {
-            Chunks::Byte(byte_chunks) => {
-                byte_chunks
-                    .copy_into_chunked(&mut output_buffer)
-                    .units_copied
-                    * 8
-            }
-            Chunks::Dyn(dyn_chunks) => dyn_chunks.copy_into(&mut output_buffer).units_copied,
-        };
-        assert_eq!(
-            bits_copied,
-            output_buffer.bit_count(),
-            "these must match because the chunked buffer can potentially only have more bits, not less.",
-        );
-
-        let double_error_chunks = double_error_chunks.map(|double_error_chunks| {
+        Ok(double_error_chunks.map(|double_error_chunks| {
             PyArray1::from_iter(
                 py,
                 double_error_chunks.into_iter().map(|chunk_index| {
@@ -86,136 +76,24 @@ impl PyEncoding {
                         .expect("usize is at most 64 bits on supported targets")
                 }),
             )
-        });
-
-        Ok((
-            output_buffer
-                .0
-                .into_iter()
-                .map(|vec| PyArray1::from_vec(py, vec))
-                .collect(),
-            double_error_chunks,
-        ))
+        }))
     }
 
-    pub fn from_rust<'py>(
-        py: Python<'py>,
-        encoded_chunks: DynChunks,
-        data_bit_count: usize,
-        item_counts: Vec<usize>,
-    ) -> PyResult<Self> {
-        let bytes = encoded_chunks.into_raw().into_iter().map(|chunk| {
-            assert_eq!(
-                chunk.bit_count(),
-                encoded_bit_count(data_bit_count)
-                    .expect("chunk creation will fail before this for empty buffers.")
-            );
-            let chunk_bytes = chunk.into_inner();
-            PyBytes::new(py, &chunk_bytes).unbind()
-        });
-
-        let encoded_chunks = PyList::new(py, bytes)?.unbind();
-
-        Ok(PyEncoding {
-            encoded_chunks,
-            data_bit_count,
-            item_counts,
-        })
+    /// Return the number of bytes in each input array.
+    pub fn array_byte_counts(&self) -> Vec<usize> {
+        self.array_byte_ranges.iter().map(Range::len).collect()
     }
 
-    pub fn to_rust<'py>(&self, py: Python<'py>) -> PyResult<DynChunks> {
-        let encoded_bit_count = encoded_bit_count(self.data_bit_count)
-            .expect("Known to be correct. Checked during initialization.");
-
-        let raw_chunks = self
-            .encoded_chunks
-            .bind(py)
-            .iter()
-            .map(|chunk| {
-                let py_bytes = chunk.cast_into::<PyBytes>().expect(
-                    "It was created as `PyBytes` and it should not be possible to modify it after.",
-                );
-
-                Limited::new(Vec::from(py_bytes.as_bytes()), encoded_bit_count).unwrap_or_else(
-                    || {
-                        panic!(
-                            "`bits_per_chunk` {} doesn't match the encoded chunks.",
-                            encoded_bit_count
-                        )
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
-
-        Ok(
-            DynChunks::from_raw(raw_chunks).expect(
-                "There's no reason recreating the chunks should fail assuming the data remains immutable."
-            )
-        )
-    }
-}
-
-#[pymethods]
-impl PyEncoding {
-    /// Decode a list of float32 values.
-    ///
-    /// See [`PyEncoding::decode_generic`] for `collect_double_errors`.
-    #[pyo3(signature = (*, collect_double_errors = false))]
-    pub fn decode_f32<'py>(
-        &self,
-        py: Python<'py>,
-        collect_double_errors: bool,
-    ) -> PyResult<DecodeOutput<'py, f32>> {
-        let output_buffer = NonUniformSequence(
-            self.item_counts
-                .iter()
-                .map(|&numel| vec![0f32; numel])
-                .collect::<Vec<_>>(),
-        );
-
-        self.decode_generic(py, output_buffer, collect_double_errors)
-    }
-
-    /// Decode a list of 16 bit unsigned integers.
-    ///
-    /// See [`PyEncoding::decode_generic`] for `collect_double_errors`.
-    #[pyo3(signature = (*, collect_double_errors = false))]
-    pub fn decode_u16<'py>(
-        &self,
-        py: Python<'py>,
-        collect_double_errors: bool,
-    ) -> PyResult<DecodeOutput<'py, u16>> {
-        let output_buffer = NonUniformSequence(
-            self.item_counts
-                .iter()
-                .map(|&numel| vec![0u16; numel])
-                .collect::<Vec<_>>(),
-        );
-
-        self.decode_generic(py, output_buffer, collect_double_errors)
-    }
-
-    pub fn apply_fault<'py>(
-        &mut self,
-        py: Python<'py>,
-        fault: PyFault,
-        target_bit: usize,
-    ) -> PyResult<()> {
-        self.apply_faults(py, vec![(fault, target_bit)])
+    pub fn apply_fault(&mut self, fault: PyFault, target_bit: usize) -> PyResult<()> {
+        self.apply_faults(vec![(fault, target_bit)])
     }
 
     /// Apply multiple faults at once.
     ///
-    /// This is much cheaper than calling `apply_fault` in a loop: the whole
-    /// encoded buffer is round-tripped through Python objects (`to_rust`/
-    /// `from_rust`) exactly once for the batch instead of once per fault,
-    /// even though flipping a single bit is itself O(1).
-    pub fn apply_faults<'py>(
-        &mut self,
-        py: Python<'py>,
-        faults: Vec<(PyFault, usize)>,
-    ) -> PyResult<()> {
-        let bit_count = self.bit_count(py);
+    /// All targets are checked before any fault is applied, so an out of
+    /// bounds target leaves the encoding unchanged.
+    pub fn apply_faults(&mut self, faults: Vec<(PyFault, usize)>) -> PyResult<()> {
+        let bit_count = self.bit_count();
         for (_, target_bit) in &faults {
             if *target_bit >= bit_count {
                 return Err(PyIndexError::new_err(format!(
@@ -225,98 +103,64 @@ impl PyEncoding {
             }
         }
 
-        let mut encoding = self.to_rust(py)?;
-        encoding.apply_faults(
+        self.encoded.apply_faults(
             faults
                 .into_iter()
                 .map(|(fault, target_bit)| (fault.0, target_bit)),
         );
 
-        *self = PyEncoding::from_rust(py, encoding, self.data_bit_count, self.item_counts.clone())?;
-
         Ok(())
     }
 
-    /// Return a new instance with cloned data.
-    pub fn clone<'py>(&self, py: Python<'py>) -> PyResult<PyEncoding> {
-        let encoding_clone = self.encoded_chunks.bind(py).iter().map(|chunk| {
-            let bytes = chunk
-                .cast_into::<PyBytes>()
-                .expect("Was constructed as PyBytes and is immutable.");
+    /// Return an independent copy.
+    pub fn clone(&self) -> PyEncoding {
+        PyEncoding {
+            encoded: self.encoded.clone(),
+            array_byte_ranges: self.array_byte_ranges.clone(),
+        }
+    }
 
-            let cloned = bytes.as_bytes().to_owned();
+    pub fn bit_count(&self) -> usize {
+        self.encoded.bit_count()
+    }
+}
 
-            PyBytes::new(py, &cloned).unbind()
-        });
+/// Encode the bytes of a list of arrays.
+///
+/// All arrays are encoded as one buffer, so a chunk can hold bytes of two
+/// arrays. The arrays must be contiguous and `bits_per_chunk` must be a
+/// positive multiple of 8.
+#[pyfunction]
+pub fn encode(input: Vec<InputArr<u8>>, bits_per_chunk: usize) -> PyResult<PyEncoding> {
+    // `EncodedChunks` only supports whole bytes per chunk.
+    if !bits_per_chunk.is_multiple_of(8) {
+        return Err(PyValueError::new_err(format!(
+            "bits_per_chunk must be a multiple of 8, got {bits_per_chunk}"
+        )));
+    }
 
-        Ok(PyEncoding {
-            encoded_chunks: PyList::new(py, encoding_clone)?.unbind(),
-            data_bit_count: self.data_bit_count,
-            item_counts: self.item_counts.clone(),
+    let arrays = input
+        .iter()
+        .map(|array| {
+            array
+                .as_slice()
+                .map_err(|_| PyValueError::new_err("an input array is not contiguous"))
         })
+        .collect::<PyResult<Vec<_>>>()?;
+
+    let mut array_byte_ranges = Vec::with_capacity(arrays.len());
+    let mut data_bytes = Vec::with_capacity(arrays.iter().map(|array| array.len()).sum());
+    for array in arrays {
+        let start = data_bytes.len();
+        data_bytes.extend_from_slice(array);
+        array_byte_ranges.push(start..data_bytes.len());
     }
 
-    pub fn bit_count<'py>(&self, py: Python<'py>) -> usize {
-        self.encoded_chunks.bind(py).len()
-            * encoded_bit_count(self.data_bit_count)
-                .expect("the data bits count must be checked during initialization")
-    }
-}
+    let encoded = EncodedChunks::encode(&data_bytes, bits_per_chunk / 8)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
-fn encode_generic<'py, T>(
-    py: Python<'py>,
-    buffer: NonUniformSequence<Vec<Vec<T>>>,
-    bits_per_chunk: usize,
-) -> PyResult<PyEncoding>
-where
-    T: ByteBuffer + SizedBitBuffer,
-{
-    let item_counts = buffer.0.iter().map(|chunk| chunk.len()).collect::<Vec<_>>();
-
-    let encoded_chunks = buffer
-        .to_chunks(bits_per_chunk)
-        .map_err(|err| match err {
-            ChunksCreationError::Empty | ChunksCreationError::ZeroChunksize => {
-                PyValueError::new_err(err.to_string())
-            }
-        })?
-        .encode_chunks();
-
-    PyEncoding::from_rust(py, encoded_chunks, bits_per_chunk, item_counts)
-}
-
-/// Encode a all bits of a buffer of 32 bit floats.
-///
-/// Returns a tuple containing:
-/// - A uint8 array with the encoded bits
-/// - The number of useful bits in the encoded buffer
-///
-/// These need to be given to the decoding function to restore the original representation.
-#[pyfunction]
-pub fn encode_f32<'py>(
-    py: Python<'py>,
-    input: Vec<InputArr<f32>>,
-    bits_per_chunk: usize,
-) -> PyResult<PyEncoding> {
-    let buffer = prep_input_array_list(input);
-
-    encode_generic(py, buffer, bits_per_chunk)
-}
-
-/// Encode a all bits of a buffer of 16 bit unsigned integers.
-///
-/// Returns a tuple containing:
-/// - A uint8 array with the encoded bits
-/// - The number of useful bits in the encoded buffer
-///
-/// These need to be given to the decoding function to restore the original representation.
-#[pyfunction]
-pub fn encode_u16<'py>(
-    py: Python<'py>,
-    input: Vec<InputArr<u16>>,
-    bits_per_chunk: usize,
-) -> PyResult<PyEncoding> {
-    let buffer = prep_input_array_list(input);
-
-    encode_generic(py, buffer, bits_per_chunk)
+    Ok(PyEncoding {
+        encoded,
+        array_byte_ranges,
+    })
 }

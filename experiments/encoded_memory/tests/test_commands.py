@@ -6,10 +6,12 @@ import torch
 import typer
 from encoded_memory import commands
 from encoded_memory.commands import (
+    CepScheme,
     DatasetChoice,
     EstimateChoice,
     MetricChoice,
     _init_model_bundle,
+    _resolve_encoder,
     _resolve_metric,
     _resolve_stability_limits,
     app,
@@ -94,6 +96,14 @@ def test_image_datasets_accept_classification_metrics(
 def test_image_datasets_reject_perplexity(dataset: DatasetChoice):
     with pytest.raises(typer.BadParameter, match="perplexity"):
         _ = _resolve_metric(dataset, MetricChoice.Perplexity)
+
+
+@pytest.mark.parametrize("mset", [False, True])
+def test_secded_rejects_bits_not_multiple_of_8(mset: bool):
+    with pytest.raises(typer.BadParameter, match="multiple of 8"):
+        _ = _resolve_encoder(
+            mset=mset, cep=False, cep_scheme=next(iter(CepScheme)), secded=12
+        )
 
 
 @pytest.mark.parametrize("metric", CLASSIFICATION_METRICS)
