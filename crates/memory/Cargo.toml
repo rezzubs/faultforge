@@ -5,7 +5,6 @@ version.workspace = true
 publish = false
 
 [dependencies]
-rayon.workspace = true
 picker = { path = "../picker" }
 thiserror.workspace = true
 rand.workspace = true
@@ -18,10 +17,6 @@ proptest.workspace = true
 
 [features]
 numpy = ["dep:numpy", "dep:pyo3"]
-
-[[bench]]
-name = "chunking"
-harness = false
 
 [[bench]]
 name = "secded"
