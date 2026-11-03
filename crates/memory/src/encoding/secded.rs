@@ -37,8 +37,11 @@
 //! - An even number of errors is detected unless the syndrome is 0. Then the
 //!   buffer looks valid, e.g. after flips at 1, 2, 4 and 7.
 
+mod chunks;
 #[cfg(test)]
 mod tests;
+
+pub use chunks::{DecodeChunksError, EncodeChunksError, EncodedChunks};
 
 use crate::{BitBuffer, Limited};
 
@@ -171,7 +174,7 @@ pub enum EncodeIntoError {
 /// See module docs for error semantics.
 pub fn encode_into<S, D>(source: &S, destination: &mut D) -> Result<(), EncodeIntoError>
 where
-    S: BitBuffer,
+    S: BitBuffer + ?Sized,
     D: BitBuffer,
 {
     let error_correction_bit_count =
