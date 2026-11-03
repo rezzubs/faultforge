@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -11,7 +10,11 @@ from typing import override
 import torch
 
 from faultforge._impl.dtype import EncodingDtype
-from faultforge._impl.encoding.abc import Encoder, Encoding
+from faultforge._impl.encoding.abc import (
+    Encoder,
+    Encoding,
+    check_decode_dest,
+)
 from faultforge._impl.fault import (
     Fault,
     fault_to_rust,
@@ -20,8 +23,6 @@ from faultforge._impl.fingerprint import Fingerprint
 from faultforge._impl.progress import Progress, stage
 from faultforge._impl.tensor import tensor_list_dtype
 from faultforge._rust import secded
-
-_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -63,11 +64,6 @@ class SecdedEncoder(Encoder):
             raise ValueError("Cannot encode an empty buffer")
         dtype = EncodingDtype.from_torch(dtype)
 
-        # SECDED is lossless, so copies of the inputs are the decode of the
-        # encoding without faults. The inputs themselves can't be kept, see
-        # `Encoder.encode`.
-        decoded_tensors = [t.detach().clone() for t in ts]
-
         # The encoding only sees the bytes of the tensors in memory. Fault
         # targets address them in little-endian order, and changing that would
         # change the results of existing experiments.
@@ -82,7 +78,7 @@ class SecdedEncoder(Encoder):
 
         return SecdedEncoding(
             encoded_data,
-            decoded_tensors,
+            [t.shape for t in ts],
             dtype,
         )
 
@@ -93,45 +89,35 @@ class SecdedEncoding(Encoding):
 
     _encoded_data: secded.Encoding
     """The blob that stores raw encoded data."""
-    _decoded_tensors: list[torch.Tensor]
-    """These are updated in-place during decoding."""
+    _shapes: list[torch.Size]
+    """The shapes of the encoded tensors."""
     _dtype: EncodingDtype
-    _needs_recompute: bool = False
 
     @override
-    def decode(self) -> list[torch.Tensor]:
-        if not self._needs_recompute:
-            _logger.debug("Using cached decoded tensors")
-            return self._decoded_tensors
-        _logger.debug("Recomputing decoded tensors")
+    def decode_into(self, dest: list[torch.Tensor]) -> None:
+        dtype = self._dtype.to_torch()
+        check_decode_dest(dest, [(shape, dtype) for shape in self._shapes])
+        _decode_into(self._encoded_data, dest)
 
-        _decode_into(self._encoded_data, self._decoded_tensors)
-
-        self._needs_recompute = False
-        return self._decoded_tensors
+    @override
+    def empty_decoded(self) -> list[torch.Tensor]:
+        dtype = self._dtype.to_torch()
+        return [torch.empty(shape, dtype=dtype) for shape in self._shapes]
 
     @override
     def clone(self) -> SecdedEncoding:
         return SecdedEncoding(
             self._encoded_data.clone(),
-            [t.clone() for t in self._decoded_tensors],
+            self._shapes,
             self._dtype,
-            self._needs_recompute,
         )
-
-    def _invalidate_decoded_cache(self) -> None:
-        if not self._needs_recompute:
-            _logger.debug("Invalidating decoded tensor cache due to fault injection.")
-        self._needs_recompute = True
 
     @override
     def apply_fault(self, fault: Fault, target_bit: int) -> None:
-        self._invalidate_decoded_cache()
         self._encoded_data.apply_fault(fault_to_rust(fault), target_bit)
 
     @override
     def apply_faults(self, faults: Sequence[tuple[Fault, int]]) -> None:
-        self._invalidate_decoded_cache()
         self._encoded_data.apply_faults(
             [(fault_to_rust(fault), target_bit) for fault, target_bit in faults]
         )
@@ -158,7 +144,8 @@ def _decode_into(encoded: secded.Encoding, dest: list[torch.Tensor]) -> None:
     buffer is reused, so it only needs to fit the largest tensor. The copy is
     much faster than the decode.
 
-    `dest` must have the layout of the encoded tensors.
+    `dest` must have the layout of the encoded tensors, see
+    `SecdedEncoding.decode_into`.
     """
     byte_counts = encoded.array_byte_counts()
     assert len(dest) == len(byte_counts)
