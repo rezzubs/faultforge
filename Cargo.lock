@@ -440,7 +440,6 @@ dependencies = [
  "proptest",
  "pyo3",
  "rand 0.10.1",
- "rayon",
  "thiserror",
 ]
 

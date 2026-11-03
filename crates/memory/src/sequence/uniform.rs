@@ -76,11 +76,6 @@ impl<S> UniformSequence<S> {
         &self.sequence
     }
 
-    #[cfg(test)]
-    pub(crate) fn inner_mut(&mut self) -> &mut S {
-        &mut self.sequence
-    }
-
     pub fn into_inner(self) -> S {
         self.sequence
     }

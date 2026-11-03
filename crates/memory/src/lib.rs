@@ -26,7 +26,6 @@
 
 mod bit_buffer;
 mod byte_buffer;
-pub mod chunks;
 pub mod encoding;
 mod fault;
 mod limited;
