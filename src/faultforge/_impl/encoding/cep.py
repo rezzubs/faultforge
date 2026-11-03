@@ -86,7 +86,6 @@ class CepEncoder(InPlaceEncoder):
         return CepEncoding(
             _encoded_data=data,
             _bit_count=bit_count,
-            _decoded_tensors=None,
             _dtype=dtype,
             _scheme=self.scheme,
         )
@@ -100,16 +99,9 @@ class CepEncoding(InPlaceEncoding):
 
     @override
     def clone(self) -> CepEncoding:
-        cloned_data = [t.clone() for t in self._encoded_data]
-        if self._decoded_tensors is not None:
-            cloned_decoded = [t.clone() for t in self._decoded_tensors]
-        else:
-            cloned_decoded = None
-
         return CepEncoding(
-            _encoded_data=cloned_data,
+            _encoded_data=[t.clone() for t in self._encoded_data],
             _bit_count=self._bit_count,
-            _decoded_tensors=cloned_decoded,
             _dtype=self._dtype,
             _scheme=self._scheme,
         )

@@ -58,7 +58,6 @@ class MsetEncoder(InPlaceEncoder):
         return MsetEncoding(
             _encoded_data=data,
             _bit_count=bit_count,
-            _decoded_tensors=None,
             _dtype=dtype,
         )
 
@@ -82,15 +81,8 @@ class MsetEncoding(InPlaceEncoding):
 
     @override
     def clone(self) -> MsetEncoding:
-        copied_data = [t.clone() for t in self._encoded_data]
-        if self._decoded_tensors is not None:
-            copied_decoded = [t.clone() for t in self._decoded_tensors]
-        else:
-            copied_decoded = None
-
         return MsetEncoding(
-            copied_data,
+            [t.clone() for t in self._encoded_data],
             self._bit_count,
-            copied_decoded,
             self._dtype,
         )

@@ -50,3 +50,14 @@ def test_tensors_that_share_a_chunk_decode_separately(dtype: torch.dtype) -> Non
     assert not torch.equal(_bytes(contiguous[0]), _bytes(inputs[0]))
     assert not torch.equal(_bytes(contiguous[1]), _bytes(inputs[1]))
     assert torch.equal(_bytes(contiguous[2]), _bytes(inputs[2]))
+
+
+def test_decode_into_rejects_wrong_destinations() -> None:
+    encoding = SecdedEncoder(bits_per_chunk=64).encode([torch.zeros(4), torch.zeros(2)])
+
+    with pytest.raises(ValueError, match="Expected 2 destination tensors"):
+        encoding.decode_into([torch.zeros(4)])
+    with pytest.raises(ValueError, match=r"has shape \(3,\)"):
+        encoding.decode_into([torch.zeros(4), torch.zeros(3)])
+    with pytest.raises(ValueError, match="dtype torch.float16"):
+        encoding.decode_into([torch.zeros(4), torch.zeros(2, dtype=torch.float16)])

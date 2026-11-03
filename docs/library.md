@@ -47,6 +47,7 @@ encoding = encoder.encode(tensors)
 
 encoding.apply_fault(fault, target_bit)  # or apply_faults(...) for a batch
 recovered = encoding.decode()
+encoding.decode_into(recovered)  # decode again, reusing the tensors
 ```
 
 `TensorEncoder`/`TensorEncoding` are a refinement for encodings whose
