@@ -2,10 +2,7 @@ mod layout;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    BitBuffer, Limited,
-    encoding::secded::{decode_into, encode_into},
-};
+use crate::{BitBuffer, Limited, encoding::secded::encode_into};
 use layout::ChunkLayout;
 use std::ops::Range;
 
@@ -208,13 +205,18 @@ impl EncodedChunks {
         self.layout.encoded_bytes_per_chunk()
     }
 
+    /// The sizes of the chunks.
+    pub(super) fn layout(&self) -> &ChunkLayout {
+        &self.layout
+    }
+
     /// The slice of `encoded_bytes` that holds chunk `chunk_index`.
     ///
     /// It's [`EncodedChunks::encoded_bytes_per_chunk`] bytes long, including
     /// the padding bits in its last byte.
     ///
     /// Panics if the chunk index is out of bounds.
-    fn encoded_chunk(&self, chunk_index: usize) -> &[u8] {
+    pub(super) fn encoded_chunk(&self, chunk_index: usize) -> &[u8] {
         let start = chunk_index * self.encoded_bytes_per_chunk();
         &self.encoded_bytes[start..start + self.encoded_bytes_per_chunk()]
     }
@@ -226,49 +228,14 @@ impl EncodedChunks {
         &self,
         data_byte_range: Range<usize>,
         dest: &mut [u8],
-        mut on_double_error: impl FnMut(usize),
+        on_double_error: impl FnMut(usize),
     ) -> Result<(), DecodeChunksError> {
-        self.layout.check_range(&data_byte_range, dest)?;
-
-        // A scratch buffer to store the encoded chunks because decoding
-        // modifies the input and we don't want to modify ours.
-        let mut encoded_chunk_scratch = vec![0u8; self.encoded_bytes_per_chunk()];
-        let mut data_chunk = vec![0u8; self.data_bytes_per_chunk()];
-
-        // Go through the range one chunk at a time. The range can start and
-        // end in the middle of a chunk, so only part of the first and last
-        // chunk may be copied.
-        let mut data_byte_index = data_byte_range.start;
-        while data_byte_index < data_byte_range.end {
-            let chunk_index = data_byte_index / self.data_bytes_per_chunk();
-            let index_in_chunk = data_byte_index % self.data_bytes_per_chunk();
-            // Up to the end of the chunk or of the range, whichever is first.
-            let copy_count = (self.data_bytes_per_chunk() - index_in_chunk)
-                .min(data_byte_range.end - data_byte_index);
-
-            // `decode_into` corrects single errors in its source, so decode a
-            // copy to keep the stored chunk unchanged. This copy would panic
-            // on a size mismatch but `encoded_chunk` is built with the correct
-            // size.
-            encoded_chunk_scratch.copy_from_slice(self.encoded_chunk(chunk_index));
-            let mut source = Limited::new(
-                encoded_chunk_scratch.as_mut_slice(),
-                self.encoded_bits_per_chunk(),
-            )
-            .expect("the buffer has enough bytes for the encoded bits");
-            let detection = decode_into(&mut source, &mut data_chunk.as_mut_slice())
-                .expect("the chunk sizes are derived from the data size");
-            if detection.is_detected() {
-                on_double_error(chunk_index);
-            }
-
-            let index_in_dest = data_byte_index - data_byte_range.start;
-            dest[index_in_dest..index_in_dest + copy_count]
-                .copy_from_slice(&data_chunk[index_in_chunk..index_in_chunk + copy_count]);
-            data_byte_index += copy_count;
-        }
-
-        Ok(())
+        self.layout.decode_range(
+            data_byte_range,
+            dest,
+            |chunk_index| self.encoded_chunk(chunk_index),
+            on_double_error,
+        )
     }
 }
 

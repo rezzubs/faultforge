@@ -21,3 +21,7 @@ numpy = ["dep:numpy", "dep:pyo3"]
 [[bench]]
 name = "secded"
 harness = false
+
+[[bench]]
+name = "cow"
+harness = false
