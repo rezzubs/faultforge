@@ -38,10 +38,12 @@
 //!   buffer looks valid, e.g. after flips at 1, 2, 4 and 7.
 
 mod chunks;
+mod cow;
 #[cfg(test)]
 mod tests;
 
 pub use chunks::{DecodeChunksError, EncodeChunksError, EncodedChunks};
+pub use cow::CowEncodedChunks;
 
 use crate::{BitBuffer, Limited};
 

@@ -1,7 +1,7 @@
 use crate::{common::*, fault::PyFault};
 use memory::{
     BitBuffer,
-    encoding::secded::{DecodeChunksError, EncodedChunks},
+    encoding::secded::{CowEncodedChunks, DecodeChunksError},
 };
 use numpy::{PyArray1, PyReadwriteArrayDyn};
 use pyo3::{
@@ -14,7 +14,7 @@ use std::ops::Range;
 pub struct PyEncoding {
     /// The encoding of the bytes of all input arrays, concatenated in input
     /// order.
-    encoded: EncodedChunks,
+    encoded: CowEncodedChunks,
     /// The range of each input array's bytes in the data bytes of `encoded`.
     array_byte_ranges: Vec<Range<usize>>,
 }
@@ -113,6 +113,9 @@ impl PyEncoding {
     }
 
     /// Return an independent copy.
+    ///
+    /// Copies of an instance without faults share their data until faults are
+    /// applied, so they're cheap to make.
     pub fn clone(&self) -> PyEncoding {
         PyEncoding {
             encoded: self.encoded.clone(),
@@ -156,7 +159,7 @@ pub fn encode(input: Vec<InputArr<u8>>, bits_per_chunk: usize) -> PyResult<PyEnc
         array_byte_ranges.push(start..data_bytes.len());
     }
 
-    let encoded = EncodedChunks::encode(&data_bytes, bits_per_chunk / 8)
+    let encoded = CowEncodedChunks::encode(&data_bytes, bits_per_chunk / 8)
         .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
     Ok(PyEncoding {
