@@ -67,13 +67,9 @@ class EncodedModule(nn.Module):
 
     def force_decode(self) -> nn.Module:
         """Force a decode of the memory."""
-        decoded = self._memory.decode()
-        for param, decoded_param in zip(self._module.parameters(), decoded):
-            assert param.shape == decoded_param.shape
-            assert param.dtype == decoded_param.dtype
-
-            with torch.no_grad():
-                param.copy_(decoded_param)
+        # The parameters are the only decoded copy. The encoding decodes
+        # straight into them, wherever they are.
+        self._memory.decode_into(list(self._module.parameters()))
 
         self._dirty = False
 
