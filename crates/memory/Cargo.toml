@@ -22,3 +22,7 @@ numpy = ["dep:numpy", "dep:pyo3"]
 [[bench]]
 name = "chunking"
 harness = false
+
+[[bench]]
+name = "secded"
+harness = false
