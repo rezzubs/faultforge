@@ -16,6 +16,7 @@ from faultforge._impl.experiment.estimate import (
     Estimator,
     FailureRate,
     Mean,
+    NonFiniteRate,
     RelativeThreshold,
 )
 from faultforge._impl.experiment.recorded import RecordedRuns
@@ -37,6 +38,7 @@ __all__ = [
     "FailureRate",
     "MaxRuns",
     "Mean",
+    "NonFiniteRate",
     "RecordedRuns",
     "RelativeThreshold",
     "SaveConfig",

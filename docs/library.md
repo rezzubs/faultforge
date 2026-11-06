@@ -158,6 +158,8 @@ An `Estimator` (`faultforge.experiment`) summarizes many scores as an
     golden score.
   - `AbsoluteThreshold(score)` - a fixed score, e.g. `5.0` for "more than 5%
     SDC". Doesn't need a golden score.
+- `NonFiniteRate()` - the percentage of runs with a non-finite score (`NaN`,
+  `inf` or `-inf`), with a Wilson score interval. Doesn't need a golden score.
 
 ```python
 from faultforge.experiment import FailureRate, Mean, RelativeThreshold

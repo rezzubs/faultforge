@@ -46,7 +46,7 @@ Experiment harness:
   automatic run loops with clean Ctrl+C handling, and atomic, resumable,
   optionally zstd-compressed saving.
 - [**Estimators**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#estimators) -
-  mean and failure rate, with 95% confidence intervals.
+  mean, failure rate and non-finite rate, with 95% confidence intervals.
 - [**Stop conditions**](https://github.com/rezzubs/faultforge/blob/main/docs/library.md#stop-conditions) -
   run until an estimate is stable, for a fixed number of runs, or until
   interrupted.

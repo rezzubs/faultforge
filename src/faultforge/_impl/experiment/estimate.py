@@ -248,24 +248,7 @@ class FailureRate(Estimator):
             return None
 
         failures = sum(1 for score in scores if self._is_failure(score, limit))
-
-        interval = scipy.stats.binomtest(failures, count).proportion_ci(
-            confidence_level=CONFIDENCE_LEVEL, method="wilson"
-        )
-        lower = interval.low
-        upper = interval.high
-        # NOTE: scipy isn't typed. numpy's float64 is a subclass of float.
-        assert isinstance(lower, float)
-        assert isinstance(upper, float)
-
-        value = failures / count * 100
-        # Floating point error can put `value` slightly outside its bounds at
-        # 0% and 100%.
-        return Estimate(
-            value=value,
-            lower=min(lower * 100, value),
-            upper=max(upper * 100, value),
-        )
+        return _percentage_estimate(failures, count)
 
     def _limit(self, golden_score: float | None) -> float:
         match self.threshold:
@@ -315,3 +298,68 @@ class FailureRate(Estimator):
     def format_value(self, value: float, score_display: ScoreDisplay) -> str:
         _ = score_display
         return f"{value:.2f}%"
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class NonFiniteRate(Estimator):
+    """The percentage of runs with a non-finite score, with a Wilson score interval.
+
+    `NaN`, `inf` and `-inf` all count as non-finite. Doesn't need a golden
+    score.
+
+    The value and bounds are percentages, so the margin is in percentage
+    points. The estimate is available from the first score onward. The
+    largest possible margin shrinks with every run, so any margin limit in
+    percentage points is eventually reached.
+    """
+
+    @override
+    def estimate(
+        self, scores: Sequence[float], golden_score: float | None
+    ) -> Estimate | None:
+        _ = golden_score
+
+        count = len(scores)
+        if count == 0:
+            return None
+
+        non_finite = sum(1 for score in scores if not math.isfinite(score))
+        return _percentage_estimate(non_finite, count)
+
+    @override
+    def requires_golden(self) -> bool:
+        return False
+
+    @override
+    def name(self) -> str:
+        return "non-finite rate"
+
+    @override
+    def format_value(self, value: float, score_display: ScoreDisplay) -> str:
+        _ = score_display
+        return f"{value:.2f}%"
+
+
+def _percentage_estimate(matching_runs: int, total_runs: int) -> Estimate:
+    """`matching_runs` as a percentage of `total_runs`, with a Wilson score interval."""
+    assert 0 <= matching_runs <= total_runs
+    assert total_runs > 0
+
+    interval = scipy.stats.binomtest(matching_runs, total_runs).proportion_ci(
+        confidence_level=CONFIDENCE_LEVEL, method="wilson"
+    )
+    lower = interval.low
+    upper = interval.high
+    # NOTE: scipy isn't typed. numpy's float64 is a subclass of float.
+    assert isinstance(lower, float)
+    assert isinstance(upper, float)
+
+    value = matching_runs / total_runs * 100
+    # Floating point error can put `value` slightly outside its bounds at
+    # 0% and 100%.
+    return Estimate(
+        value=value,
+        lower=min(lower * 100, value),
+        upper=max(upper * 100, value),
+    )

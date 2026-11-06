@@ -11,6 +11,7 @@ from faultforge.experiment import (
     Estimate,
     FailureRate,
     Mean,
+    NonFiniteRate,
     RelativeThreshold,
     ScoreDisplay,
 )
@@ -209,3 +210,47 @@ def test_failure_rate_name():
         FailureRate(AbsoluteThreshold(50.0), ScoreDirection.HigherIsBetter).name()
         == "failure rate (<50)"
     )
+
+
+def test_non_finite_rate_needs_one_score():
+    assert NonFiniteRate().estimate([], None) is None
+    assert NonFiniteRate().estimate([0.0], None) is not None
+
+
+def test_non_finite_rate_known_interval():
+    estimate = NonFiniteRate().estimate([0.0] * 10, None)
+
+    assert estimate is not None
+    assert estimate.value == 0.0
+    assert estimate.lower == 0.0
+    assert estimate.upper == pytest.approx(27.753280, rel=1e-6)
+
+
+@pytest.mark.parametrize("non_finite", [math.nan, math.inf, -math.inf])
+def test_non_finite_rate_counts_every_non_finite_kind(non_finite: float):
+    estimate = NonFiniteRate().estimate([0.0, non_finite], None)
+
+    assert estimate is not None
+    assert estimate.value == 50.0
+
+
+@given(st.lists(any_floats, min_size=1))
+def test_non_finite_rate_counts_non_finite_scores(scores: list[float]):
+    estimate = NonFiniteRate().estimate(scores, None)
+
+    expected = sum(1 for score in scores if not math.isfinite(score))
+    assert estimate is not None
+    assert estimate.value == pytest.approx(expected / len(scores) * 100)
+    assert 0 <= estimate.lower <= estimate.value <= estimate.upper <= 100
+
+
+def test_non_finite_rate_doesnt_require_golden():
+    assert not NonFiniteRate().requires_golden()
+
+
+def test_non_finite_rate_name():
+    assert NonFiniteRate().name() == "non-finite rate"
+
+
+def test_non_finite_rate_formats_percentages():
+    assert NonFiniteRate().format_value(12.345, _Display()) == "12.35%"
