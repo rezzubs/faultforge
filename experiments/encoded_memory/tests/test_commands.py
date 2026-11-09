@@ -22,6 +22,7 @@ from faultforge.experiment import (
     AbsoluteThreshold,
     FailureRate,
     Mean,
+    NonFiniteRate,
     RelativeThreshold,
     Stability,
 )
@@ -257,12 +258,23 @@ def test_stability_defaults_to_mean():
 
 
 @pytest.mark.parametrize(
+    "estimate", [EstimateChoice.Mean, EstimateChoice.NonFiniteRate]
+)
+@pytest.mark.parametrize(
     "arguments",
     [{"relative_failure_threshold": 2.0}, {"absolute_failure_threshold": 2.0}],
 )
-def test_mean_rejects_failure_thresholds(arguments: dict):
+def test_only_failure_rate_takes_failure_thresholds(
+    estimate: EstimateChoice, arguments: dict
+):
     with pytest.raises(typer.BadParameter, match="failure-rate"):
-        _ = resolve_stability(estimate=EstimateChoice.Mean, **arguments)
+        _ = resolve_stability(estimate=estimate, **arguments)
+
+
+def test_non_finite_rate():
+    stability = resolve_stability(estimate=EstimateChoice.NonFiniteRate)
+
+    assert stability == Stability(estimator=NonFiniteRate(), max_absolute_margin=1.0)
 
 
 @pytest.mark.parametrize(

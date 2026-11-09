@@ -14,6 +14,7 @@ from faultforge.experiment import (
     AbsoluteThreshold,
     FailureRate,
     Mean,
+    NonFiniteRate,
     Stability,
 )
 from faultforge.metric import (
@@ -46,7 +47,7 @@ def test_cli_reports_invalid_margins():
         )
 
 
-def test_mean_without_failure_threshold():
+def test_defaults_to_mean():
     limits = StabilityLimits(min_runs=3, max_absolute_margin=0.5)
 
     assert limits.stability(Accuracy()) == Stability(
@@ -55,13 +56,19 @@ def test_mean_without_failure_threshold():
 
 
 def test_failure_rate_direction_follows_the_metric():
-    limits = StabilityLimits(
-        failure_threshold=AbsoluteThreshold(5.0), max_relative_margin=1.0
-    )
+    limits = StabilityLimits(estimate=AbsoluteThreshold(5.0), max_relative_margin=1.0)
 
     assert limits.stability(Accuracy()).estimator == FailureRate(
         AbsoluteThreshold(5.0), ScoreDirection.HigherIsBetter
     )
     assert limits.stability(Perplexity()).estimator == FailureRate(
         AbsoluteThreshold(5.0), ScoreDirection.LowerIsBetter
+    )
+
+
+def test_non_finite_rate():
+    limits = StabilityLimits(estimate=NonFiniteRate(), max_absolute_margin=1.0)
+
+    assert limits.stability(Perplexity()) == Stability(
+        estimator=NonFiniteRate(), max_absolute_margin=1.0
     )

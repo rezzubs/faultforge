@@ -29,6 +29,8 @@ from faultforge.experiment import (
     AbsoluteThreshold,
     AdditionalRuns,
     MaxRuns,
+    Mean,
+    NonFiniteRate,
     RelativeThreshold,
     SaveConfig,
     StopCondition,
@@ -109,6 +111,7 @@ def _resolve_metric(
 class EstimateChoice(enum.StrEnum):
     Mean = "mean"
     FailureRate = "failure-rate"
+    NonFiniteRate = "non-finite-rate"
 
 
 _MaxRunsOption = Annotated[
@@ -143,7 +146,7 @@ _MaxAbsoluteMarginOption = Annotated[
     typer.Option(
         min=0.0,
         help="Run until the estimate's margin of error at 95% confidence is at most N, in the "
-        "estimate's units (percentage points for failure-rate). "
+        "estimate's units (percentage points for failure-rate and non-finite-rate). "
         "Can be combined with --max-relative-margin, whichever is reached first stops.",
         rich_help_panel="Stop Conditions",
     ),
@@ -155,7 +158,8 @@ _EstimateOption = Annotated[
         help="What the margin limits apply to. `mean` is the mean score; it "
         "stops with an error at the first non-finite score, e.g. an infinite perplexity. "
         "`failure-rate` is the percentage of runs whose score is worse than a failure "
-        "threshold; non-finite scores always count as failures.",
+        "threshold; non-finite scores always count as failures. "
+        "`non-finite-rate` is the percentage of runs with a non-finite score.",
         rich_help_panel="Stop Conditions",
     ),
 ]
@@ -204,9 +208,9 @@ def _resolve_stability_limits(
                 )
         return None
 
-    failure_threshold: RelativeThreshold | AbsoluteThreshold | None
+    stability_estimate: Mean | NonFiniteRate | RelativeThreshold | AbsoluteThreshold
     match estimate:
-        case EstimateChoice.Mean:
+        case EstimateChoice.Mean | EstimateChoice.NonFiniteRate:
             for value, option in [
                 (relative_failure_threshold, "--relative-failure-threshold"),
                 (absolute_failure_threshold, "--absolute-failure-threshold"),
@@ -216,7 +220,9 @@ def _resolve_stability_limits(
                         f"{option} only applies to --estimate failure-rate",
                         param_hint=option,
                     )
-            failure_threshold = None
+            stability_estimate = (
+                Mean() if estimate == EstimateChoice.Mean else NonFiniteRate()
+            )
         case EstimateChoice.FailureRate:
             try:
                 match (relative_failure_threshold, absolute_failure_threshold):
@@ -228,11 +234,11 @@ def _resolve_stability_limits(
                             param_hint="--estimate",
                         )
                     case (float(), None):
-                        failure_threshold = RelativeThreshold(
+                        stability_estimate = RelativeThreshold(
                             relative_failure_threshold
                         )
                     case (None, float()):
-                        failure_threshold = AbsoluteThreshold(
+                        stability_estimate = AbsoluteThreshold(
                             absolute_failure_threshold
                         )
             except ValueError as error:
@@ -240,7 +246,7 @@ def _resolve_stability_limits(
 
     try:
         return StabilityLimits(
-            failure_threshold=failure_threshold,
+            estimate=stability_estimate,
             min_runs=min_runs if min_runs is not None else 0,
             max_absolute_margin=max_absolute_margin,
             max_relative_margin=max_relative_margin,

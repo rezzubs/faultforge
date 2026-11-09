@@ -18,6 +18,7 @@ from hypothesis import strategies as st
 from faultforge import Fingerprint
 from faultforge.experiment import (
     MaxRuns,
+    NonFiniteRate,
     RelativeThreshold,
     SaveConfig,
 )
@@ -36,7 +37,7 @@ from .conftest import (
 TIGHT = StabilityLimits(max_absolute_margin=0.5)
 """Reached by a few equal scores, but not by a single one."""
 FAILURE_RATE = StabilityLimits(
-    failure_threshold=RelativeThreshold(2.0), max_absolute_margin=100.0
+    estimate=RelativeThreshold(2.0), max_absolute_margin=100.0
 )
 """Needs a golden score. Any failure rate estimate is within the margin."""
 
@@ -189,6 +190,17 @@ def test_mean_rejects_non_finite_scores(tmp_path: Path):
 
     with pytest.raises(ValueError):
         _ = check_saved(path, stability=TIGHT)
+
+
+def test_non_finite_rate_accepts_non_finite_scores(tmp_path: Path):
+    path = _write_saved(tmp_path, _saved_result([2.0, math.inf, math.nan, 2.0]))
+    limits = StabilityLimits(estimate=NonFiniteRate(), max_absolute_margin=100.0)
+
+    result = check_saved(path, stability=limits)
+
+    assert result.status == CheckStatus.Stable
+    assert result.estimate is not None
+    assert result.estimate.value == 50.0
 
 
 def test_unreadable_file_raises(tmp_path: Path):

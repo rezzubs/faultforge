@@ -1,12 +1,16 @@
 """Margin of error limits that don't depend on the metric."""
 
-from dataclasses import dataclass
+from dataclasses import (
+    dataclass,
+    field,
+)
 
 from faultforge.experiment import (
     AbsoluteThreshold,
     Estimator,
     FailureRate,
     Mean,
+    NonFiniteRate,
     RelativeThreshold,
     Stability,
 )
@@ -23,9 +27,11 @@ class StabilityLimits:
     At least one margin is required. Margins must be finite and not negative.
     """
 
-    failure_threshold: RelativeThreshold | AbsoluteThreshold | None = None
-    """Estimate the failure rate against this threshold. `None` estimates the
-    mean score instead."""
+    estimate: Mean | NonFiniteRate | RelativeThreshold | AbsoluteThreshold = field(
+        default_factory=Mean
+    )
+    """What the limits apply to. A threshold estimates the failure rate against
+    it, with the metric's direction."""
     min_runs: int = 0
     """Minimum number of runs before checking the limits."""
     max_absolute_margin: float | None = None
@@ -40,9 +46,11 @@ class StabilityLimits:
 
     def _estimator(self, metric: Metric) -> Estimator:
         """The `Estimator` to use for scores of `metric`."""
-        if self.failure_threshold is None:
-            return Mean()
-        return FailureRate(self.failure_threshold, metric.direction())
+        match self.estimate:
+            case Mean() | NonFiniteRate():
+                return self.estimate
+            case RelativeThreshold() | AbsoluteThreshold():
+                return FailureRate(self.estimate, metric.direction())
 
     def stability(self, metric: Metric) -> Stability:
         """The `Stability` condition for scores of `metric`."""

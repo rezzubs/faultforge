@@ -204,11 +204,13 @@ stops. `--min-runs` delays the check, `--max-runs` caps the run count.
     (`accuracy-degradation`, `sdc`, `top1-sdc`).
   - `--absolute-failure-threshold N` - worse than N in the metric's units,
     e.g. `5.0` for 5% SDC.
+- `non-finite-rate` - the percentage of runs with a non-finite score, e.g. an
+  infinite perplexity. In percentage points for `--max-absolute-margin`.
 
 A relative limit is never reached while the estimate is 0, e.g. a failure
 rate without failures. Combine it with `--max-absolute-margin` or
-`--max-runs` in that case. The absolute margin of a failure rate always
-reaches its limit eventually.
+`--max-runs` in that case. The absolute margin of a failure rate or
+non-finite rate always reaches its limit eventually.
 
 ```sh
 encoded-memory record \
@@ -272,9 +274,7 @@ From Python, `check_saved` does the same for one file:
 from encoded_memory import StabilityLimits, check_saved
 from faultforge.experiment import RelativeThreshold
 
-limits = StabilityLimits(
-    failure_threshold=RelativeThreshold(2.0), max_absolute_margin=2.0
-)
+limits = StabilityLimits(estimate=RelativeThreshold(2.0), max_absolute_margin=2.0)
 result = check_saved("results/secded.json.zst", stability=limits, max_runs=1000)
 if result.should_run():
     ...
