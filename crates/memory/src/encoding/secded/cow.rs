@@ -41,16 +41,20 @@ pub struct DecodedChanges {
 /// - Every write, and every chunk a decode reads, is looked up in the
 ///   overlay first, which gets slower as the overlay grows.
 ///
-/// From `benches/cow.rs` (clone, apply faults and decode 1 MiB of data with
-/// 64-bit chunks):
+/// The overlay also makes [`CowEncodedChunks::decoded_changes`] possible,
+/// which is much faster than a full decode at low bit error rates.
 ///
-/// | Bit error rate | Overlay memory of a full copy | Time of a full copy |
-/// |----------------|-------------------------------|---------------------|
-/// | 1e-4           | 1.4%                          | 1.03x               |
-/// | 1e-3           | 13%                           | 1.06x               |
-/// | 1e-2           | 97%                           | 1.32x               |
-/// | 1e-1           | 189%                          | 1.9x                |
-/// | 1              | 189%                          | 11.6x               |
+/// From `benches/cow.rs` (clone, apply faults and decode 1 MiB of data with
+/// 64-bit chunks). The times are relative to a clone of [`EncodedChunks`] with
+/// a full decode:
+///
+/// | Bit error rate | Overlay memory of a full copy | Time with a full decode | Time with `decoded_changes` |
+/// |----------------|-------------------------------|-------------------------|-----------------------------|
+/// | 1e-4           | 1.4%                          | 1.01x                   | 0.0014x                     |
+/// | 1e-3           | 13%                           | 1.06x                   | 0.024x                      |
+/// | 1e-2           | 97%                           | 1.33x                   | 0.62x                       |
+/// | 1e-1           | 189%                          | 1.89x                   | 2.5x                        |
+/// | 1              | 189%                          | 11.5x                   | 12.4x                       |
 #[derive(Debug, Clone)]
 pub struct CowEncodedChunks {
     /// The shared chunks. They're never written to, so they hold the encoding
@@ -173,8 +177,10 @@ impl CowEncodedChunks {
             // decoding corrects it back to the pristine data, see the decision
             // table in the `secded` module docs. Only chunks with at least two
             // differing bits can decode differently, which are a small part of
-            // the written chunks at low bit error rates. The padding bits are
-            // never written, so they never differ.
+            // the written chunks at low bit error rates. Skipping the others
+            // made `overlay_changes` in `benches/cow.rs` 12x faster at a bit
+            // error rate of 1e-4, 7x at 1e-3 and 2x at 1e-2 (64-bit chunks).
+            // The padding bits are never written, so they never differ.
             let differing_bit_count: u32 = faulty_encoded_chunk
                 .iter()
                 .zip(pristine_encoded_chunk)

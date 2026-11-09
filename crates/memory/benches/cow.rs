@@ -1,9 +1,11 @@
 //! Compares sharing unchanged chunks with copying all of them.
 //!
 //! Every iteration clones a fault-free encoding, applies faults at a bit error
-//! rate and decodes, like a fault injection run does. The `overlay` variant
-//! clones [`CowEncodedChunks`], the `full_copy` variant clones
-//! [`EncodedChunks`].
+//! rate and decodes, like a fault injection run does. The variants:
+//! - `full_copy` clones [`EncodedChunks`] and decodes all chunks.
+//! - `overlay` clones [`CowEncodedChunks`] and decodes all chunks.
+//! - `overlay_changes` clones [`CowEncodedChunks`] and only finds the decoded
+//!   bytes that faults changed, see [`CowEncodedChunks::decoded_changes`].
 //!
 //! Criterion only measures time, so the number of bytes each clone doesn't
 //! share is printed separately.
@@ -88,6 +90,16 @@ fn bench_cow(c: &mut Criterion) {
                     faulty.decode_into(black_box(&mut decoded))
                 })
             });
+            group.bench_function(
+                BenchmarkId::from_parameter(parameter("overlay_changes")),
+                |b| {
+                    b.iter(|| {
+                        let mut faulty = black_box(&shared).clone();
+                        faulty.apply_faults(faults.iter().copied());
+                        faulty.decoded_changes(0..DATA_BYTE_COUNT)
+                    })
+                },
+            );
             group.bench_function(BenchmarkId::from_parameter(parameter("full_copy")), |b| {
                 b.iter(|| {
                     let mut faulty = black_box(&pristine).clone();
