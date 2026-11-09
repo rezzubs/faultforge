@@ -1,4 +1,4 @@
-"""Tests for `Encoding.decode` and `Encoding.decode_into`."""
+"""Tests for `Encoding.decode`, `Encoding.decode_into` and `Encoding.decode_changes_into`."""
 
 import hypothesis.strategies as st
 import pytest
@@ -82,6 +82,47 @@ def test_decode_into_matches_decode(
 
     # Decoding again gives the same result.
     _assert_bits_equal(encoding.decode(), expected)
+
+
+@pytest.mark.parametrize("encoder", _ENCODERS)
+@given(ts=_tensor_lists(), data=st.data())
+def test_decode_changes_into_matches_decode(
+    encoder: Encoder, ts: list[Tensor], data: st.DataObject
+) -> None:
+    encoding = encoder.encode(ts)
+    fault_free = encoding.decode()
+
+    faulty = encoding.clone()
+    bit_count = faulty.bit_count()
+    # Faults close together often hit the same chunk, so some chunks decode
+    # differently from the fault-free decode.
+    window_start = data.draw(st.integers(0, bit_count - 1))
+    target_bits = data.draw(
+        st.lists(st.integers(window_start, min(window_start + 150, bit_count - 1)))
+    )
+    faulty.apply_faults([(BitFlip(), bit) for bit in target_bits])
+    expected = faulty.decode()
+
+    contiguous = [t.clone() for t in fault_free]
+    faulty.decode_changes_into(contiguous)
+    _assert_bits_equal(contiguous, expected)
+
+    # Every other element of a larger tensor isn't contiguous.
+    strided = [torch.full((*t.shape, 2), 7.0, dtype=t.dtype)[..., 0] for t in ts]
+    for strided_tensor, fault_free_tensor in zip(strided, fault_free, strict=True):
+        _ = strided_tensor.copy_(fault_free_tensor)
+    faulty.decode_changes_into(strided)
+    _assert_bits_equal(strided, expected)
+
+
+@pytest.mark.parametrize("encoder", _ENCODERS)
+def test_decode_changes_into_rejects_wrong_destinations(encoder: Encoder) -> None:
+    encoding = encoder.encode([torch.zeros(4), torch.zeros(2, 3)])
+
+    with pytest.raises(ValueError, match="Expected 2 destination tensors"):
+        encoding.decode_changes_into([torch.zeros(4)])
+    with pytest.raises(ValueError, match="Destination tensor 1 has shape"):
+        encoding.decode_changes_into([torch.zeros(4), torch.zeros(3, 2)])
 
 
 @pytest.mark.parametrize("encoder", _ENCODERS)

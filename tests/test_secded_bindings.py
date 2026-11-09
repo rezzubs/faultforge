@@ -114,6 +114,49 @@ def test_decode_rejects_wrong_dest_length():
         _ = encoding.decode_into(0, np.zeros(31, dtype=np.uint8))
 
 
+def test_no_decoded_changes_without_faults():
+    _, encoding = _encode()
+
+    byte_offsets, byte_values = encoding.decoded_changes(0)
+
+    assert byte_offsets.dtype == np.int64
+    assert byte_values.dtype == np.uint8
+    assert byte_offsets.size == 0
+    assert byte_values.size == 0
+
+
+def test_decoded_changes_turn_the_source_into_the_decode():
+    # 3 and 5 bytes in chunks of 2 bytes: chunk 1 holds the end of the first
+    # array and the start of the second.
+    sources = [np.arange(3, dtype=np.uint8), np.arange(10, 15, dtype=np.uint8)]
+    encoding = encode(sources, _DATA_BITS_PER_CHUNK)
+
+    # Two flips in chunk 1 make it decode differently.
+    chunk_start = 1 * _ENCODED_BITS_PER_CHUNK
+    encoding.apply_faults(
+        [(Fault.flip(), chunk_start + 3), (Fault.flip(), chunk_start + 5)]
+    )
+
+    changed_arrays = 0
+    for array_index, source in enumerate(sources):
+        decoded = np.zeros_like(source)
+        _ = encoding.decode_into(array_index, decoded)
+
+        byte_offsets, byte_values = encoding.decoded_changes(array_index)
+        changed_arrays += byte_offsets.size > 0
+        changed = source.copy()
+        changed[byte_offsets] = byte_values
+        np.testing.assert_array_equal(changed, decoded)
+    assert changed_arrays > 0
+
+
+def test_decoded_changes_rejects_out_of_bounds_array():
+    _, encoding = _encode()
+
+    with pytest.raises(IndexError, match="out of bounds"):
+        _ = encoding.decoded_changes(1)
+
+
 def test_decode_rejects_out_of_bounds_array():
     _, encoding = _encode()
 

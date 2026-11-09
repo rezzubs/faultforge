@@ -61,3 +61,27 @@ def test_decode_into_rejects_wrong_destinations() -> None:
         encoding.decode_into([torch.zeros(4), torch.zeros(3)])
     with pytest.raises(ValueError, match="dtype torch.float16"):
         encoding.decode_into([torch.zeros(4), torch.zeros(2, dtype=torch.float16)])
+
+
+def test_decode_changes_into_writes_only_changed_bytes() -> None:
+    # 64-bit chunks hold 2 float32 values, encoded in 72 bits.
+    encoding = SecdedEncoder(bits_per_chunk=64).encode([torch.ones(8)])
+    # A value the decode can't produce shows which bytes were written.
+    dest = torch.full((8,), 7.0)
+
+    encoding.decode_changes_into([dest])
+    assert torch.equal(dest, torch.full((8,), 7.0))
+
+    # Two flips in chunk 1 make it decode wrong, so its values are written.
+    chunk_start = 1 * 72
+    encoding.apply_faults([(BitFlip(), chunk_start + 3), (BitFlip(), chunk_start + 5)])
+    encoding.decode_changes_into([dest])
+
+    decoded = encoding.decode()[0]
+    assert not torch.equal(decoded[2:4], torch.ones(2))
+    assert torch.equal(dest[:2], torch.full((2,), 7.0))
+    assert torch.equal(dest[4:], torch.full((4,), 7.0))
+    # Only the changed bytes are written, so the unchanged bytes of chunk 1
+    # can still be 7.0's.
+    changed = _bytes(decoded[2:4]) != _bytes(torch.ones(2))
+    assert torch.equal(_bytes(dest[2:4])[changed], _bytes(decoded[2:4])[changed])

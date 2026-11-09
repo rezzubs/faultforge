@@ -100,6 +100,12 @@ class SecdedEncoding(Encoding):
         _decode_into(self._encoded_data, dest)
 
     @override
+    def decode_changes_into(self, dest: list[torch.Tensor]) -> None:
+        dtype = self._dtype.to_torch()
+        check_decode_dest(dest, [(shape, dtype) for shape in self._shapes])
+        _decode_changes_into(self._encoded_data, dest)
+
+    @override
     def empty_decoded(self) -> list[torch.Tensor]:
         dtype = self._dtype.to_torch()
         return [torch.empty(shape, dtype=dtype) for shape in self._shapes]
@@ -158,3 +164,32 @@ def _decode_into(encoded: secded.Encoding, dest: list[torch.Tensor]) -> None:
             staged = staging[:byte_count]
             encoded.decode_into(index, staged.numpy())
             _ = t.copy_(staged.view(t.dtype).view(t.shape))
+
+
+def _decode_changes_into(encoded: secded.Encoding, dest: list[torch.Tensor]) -> None:
+    """Write the bytes of `encoded` that faults changed into `dest`.
+
+    Only the changed bytes are moved to the device of each tensor, so this is
+    cheap on CUDA too.
+
+    `dest` must have the layout of the encoded tensors and hold the decode
+    without faults, see `SecdedEncoding.decode_changes_into`.
+    """
+    assert len(dest) == len(encoded.array_byte_counts())
+
+    with torch.no_grad():
+        for index, t in enumerate(dest):
+            byte_offsets, byte_values = encoded.decoded_changes(index)
+            if byte_offsets.size == 0:
+                continue
+
+            # Only contiguous tensors can be viewed as bytes. A contiguous copy
+            # also holds the decode without faults, so the changes can be
+            # written into it and copied back.
+            contiguous = t if t.is_contiguous() else t.contiguous()
+            byte_view = _byte_view(contiguous)
+            byte_view[torch.from_numpy(byte_offsets).to(t.device)] = torch.from_numpy(
+                byte_values
+            ).to(t.device)
+            if contiguous is not t:
+                _ = t.copy_(contiguous)

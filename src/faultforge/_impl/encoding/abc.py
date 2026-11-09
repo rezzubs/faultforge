@@ -73,6 +73,29 @@ class Encoding:
         """
         ...
 
+    def decode_changes_into(self, dest: list[Tensor]) -> None:
+        """Decode into tensors that hold the decode without faults.
+
+        Afterwards `dest` holds the same as after `decode_into`.
+
+        `dest` must hold what `decode` returns for this encoding before any
+        faults. Clones count as the same encoding. For example, `dest` can be
+        the decode of a fault-free encoding that this one was cloned from. The
+        result of an earlier decode with faults doesn't work, because data that
+        faults changed before may not be written again.
+
+        `dest` has the same layout requirements as for `decode_into`.
+
+        The default implementation calls `decode_into`, which is always
+        correct. Encodings that can find the data that faults changed should
+        override this to only write that, which is much faster at low bit error
+        rates.
+
+        Raises:
+            ValueError: If `dest` doesn't match the encoded tensors.
+        """
+        self.decode_into(dest)
+
     @abc.abstractmethod
     def empty_decoded(self) -> list[Tensor]:
         """Allocate uninitialized tensors that fit the decoded data.

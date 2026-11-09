@@ -38,16 +38,7 @@ impl PyEncoding {
         mut dest: PyReadwriteArrayDyn<'py, u8>,
         collect_double_errors: bool,
     ) -> PyResult<Option<OutputArr<'py, u64>>> {
-        let array_byte_range = self
-            .array_byte_ranges
-            .get(array_index)
-            .ok_or_else(|| {
-                PyIndexError::new_err(format!(
-                    "array {array_index} is out of bounds for {} arrays",
-                    self.array_byte_ranges.len()
-                ))
-            })?
-            .clone();
+        let array_byte_range = self.array_byte_range(array_index)?;
         let dest = dest
             .as_slice_mut()
             .map_err(|_| PyValueError::new_err("`dest` is not contiguous"))?;
@@ -77,6 +68,42 @@ impl PyEncoding {
                 }),
             )
         }))
+    }
+
+    /// Find the decoded bytes of one input array that differ from the
+    /// original data.
+    ///
+    /// Returns the offsets of the bytes from the start of the array in
+    /// ascending order, and the decoded value of each byte. Writing them into
+    /// a copy of the original array gives the same bytes as `decode_into`.
+    ///
+    /// The changes are always relative to the original data. So writing them
+    /// into the result of an earlier decode with faults can give wrong bytes.
+    pub fn decoded_changes<'py>(
+        &self,
+        py: Python<'py>,
+        array_index: usize,
+    ) -> PyResult<(OutputArr<'py, i64>, OutputArr<'py, u8>)> {
+        let array_byte_range = self.array_byte_range(array_index)?;
+        let changes = self
+            .encoded
+            .decoded_changes(array_byte_range)
+            .unwrap_or_else(|err| {
+                unreachable!("the array ranges are within the data bytes: {err}")
+            });
+
+        // Torch only indexes with int64 tensors.
+        let byte_offsets = changes
+            .byte_offsets
+            .into_iter()
+            .map(|byte_offset| {
+                i64::try_from(byte_offset).expect("an array has fewer than 2^63 bytes")
+            })
+            .collect::<Vec<_>>();
+        Ok((
+            PyArray1::from_vec(py, byte_offsets),
+            PyArray1::from_vec(py, changes.byte_values),
+        ))
     }
 
     /// Return the number of bytes in each input array.
@@ -125,6 +152,21 @@ impl PyEncoding {
 
     pub fn bit_count(&self) -> usize {
         self.encoded.bit_count()
+    }
+}
+
+impl PyEncoding {
+    /// The range of an input array's bytes in the data bytes of `encoded`.
+    fn array_byte_range(&self, array_index: usize) -> PyResult<Range<usize>> {
+        self.array_byte_ranges
+            .get(array_index)
+            .cloned()
+            .ok_or_else(|| {
+                PyIndexError::new_err(format!(
+                    "array {array_index} is out of bounds for {} arrays",
+                    self.array_byte_ranges.len()
+                ))
+            })
     }
 }
 
