@@ -75,3 +75,8 @@ typecheck-python:
 [group('rust')]
 doc-rust:
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+# Run the Python benchmarks. Extra arguments go to pytest, e.g. `--benchmark-save=<name>`.
+[group('python')]
+bench-python *args:
+    uv run --all-packages pytest benches -o python_files='bench_*.py' -o python_functions='bench_*' {{args}}
