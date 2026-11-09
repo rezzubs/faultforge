@@ -88,6 +88,63 @@ fn apply_faults_checks_all_targets_first() {
     cow.apply_faults([(Fault::Flip, 0), (Fault::Flip, bit_count)].into_iter());
 }
 
+#[test]
+fn no_changes_without_faults() {
+    let cow = four_chunks();
+    let changes = cow.decoded_changes(0..cow.data_byte_count()).unwrap();
+    assert_eq!(changes, DecodedChanges::default());
+}
+
+#[test]
+fn decoded_changes_checks_the_range() {
+    let cow = four_chunks();
+    let data_byte_count = cow.data_byte_count();
+    let invalid_range = |start, end| DecodeChunksError::InvalidRange {
+        start,
+        end,
+        data_byte_count,
+    };
+
+    assert_eq!(
+        cow.decoded_changes(0..data_byte_count + 1),
+        Err(invalid_range(0, data_byte_count + 1))
+    );
+    #[expect(clippy::reversed_empty_ranges, reason = "testing an invalid range")]
+    let reversed = 2..1;
+    assert_eq!(cow.decoded_changes(reversed), Err(invalid_range(2, 1)));
+    assert_eq!(
+        cow.decoded_changes(data_byte_count..data_byte_count),
+        Ok(DecodedChanges::default())
+    );
+}
+
+/// `decoded_changes` skips chunks with a single differing bit without decoding
+/// them, which is only correct if every single flip is corrected.
+#[test]
+fn single_flips_decode_without_changes() {
+    for data_bytes_per_chunk in [1, 2, 3, 8, 9, 32] {
+        // Two full chunks and a shorter, padded last one.
+        let source = (0..2 * data_bytes_per_chunk + 1)
+            .map(|index| u8::try_from(index * 37 % 256).expect("the value is below 256"))
+            .collect::<Vec<u8>>();
+        let original = CowEncodedChunks::encode(&source, data_bytes_per_chunk).unwrap();
+
+        for bit_index in 0..original.bit_count() {
+            let mut cow = original.clone();
+            cow.flip_bit(bit_index);
+
+            let mut decoded = vec![0u8; source.len()];
+            cow.decode_into(&mut decoded).unwrap();
+            assert_eq!(decoded, source, "flipped bit {bit_index}");
+            assert_eq!(
+                cow.decoded_changes(0..source.len()).unwrap(),
+                DecodedChanges::default(),
+                "flipped bit {bit_index}"
+            );
+        }
+    }
+}
+
 fn fault_strategy() -> impl Strategy<Value = Fault> {
     prop_oneof![
         Just(Fault::Flip),
@@ -110,13 +167,15 @@ fn resolve(
         .map(move |(fault, target)| (*fault, target.index(bit_count)))
 }
 
-/// Check that decoding `cow` gives the same results as decoding `expected`.
+/// Check that decoding `cow` gives the same results as decoding `expected`,
+/// and that its decoded changes turn `source` into the same bytes.
 ///
 /// The range decode is checked by splitting the data into adjacent ranges at
 /// `split_points`.
 fn check_decode(
     cow: &CowEncodedChunks,
     expected: &EncodedChunks,
+    source: &[u8],
     split_points: &[prop::sample::Index],
 ) -> Result<(), TestCaseError> {
     let byte_count = expected.data_byte_count();
@@ -157,7 +216,25 @@ fn check_decode(
         let mut without_double_errors = vec![u8::MAX; data_byte_range.len()];
         cow.decode_range_into(data_byte_range.clone(), &mut without_double_errors)
             .unwrap();
-        prop_assert_eq!(&without_double_errors, &expected_decoded[data_byte_range]);
+        prop_assert_eq!(
+            &without_double_errors,
+            &expected_decoded[data_byte_range.clone()]
+        );
+
+        let changes = cow.decoded_changes(data_byte_range.clone()).unwrap();
+        prop_assert_eq!(changes.byte_offsets.len(), changes.byte_values.len());
+        prop_assert!(
+            changes
+                .byte_offsets
+                .is_sorted_by(|previous, next| previous < next)
+        );
+        let mut changed = source[data_byte_range.clone()].to_vec();
+        for (&byte_offset, &byte_value) in changes.byte_offsets.iter().zip(&changes.byte_values) {
+            // Only bytes that differ from the source are reported.
+            prop_assert_ne!(changed[byte_offset], byte_value);
+            changed[byte_offset] = byte_value;
+        }
+        prop_assert_eq!(&changed, &expected_decoded[data_byte_range]);
     }
     // A chunk that's split between two ranges is reported by both.
     double_error_chunks.dedup();
@@ -186,7 +263,7 @@ proptest! {
         prop_assert_eq!(cow.bit_count(), bit_count);
         prop_assert_eq!(cow.chunk_count(), expected.chunk_count());
         prop_assert_eq!(cow.data_byte_count(), expected.data_byte_count());
-        check_decode(&cow, &expected, &split_points)?;
+        check_decode(&cow, &expected, &source, &split_points)?;
 
         for (batched, faults) in &batches {
             if *batched {
@@ -201,7 +278,7 @@ proptest! {
             prop_assert_eq!(bits(&cow), bits(&expected));
         }
 
-        check_decode(&cow, &expected, &split_points)?;
+        check_decode(&cow, &expected, &source, &split_points)?;
         // The clone's writes never reach the original.
         prop_assert_eq!(bits(&original), pristine_bits);
     }

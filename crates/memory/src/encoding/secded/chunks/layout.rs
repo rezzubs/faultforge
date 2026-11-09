@@ -1,7 +1,7 @@
 use super::{DecodeChunksError, EncodeChunksError};
 use crate::{
     Limited,
-    encoding::secded::{decode_into, encoded_bit_count},
+    encoding::secded::{DoubleErrorDetection, decode_into, encoded_bit_count},
 };
 use std::ops::Range;
 
@@ -120,12 +120,10 @@ impl ChunkLayout {
         location.chunk_index * self.encoded_bytes_per_chunk() * 8 + location.bit_in_chunk
     }
 
-    /// Check that `data_byte_range` is a valid range of data bytes and that `dest`
-    /// has as many bytes.
-    pub(super) fn check_range(
+    /// Check that `data_byte_range` is a valid range of data bytes.
+    pub(in crate::encoding::secded) fn check_range_bounds(
         &self,
         data_byte_range: &Range<usize>,
-        dest: &[u8],
     ) -> Result<(), DecodeChunksError> {
         if data_byte_range.start > data_byte_range.end || data_byte_range.end > self.data_byte_count
         {
@@ -135,6 +133,17 @@ impl ChunkLayout {
                 data_byte_count: self.data_byte_count,
             });
         }
+        Ok(())
+    }
+
+    /// Check that `data_byte_range` is a valid range of data bytes and that `dest`
+    /// has as many bytes.
+    pub(super) fn check_range(
+        &self,
+        data_byte_range: &Range<usize>,
+        dest: &[u8],
+    ) -> Result<(), DecodeChunksError> {
+        self.check_range_bounds(data_byte_range)?;
         if dest.len() != data_byte_range.len() {
             return Err(DecodeChunksError::LengthMismatch {
                 expected: data_byte_range.len(),
@@ -165,9 +174,7 @@ impl ChunkLayout {
     ) -> Result<(), DecodeChunksError> {
         self.check_range(&data_byte_range, dest)?;
 
-        // A scratch buffer to store the encoded chunks because decoding
-        // modifies the input and we don't want to modify ours.
-        let mut encoded_chunk_scratch = vec![0u8; self.encoded_bytes_per_chunk()];
+        let mut decoder = ChunkDecoder::new(self);
         let mut data_chunk = vec![0u8; self.data_bytes_per_chunk];
 
         // Go through the range one chunk at a time. The range can start and
@@ -181,18 +188,9 @@ impl ChunkLayout {
             let copy_count = (self.data_bytes_per_chunk - index_in_chunk)
                 .min(data_byte_range.end - data_byte_index);
 
-            // `decode_into` corrects single errors in its source, so decode a
-            // copy to keep the stored chunk unchanged. This copy panics if
-            // `encoded_chunk` returns the wrong number of bytes, see the
-            // panics section.
-            encoded_chunk_scratch.copy_from_slice(encoded_chunk(chunk_index));
-            let mut source = Limited::new(
-                encoded_chunk_scratch.as_mut_slice(),
-                self.encoded_bits_per_chunk,
-            )
-            .expect("the buffer has enough bytes for the encoded bits");
-            let detection = decode_into(&mut source, &mut data_chunk.as_mut_slice())
-                .expect("the chunk sizes are derived from the data size");
+            // Panics if `encoded_chunk` returns the wrong number of bytes, see
+            // the panics section.
+            let detection = decoder.decode(encoded_chunk(chunk_index), &mut data_chunk);
             if detection.is_detected() {
                 on_double_error(chunk_index);
             }
@@ -204,5 +202,51 @@ impl ChunkLayout {
         }
 
         Ok(())
+    }
+}
+
+/// Decodes single chunks of a [`ChunkLayout`] without changing them.
+pub(in crate::encoding::secded) struct ChunkDecoder {
+    /// A copy of the chunk being decoded. Decoding corrects single errors in
+    /// its source, and the stored chunks must stay unchanged.
+    encoded_chunk_scratch: Vec<u8>,
+    /// The number of encoded bits in each chunk.
+    encoded_bits_per_chunk: usize,
+}
+
+impl ChunkDecoder {
+    /// Create a decoder for the chunks of `layout`.
+    pub(in crate::encoding::secded) fn new(layout: &ChunkLayout) -> Self {
+        Self {
+            encoded_chunk_scratch: vec![0u8; layout.encoded_bytes_per_chunk()],
+            encoded_bits_per_chunk: layout.encoded_bits_per_chunk(),
+        }
+    }
+
+    /// Decode `encoded_chunk` into `data_chunk`.
+    ///
+    /// `encoded_chunk` is not changed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `encoded_chunk` doesn't have
+    /// [`ChunkLayout::encoded_bytes_per_chunk`] bytes or `data_chunk` doesn't
+    /// have [`ChunkLayout::data_bytes_per_chunk`] bytes.
+    pub(in crate::encoding::secded) fn decode(
+        &mut self,
+        encoded_chunk: &[u8],
+        mut data_chunk: &mut [u8],
+    ) -> DoubleErrorDetection {
+        // `decode_into` corrects single errors in its source, so decode a
+        // copy to keep the stored chunk unchanged. This copy panics if
+        // `encoded_chunk` has the wrong number of bytes.
+        self.encoded_chunk_scratch.copy_from_slice(encoded_chunk);
+        let mut source = Limited::new(
+            self.encoded_chunk_scratch.as_mut_slice(),
+            self.encoded_bits_per_chunk,
+        )
+        .expect("the buffer has enough bytes for the encoded bits");
+        decode_into(&mut source, &mut data_chunk)
+            .expect("the data chunk has the size the encoded chunk was made from")
     }
 }

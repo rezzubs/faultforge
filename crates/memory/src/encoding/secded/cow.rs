@@ -4,10 +4,22 @@ mod tests;
 
 use crate::{
     BitBuffer, Fault,
-    encoding::secded::{DecodeChunksError, EncodeChunksError, EncodedChunks},
+    encoding::secded::{DecodeChunksError, EncodeChunksError, EncodedChunks, chunks::ChunkDecoder},
 };
 use overlay::Overlay;
 use std::{ops::Range, sync::Arc};
+
+/// Decoded data bytes that differ from the original data.
+///
+/// See [`CowEncodedChunks::decoded_changes`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DecodedChanges {
+    /// The offsets of the changed bytes from the start of the decoded range,
+    /// in ascending order.
+    pub byte_offsets: Vec<usize>,
+    /// The decoded value of the byte at each offset in `byte_offsets`.
+    pub byte_values: Vec<u8>,
+}
 
 /// [`EncodedChunks`] that share their unchanged chunks with their clones.
 ///
@@ -104,6 +116,101 @@ impl CowEncodedChunks {
             double_error_chunks.push(chunk_index);
         })?;
         Ok(double_error_chunks)
+    }
+
+    /// Find the decoded data bytes in `data_byte_range` that differ from the
+    /// original data.
+    ///
+    /// The original data is what was encoded, before any faults. Writing the
+    /// changes into a copy of it gives the same bytes as
+    /// [`CowEncodedChunks::decode_range_into`]. Only chunks that were written
+    /// to can change, so this is much faster than a full decode while few
+    /// chunks were written to.
+    ///
+    /// Earlier calls don't matter. A byte that an earlier call reported is
+    /// left out once it decodes to its original value again. So writing the
+    /// changes into the result of an earlier decode with faults can give wrong
+    /// bytes.
+    ///
+    /// # Errors
+    ///
+    /// If `data_byte_range` ends before it starts or goes beyond the data, see
+    /// [`DecodeChunksError::InvalidRange`].
+    pub fn decoded_changes(
+        &self,
+        data_byte_range: Range<usize>,
+    ) -> Result<DecodedChanges, DecodeChunksError> {
+        let layout = self.pristine.layout();
+        layout.check_range_bounds(&data_byte_range)?;
+
+        let mut changes = DecodedChanges::default();
+        if data_byte_range.is_empty() {
+            return Ok(changes);
+        }
+
+        let data_bytes_per_chunk = self.data_bytes_per_chunk();
+        let first_chunk = data_byte_range.start / data_bytes_per_chunk;
+        let last_chunk = (data_byte_range.end - 1) / data_bytes_per_chunk;
+        let (Ok(first_position) | Err(first_position)) = self.overlay.position(first_chunk);
+
+        let mut decoder = ChunkDecoder::new(layout);
+        let mut faulty_data_chunk = vec![0u8; data_bytes_per_chunk];
+        let mut pristine_data_chunk = vec![0u8; data_bytes_per_chunk];
+
+        // Chunks that aren't in the overlay were never written to, so they
+        // decode to their data without faults.
+        for (chunk_index, faulty_encoded_chunk) in self
+            .overlay
+            .iter()
+            .skip(first_position)
+            .take_while(|&(chunk_index, _)| chunk_index <= last_chunk)
+        {
+            let pristine_encoded_chunk = self.pristine.encoded_chunk(chunk_index);
+            // `zip` below would silently compare only part of the chunk.
+            assert_eq!(faulty_encoded_chunk.len(), pristine_encoded_chunk.len());
+
+            // The pristine chunk is a valid code word. With one differing bit,
+            // decoding corrects it back to the pristine data, see the decision
+            // table in the `secded` module docs. Only chunks with at least two
+            // differing bits can decode differently, which are a small part of
+            // the written chunks at low bit error rates. The padding bits are
+            // never written, so they never differ.
+            let differing_bit_count: u32 = faulty_encoded_chunk
+                .iter()
+                .zip(pristine_encoded_chunk)
+                .map(|(faulty_byte, pristine_byte)| (faulty_byte ^ pristine_byte).count_ones())
+                .sum();
+            if differing_bit_count <= 1 {
+                continue;
+            }
+
+            // Discarding the double error detection results because we only
+            // care about the bytes.
+            let _ = decoder.decode(faulty_encoded_chunk, &mut faulty_data_chunk);
+            let _ = decoder.decode(pristine_encoded_chunk, &mut pristine_data_chunk);
+
+            // The range can start and end in the middle of a chunk. The
+            // padding of a shorter last chunk is never in the range because
+            // the range is within the data.
+            let chunk_start = chunk_index * data_bytes_per_chunk;
+            let chunk_end = chunk_start + data_bytes_per_chunk;
+            // The part of the chunk that's in the range, as indices into the
+            // chunk.
+            let first_in_chunk = data_byte_range.start.max(chunk_start) - chunk_start;
+            let end_in_chunk = data_byte_range.end.min(chunk_end) - chunk_start;
+            for index_in_chunk in first_in_chunk..end_in_chunk {
+                let faulty_byte = faulty_data_chunk[index_in_chunk];
+                if faulty_byte == pristine_data_chunk[index_in_chunk] {
+                    continue;
+                }
+                changes
+                    .byte_offsets
+                    .push(chunk_start + index_in_chunk - data_byte_range.start);
+                changes.byte_values.push(faulty_byte);
+            }
+        }
+
+        Ok(changes)
     }
 
     /// Get the number of chunks that were copied into the overlay.

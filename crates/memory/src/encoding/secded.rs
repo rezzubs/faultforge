@@ -43,7 +43,7 @@ mod cow;
 mod tests;
 
 pub use chunks::{DecodeChunksError, EncodeChunksError, EncodedChunks};
-pub use cow::CowEncodedChunks;
+pub use cow::{CowEncodedChunks, DecodedChanges};
 
 use crate::{BitBuffer, Limited};
 

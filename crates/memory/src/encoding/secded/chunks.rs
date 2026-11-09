@@ -3,6 +3,7 @@ mod layout;
 mod tests;
 
 use crate::{BitBuffer, Limited, encoding::secded::encode_into};
+pub(super) use layout::ChunkDecoder;
 use layout::ChunkLayout;
 use std::ops::Range;
 
