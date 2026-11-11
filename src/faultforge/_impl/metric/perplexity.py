@@ -1,6 +1,7 @@
 """See [`faultforge.metric`]"""
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import ClassVar, final, override
 
@@ -194,6 +195,61 @@ class Perplexity(Metric[PerplexityResult]):
             return math.exp(result.cross_entropy_sum / result.token_count)
         except OverflowError:
             return math.inf
+
+    @staticmethod
+    def unigram_score(target_batches: Iterable[Tensor]) -> float:
+        """The perplexity of a unigram model on the scored targets.
+
+        A unigram model ignores all context. It predicts every token with the
+        frequency the token has among the scored targets of `target_batches`. By
+        Gibbs' inequality, no predictor whose output doesn't depend on its input
+        can have a lower perplexity score on the same targets. A perplexity
+        at or above this value therefore means the model makes no use of its
+        context (though the context may still affect the result).
+
+        Every batch follows the `targets` format described in the
+        [`Perplexity`] docs. The batches can have different shapes.
+
+        Raises a `ValueError` if:
+        - a batch isn't `int64`.
+        - a scored target is negative.
+        - there are no scored tokens.
+
+        [`Perplexity`]: faultforge.metric.Perplexity
+        """
+        token_counts = torch.zeros(0, dtype=torch.int64)
+        for batch_targets in target_batches:
+            if batch_targets.dtype != torch.int64:
+                raise ValueError(
+                    f"expected int64 target token ids, got {batch_targets.dtype}"
+                )
+            targets = batch_targets.reshape(-1)
+            scored_targets = targets[targets != Perplexity.IGNORED_TARGET]
+            if scored_targets.numel() > 0 and scored_targets.min().item() < 0:
+                raise ValueError(
+                    "expected non-negative token ids or "
+                    f"{Perplexity.IGNORED_TARGET}, got {scored_targets.min().item()}"
+                )
+
+            batch_token_counts = torch.bincount(scored_targets).cpu()
+            # Token ids above the largest one seen so far extend the counts.
+            if batch_token_counts.numel() > token_counts.numel():
+                token_counts, batch_token_counts = batch_token_counts, token_counts
+            token_counts[: batch_token_counts.numel()] += batch_token_counts
+
+        token_count = int(token_counts.sum().item())
+        if token_count == 0:
+            raise ValueError(
+                "cannot compute unigram perplexity: no scored tokens (all "
+                f"targets are {Perplexity.IGNORED_TARGET})"
+            )
+
+        # The unigram perplexity is the exponential of the entropy of the token
+        # frequencies. Tokens that never occur have probability 0 and contribute
+        # nothing, so they're left out to avoid `0 * log(0)`.
+        probabilities = token_counts[token_counts > 0].double() / token_count
+        entropy = -(probabilities * probabilities.log()).sum().item()
+        return math.exp(entropy)
 
     @override
     def direction(self) -> ScoreDirection:
