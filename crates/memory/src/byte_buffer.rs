@@ -2,10 +2,7 @@ mod impls;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    BitBuffer, CopyIntoResult,
-    chunks::{ByteChunks, Chunks, ChunksCreationError, DynChunks},
-};
+use crate::{BitBuffer, CopyIntoResult};
 
 /// A [`BitBuffer`] that is byte addressable.
 pub trait ByteBuffer: BitBuffer {
@@ -65,42 +62,5 @@ pub trait ByteBuffer: BitBuffer {
         D: ByteBuffer,
     {
         self.copy_into_chunked_offset(0, 0, dest)
-    }
-
-    /// Convert to chunks of equal length where each chunk is a number of bytes long.
-    ///
-    /// If the number of bytes in the buffer isn't a multiple of the number of bytes per chunk then
-    /// it will result in a number of bytes of (essentially useless) padding at the end of the final
-    /// chunk.
-    ///
-    /// Returns [`None`] if the buffer is empty.
-    fn to_byte_chunks(&self, bytes_per_chunk: usize) -> Result<ByteChunks, ChunksCreationError>
-    where
-        Self: std::marker::Sized,
-    {
-        ByteChunks::from_buffer(self, bytes_per_chunk)
-    }
-
-    /// Convert to chunks of equal length.
-    ///
-    /// Choose the optimal format automatically. For manual selection see:
-    /// - [`ByteBuffer::to_byte_chunks`]
-    /// - [`ByteBuffer::to_dyn_chunks`]
-    ///
-    /// If the number of bits in the buffer isn't a multiple of the number of
-    /// bits per chunk then it will result in a number of bits of (essentially
-    /// useless) padding at the end of the final chunk.
-    fn to_chunks(&self, bits_per_chunk: usize) -> Result<Chunks, ChunksCreationError>
-    where
-        Self: std::marker::Sized,
-    {
-        Chunks::from_buffer(self, bits_per_chunk)
-    }
-
-    fn to_dyn_chunks(&self, bits_per_chunk: usize) -> Result<DynChunks, ChunksCreationError>
-    where
-        Self: std::marker::Sized,
-    {
-        DynChunks::from_buffer(self, bits_per_chunk)
     }
 }

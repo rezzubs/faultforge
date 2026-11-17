@@ -1,4 +1,4 @@
-use crate::{BitBuffer, SizedBitBuffer};
+use crate::{Bit, BitBuffer, Fault, SizedBitBuffer};
 
 macro_rules! int_impl {
     ($t:ty, $bits:expr) => {
@@ -173,5 +173,54 @@ where
 
     fn flip_bit(&mut self, bit_index: usize) {
         self.as_mut_slice().flip_bit(bit_index);
+    }
+}
+
+/// Lets wrappers like [`crate::Limited`] work on borrowed buffers.
+impl<B> BitBuffer for &mut B
+where
+    B: BitBuffer + ?Sized,
+{
+    // The bit access and fault methods are forwarded, so specialized
+    // implementations of them (e.g. `NonUniformSequence::apply_faults`) are
+    // still used. The other provided methods are built on top of these.
+
+    fn bit_count(&self) -> usize {
+        (**self).bit_count()
+    }
+
+    fn set_1(&mut self, bit_index: usize) {
+        (**self).set_1(bit_index);
+    }
+
+    fn set_0(&mut self, bit_index: usize) {
+        (**self).set_0(bit_index);
+    }
+
+    fn is_1(&self, bit_index: usize) -> bool {
+        (**self).is_1(bit_index)
+    }
+
+    fn is_0(&self, bit_index: usize) -> bool {
+        (**self).is_0(bit_index)
+    }
+
+    fn flip_bit(&mut self, bit_index: usize) {
+        (**self).flip_bit(bit_index);
+    }
+
+    fn bit_at(&self, bit_index: usize) -> Bit {
+        (**self).bit_at(bit_index)
+    }
+
+    fn apply_fault(&mut self, fault: Fault, bit_index: usize) {
+        (**self).apply_fault(fault, bit_index);
+    }
+
+    fn apply_faults<I>(&mut self, faults: I)
+    where
+        I: Iterator<Item = (Fault, usize)>,
+    {
+        (**self).apply_faults(faults);
     }
 }

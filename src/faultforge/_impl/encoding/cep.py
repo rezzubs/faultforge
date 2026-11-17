@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from typing import override
 
+import numpy as np
 import torch
 from torch import Tensor
 
@@ -15,6 +16,7 @@ from faultforge._impl.encoding.abc import (
     TensorEncoding,
 )
 from faultforge._impl.fingerprint import Fingerprint
+from faultforge._impl.tensor import to_owned_numpy
 from faultforge._rust import cep
 
 _logger = logging.getLogger(__name__)
@@ -64,15 +66,13 @@ class CepEncoder(InPlaceEncoder):
 
     @override
     def encode_float32(self, t: Tensor) -> Tensor:
-        with torch.no_grad():
-            t_np = t.numpy(force=True)
+        t_np = to_owned_numpy(t)
         cep.encode_f32(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np)
 
     @override
     def encode_float16(self, t: Tensor) -> Tensor:
-        with torch.no_grad():
-            t_np = t.view(torch.uint16).numpy(force=True)
+        t_np = to_owned_numpy(t).view(np.uint16)
         cep.encode_u16(t_np, self.scheme._to_rust())
         return torch.from_numpy(t_np).view(torch.float16)
 
@@ -86,7 +86,6 @@ class CepEncoder(InPlaceEncoder):
         return CepEncoding(
             _encoded_data=data,
             _bit_count=bit_count,
-            _decoded_tensors=None,
             _dtype=dtype,
             _scheme=self.scheme,
         )
@@ -100,16 +99,9 @@ class CepEncoding(InPlaceEncoding):
 
     @override
     def clone(self) -> CepEncoding:
-        cloned_data = [t.clone() for t in self._encoded_data]
-        if self._decoded_tensors is not None:
-            cloned_decoded = [t.clone() for t in self._decoded_tensors]
-        else:
-            cloned_decoded = None
-
         return CepEncoding(
-            _encoded_data=cloned_data,
+            _encoded_data=[t.clone() for t in self._encoded_data],
             _bit_count=self._bit_count,
-            _decoded_tensors=cloned_decoded,
             _dtype=self._dtype,
             _scheme=self._scheme,
         )

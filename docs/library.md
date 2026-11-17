@@ -47,6 +47,7 @@ encoding = encoder.encode(tensors)
 
 encoding.apply_fault(fault, target_bit)  # or apply_faults(...) for a batch
 recovered = encoding.decode()
+encoding.decode_into(recovered)  # decode again, reusing the tensors
 ```
 
 `TensorEncoder`/`TensorEncoding` are a refinement for encodings whose
@@ -69,8 +70,15 @@ from faultforge.encoding import EncodedModule
 
 encoded = EncodedModule(model, encoder)
 encoded.apply_faults(faults)
-decoded_model = encoded.decode()  # a copy of `model` with decoded parameters
+decoded_model = encoded.decode()  # `model` with decoded parameters
 ```
+
+`decode` writes into the parameters of `model` in place, so they must not be
+modified afterwards. To inject faults repeatedly, keep a module without faults
+and apply each set of faults to a fresh `clone()`: its first decode only writes
+the data that faults changed. Applying more faults to a module that was already
+decoded with faults makes the next decode decode everything. The
+`EncodedModule` docstring has the details.
 
 This is the piece the `encoded_memory` experiment builds its fault injection
 around - see

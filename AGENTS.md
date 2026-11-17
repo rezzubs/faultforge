@@ -30,6 +30,8 @@ fault-injection experiments, and a reference experiment built on it.
   - It's a uv workspace member, so it uses the local `faultforge` source and
     library changes are checked against it immediately. uv checks the range
     against the local version. It must stay in the workspace.
+- `benches/` - Python benchmarks using `pytest-benchmark`. The files are named
+  `bench_*.py` so plain `pytest` skips them. Run them with `just bench-python`.
 - `docs/` - User-facing documentation. `README.md` uses absolute GitHub URLs
   because it's also the PyPI description. Other docs use relative links.
 

@@ -11,6 +11,9 @@ wheels
 .hypothesis/
 .pytest_cache
 
+# Saved pytest-benchmark runs
+.benchmarks/
+
 # Common Rust
 target
 

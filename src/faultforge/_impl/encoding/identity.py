@@ -4,10 +4,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
+import torch
 from torch import Tensor
 
 from faultforge._impl.dtype import EncodingDtype
-from faultforge._impl.encoding.abc import TensorEncoder, TensorEncoding
+from faultforge._impl.encoding.abc import (
+    TensorEncoder,
+    TensorEncoding,
+    check_decode_dest,
+)
 from faultforge._impl.fault import Fault
 from faultforge._impl.fingerprint import Fingerprint
 from faultforge._impl.progress import Progress
@@ -35,7 +40,9 @@ class IdentityEncoder(TensorEncoder):
             raise ValueError("Cannot encode an empty list")
         dtype = EncodingDtype.from_torch(dtype)
         bit_count = sum(t.numel() for t in ts) * dtype.bit_count()
-        return IdentityEncoding(_tensors=list(ts), _bit_count=bit_count)
+        return IdentityEncoding(
+            _tensors=[t.detach().clone() for t in ts], _bit_count=bit_count
+        )
 
 
 @dataclass
@@ -54,12 +61,15 @@ class IdentityEncoding(TensorEncoding):
         return self._tensors
 
     @override
-    def trigger_recompute(self) -> None:
-        pass
+    def decode_into(self, dest: list[Tensor]) -> None:
+        check_decode_dest(dest, [(t.shape, t.dtype) for t in self._tensors])
+        with torch.no_grad():
+            for t, dest_tensor in zip(self._tensors, dest, strict=True):
+                _ = dest_tensor.copy_(t)
 
     @override
-    def decode(self) -> list[Tensor]:
-        return self._tensors
+    def empty_decoded(self) -> list[Tensor]:
+        return [torch.empty_like(t) for t in self._tensors]
 
     @override
     def clone(self) -> IdentityEncoding:

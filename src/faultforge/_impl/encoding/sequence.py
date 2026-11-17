@@ -60,17 +60,22 @@ class EncodingSequence(Encoding):
     _tail: Encoding
 
     @override
-    def decode(self) -> list[Tensor]:
-        ts = self._tail.decode()
+    def decode_into(self, dest: list[Tensor]) -> None:
+        # Each encoding decodes into the encoded tensors of the one before it,
+        # and the first one into `dest`. The encoded tensors of the head only
+        # hold intermediate results, faults are applied to the tail.
+        encodings: list[Encoding] = [*self._head, self._tail]
+        for encoding, previous in zip(
+            reversed(encodings[1:]), reversed(self._head), strict=True
+        ):
+            encoding.decode_into(previous.encoded_tensors())
+        encodings[0].decode_into(dest)
 
-        for encoding in reversed(self._head):
-            for original, updated in zip(encoding.encoded_tensors(), ts, strict=True):
-                _ = original.copy_(updated)
-            encoding.trigger_recompute()
-
-            ts = encoding.decode()
-
-        return ts
+    @override
+    def empty_decoded(self) -> list[Tensor]:
+        if len(self._head) == 0:
+            return self._tail.empty_decoded()
+        return self._head[0].empty_decoded()
 
     @override
     def apply_fault(self, fault: Fault, target_bit: int) -> None:

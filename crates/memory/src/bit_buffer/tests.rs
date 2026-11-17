@@ -272,3 +272,20 @@ fn array_flip_bit() {
     arr.flip_bit(8);
     assert_eq!(arr, [1u8, 0u8]);
 }
+
+#[test]
+fn mutable_reference_writes_through() {
+    let mut bytes = [0u8; 2];
+
+    {
+        let mut limited =
+            crate::Limited::new(bytes.as_mut_slice(), 12).expect("12 bits fit in 2 bytes");
+        assert_eq!(limited.bit_count(), 12);
+        limited.set_1(0);
+        limited.flip_bit(9);
+        limited.apply_faults([(Fault::StuckAt(Bit::One), 11)].into_iter());
+        assert!(limited.is_1(9));
+    }
+
+    assert_eq!(bytes, [0b0000_0001, 0b0000_1010]);
+}

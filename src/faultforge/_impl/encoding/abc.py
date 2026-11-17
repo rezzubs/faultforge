@@ -4,7 +4,6 @@ See `faultforge.encoding` for a general overview.
 """
 
 import abc
-import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
@@ -22,15 +21,18 @@ from faultforge._impl.tensor import (
     tensor_list_faults,
 )
 
-_logger = logging.getLogger(__name__)
-
 
 class Encoder(abc.ABC):
     """An encoder for lists of tensors."""
 
     @abc.abstractmethod
     def encode(self, ts: list[Tensor], *, progress: Progress | None = None) -> Encoding:
-        """Encode a list of tensors."""
+        """Encode a list of tensors.
+
+        The inputs are only read. Implementations must not modify them or keep
+        references to them. The caller can keep using the inputs, and changes
+        to them don't affect the encoding.
+        """
         ...
 
     @abc.abstractmethod
@@ -49,9 +51,57 @@ class Encoding:
     Created by an `Encoder`.
     """
 
-    @abc.abstractmethod
     def decode(self) -> list[Tensor]:
-        """Decode to a list of tensors."""
+        """Decode into a new list of tensors.
+
+        See `decode_into` to reuse existing tensors.
+        """
+        dest = self.empty_decoded()
+        self.decode_into(dest)
+        return dest
+
+    @abc.abstractmethod
+    def decode_into(self, dest: list[Tensor]) -> None:
+        """Decode into existing tensors.
+
+        `dest` must have one tensor per encoded tensor, with the same shape and
+        dtype. The tensors can be on any device and don't need to be
+        contiguous.
+
+        Raises:
+            ValueError: If `dest` doesn't match the encoded tensors.
+        """
+        ...
+
+    def decode_changes_into(self, dest: list[Tensor]) -> None:
+        """Decode into tensors that hold the decode without faults.
+
+        Afterwards `dest` holds the same as after `decode_into`.
+
+        `dest` must hold what `decode` returns for this encoding before any
+        faults. Clones count as the same encoding. For example, `dest` can be
+        the decode of a fault-free encoding that this one was cloned from. The
+        result of an earlier decode with faults doesn't work, because data that
+        faults changed before may not be written again.
+
+        `dest` has the same layout requirements as for `decode_into`.
+
+        The default implementation calls `decode_into`, which is always
+        correct. Encodings that can find the data that faults changed should
+        override this to only write that, which is much faster at low bit error
+        rates.
+
+        Raises:
+            ValueError: If `dest` doesn't match the encoded tensors.
+        """
+        self.decode_into(dest)
+
+    @abc.abstractmethod
+    def empty_decoded(self) -> list[Tensor]:
+        """Allocate uninitialized tensors that fit the decoded data.
+
+        The result is a valid `dest` for `decode_into`.
+        """
         ...
 
     @abc.abstractmethod
@@ -101,16 +151,7 @@ class TensorEncoding(Encoding):
     def encoded_tensors(self) -> list[Tensor]:
         """Access the encoded tensors.
 
-        Make sure to call `trigger_recompute` when modifying the encoded
-        tensors.
-        """
-        ...
-
-    @abc.abstractmethod
-    def trigger_recompute(self) -> None:
-        """Trigger a recompute of the encoded tensors.
-
-        This should be called when the encoded tensors have been modified.
+        Modifying them modifies the encoding, like a fault would.
         """
         ...
 
@@ -126,12 +167,18 @@ class InPlaceEncoder(TensorEncoder):
 
     @abc.abstractmethod
     def encode_float32(self, t: Tensor) -> Tensor:
-        """Encode a float32 tensor."""
+        """Encode a float32 tensor into a new tensor.
+
+        `t` must not be modified, see `Encoder.encode`.
+        """
         ...
 
     @abc.abstractmethod
     def encode_float16(self, t: Tensor) -> Tensor:
-        """Encode a float16 tensor."""
+        """Encode a float16 tensor into a new tensor.
+
+        `t` must not be modified, see `Encoder.encode`.
+        """
         ...
 
     @abc.abstractmethod
@@ -181,27 +228,31 @@ class InPlaceEncoding(TensorEncoding):
 
     _encoded_data: list[Tensor]
     _bit_count: int
-    _decoded_tensors: list[Tensor] | None
     _dtype: EncodingDtype
 
     @abc.abstractmethod
-    def decode_float32(self, t: Tensor) -> Tensor: ...
+    def decode_float32(self, t: Tensor) -> Tensor:
+        """Decode a float32 tensor into a new tensor.
+
+        `t` must not be modified.
+        """
+        ...
 
     @abc.abstractmethod
-    def decode_float16(self, t: Tensor) -> Tensor: ...
+    def decode_float16(self, t: Tensor) -> Tensor:
+        """Decode a float16 tensor into a new tensor.
+
+        `t` must not be modified.
+        """
+        ...
 
     @override
     def encoded_tensors(self) -> list[Tensor]:
         return self._encoded_data
 
     @override
-    def trigger_recompute(self) -> None:
-        self._decoded_tensors = None
-
-    @override
-    def decode(self) -> list[Tensor]:
-        if self._decoded_tensors is not None:
-            return self._decoded_tensors
+    def decode_into(self, dest: list[Tensor]) -> None:
+        check_decode_dest(dest, [(t.shape, t.dtype) for t in self._encoded_data])
 
         match self._dtype:
             case EncodingDtype.F16:
@@ -209,30 +260,40 @@ class InPlaceEncoding(TensorEncoding):
             case EncodingDtype.F32:
                 decode = self.decode_float32
 
-        decoded = []
-        for encoded in self.encoded_tensors():
-            with torch.no_grad():
-                decoded_item = decode(encoded)
-            decoded.append(decoded_item)
+        with torch.no_grad():
+            for encoded, dest_tensor in zip(self._encoded_data, dest, strict=True):
+                _ = dest_tensor.copy_(decode(encoded))
 
-        self._decoded_tensors = decoded
-        return decoded
-
-    def _invalidate_decoded_cache(self) -> None:
-        if self._decoded_tensors is not None:
-            _logger.debug("Invalidating decoded tensors due to fault injection")
-        self._decoded_tensors = None
+    @override
+    def empty_decoded(self) -> list[Tensor]:
+        return [torch.empty_like(t) for t in self._encoded_data]
 
     @override
     def apply_fault(self, fault: Fault, target_bit: int) -> None:
-        self._invalidate_decoded_cache()
         tensor_list_fault(self._encoded_data, fault, target_bit)
 
     @override
     def apply_faults(self, faults: Sequence[tuple[Fault, int]]) -> None:
-        self._invalidate_decoded_cache()
         tensor_list_faults(self._encoded_data, list(faults))
 
     @override
     def bit_count(self) -> int:
         return self._bit_count
+
+
+def check_decode_dest(
+    dest: Sequence[Tensor], layout: Sequence[tuple[torch.Size, torch.dtype]]
+) -> None:
+    """Check that `dest` has a tensor for each shape and dtype in `layout`.
+
+    Raises:
+        ValueError: If it doesn't.
+    """
+    if len(dest) != len(layout):
+        raise ValueError(f"Expected {len(layout)} destination tensors, got {len(dest)}")
+    for index, (t, (shape, dtype)) in enumerate(zip(dest, layout, strict=True)):
+        if t.shape != shape or t.dtype != dtype:
+            raise ValueError(
+                f"Destination tensor {index} has shape {tuple(t.shape)} and "
+                f"dtype {t.dtype}, expected {tuple(shape)} and {dtype}"
+            )
