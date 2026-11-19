@@ -27,7 +27,7 @@ jobs:
         include:
           - runner: ubuntu-latest
           - runner: ubuntu-24.04-arm
-          - runner: macos-14
+          - runner: macos-latest
           - runner: windows-latest
     runs-on: ${{ matrix.runner }}
     steps:
