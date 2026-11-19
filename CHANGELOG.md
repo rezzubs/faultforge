@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-19
+
 0.4 adds language model support (WikiText, perplexity), configurable stop
 conditions built on estimators, and makes SECDED fault injection scale to
 LLM-sized models. Several of these changes break custom metrics, encoders and
@@ -298,7 +300,8 @@ side moved from one crate to a `picker`/`memory`/`bindings` workspace.
   (`compare_array_list_bitwise_*`) - comparison logic now lives on the
   Python side.
 
-[Unreleased]: https://github.com/rezzubs/faultforge/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/rezzubs/faultforge/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/rezzubs/faultforge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rezzubs/faultforge/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/rezzubs/faultforge/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rezzubs/faultforge/compare/0.1.0...v0.2.0
