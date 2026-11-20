@@ -1,12 +1,12 @@
 """Layers whose matmul is routed through a SystolicBackend."""
 
-from typing import final, override
+lazy from typing import final, override
 
-import torch.nn.functional as F
-from torch import Tensor, nn
+lazy import torch.nn.functional as F
+lazy from torch import Tensor, nn
 
-from faultforge.progress import Progress, stage
-from systolic.backend import SystolicBackend
+lazy from faultforge.progress import Progress, stage
+lazy from systolic.backend import SystolicBackend
 
 
 def conv2d_output_height(conv2d: nn.Conv2d, input_height: int) -> int:

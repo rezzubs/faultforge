@@ -3,29 +3,29 @@
 See `systolic` for a general overview.
 """
 
-import copy
-import enum
-import logging
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Literal, final, override
+lazy import copy
+lazy import enum
+lazy import logging
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from typing import Literal, final, override
 
-import torch
-from pydantic import BaseModel
-from torch import Tensor
+lazy import torch
+lazy from pydantic import BaseModel
+lazy from torch import Tensor
 
-from faultforge import Fingerprint, Picker
-from faultforge.dataset import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DeviceLike
-from faultforge.experiment import Experiment, ExperimentDisplay, StopCondition
-from faultforge.io import AnyPath, is_compressed, open_text
-from faultforge.loading import DEFAULT_DTYPE, ModelBundle
-from faultforge.progress import Progress, stage
-from systolic._rust import ArrayConfig, Fault
-from systolic.backend import SystolicBackend
-from systolic.fault import RegisterFaults
-from systolic.lifted_backend import LiftedBackend
-from systolic.model import BackendModel
-from systolic.simulated_backend import SimulatedBackend
+lazy from faultforge import Fingerprint, Picker
+lazy from faultforge.dataset import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DeviceLike
+lazy from faultforge.experiment import Experiment, ExperimentDisplay, StopCondition
+lazy from faultforge.io import AnyPath, is_compressed, open_text
+lazy from faultforge.loading import DEFAULT_DTYPE, ModelBundle
+lazy from faultforge.progress import Progress, stage
+lazy from systolic._rust import ArrayConfig, Fault
+lazy from systolic.backend import SystolicBackend
+lazy from systolic.fault import RegisterFaults
+lazy from systolic.lifted_backend import LiftedBackend
+lazy from systolic.model import BackendModel
+lazy from systolic.simulated_backend import SimulatedBackend
 
 logger = logging.getLogger(__name__)
 

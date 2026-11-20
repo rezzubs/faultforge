@@ -5,15 +5,15 @@ Figures are built via `matplotlib`'s `Figure` object-oriented API directly
 module's docstring for why.
 """
 
-import matplotlib
-import numpy as np
-import numpy.typing as npt
-from matplotlib.axes import Axes
-from matplotlib.colors import Colormap
-from matplotlib.figure import Figure
+lazy import matplotlib
+lazy import numpy as np
+lazy import numpy.typing as npt
+lazy from matplotlib.axes import Axes
+lazy from matplotlib.colors import Colormap
+lazy from matplotlib.figure import Figure
 
-from systolic.profiling import ProfilingArrays
-from systolic.profiling_similarity import (
+lazy from systolic.profiling import ProfilingArrays
+lazy from systolic.profiling_similarity import (
     GapGrid,
     Regime,
     Variable,

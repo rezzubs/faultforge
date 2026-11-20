@@ -8,16 +8,16 @@ and is cheap enough to run per fault/shape, unlike a full model-level
 campaign comparison.
 """
 
-from collections import defaultdict
-from collections.abc import Sequence
-from dataclasses import dataclass
+lazy from collections import defaultdict
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
 
-from torch import Tensor
+lazy from torch import Tensor
 
-from systolic._rust import Fault
-from systolic.lifted_backend import LiftedBackend
-from systolic.simulated_backend import SimulatedBackend
-from systolic.torch_backend import TorchBackend
+lazy from systolic._rust import Fault
+lazy from systolic.lifted_backend import LiftedBackend
+lazy from systolic.simulated_backend import SimulatedBackend
+lazy from systolic.torch_backend import TorchBackend
 
 
 @dataclass(slots=True, frozen=True)

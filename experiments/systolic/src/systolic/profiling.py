@@ -12,15 +12,15 @@ from the other six as far as numpy's `.npz` reader is concerned.
 # code-execution footgun for untrusted files. Plain numpy.savez_compressed
 # needs none of that.
 
-from dataclasses import dataclass
-from pathlib import Path
+lazy from dataclasses import dataclass
+lazy from pathlib import Path
 
-import numpy as np
-import numpy.typing as npt
-from pydantic import BaseModel
+lazy import numpy as np
+lazy import numpy.typing as npt
+lazy from pydantic import BaseModel
 
-from faultforge.io import AnyPath
-from systolic._rust import ProfilingArtifact
+lazy from faultforge.io import AnyPath
+lazy from systolic._rust import ProfilingArtifact
 
 _METADATA_ARRAY_NAME = "metadata_json"
 """Holds `ProfilingMetadata`, JSON-encoded then viewed as a `uint8` byte array.

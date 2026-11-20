@@ -1,11 +1,11 @@
 """The golden reference systolic backend."""
 
-from typing import final, override
+lazy from typing import final, override
 
-from torch import Tensor
+lazy from torch import Tensor
 
-from systolic._rust import Fault
-from systolic.backend import SystolicBackend
+lazy from systolic._rust import Fault
+lazy from systolic.backend import SystolicBackend
 
 
 @final

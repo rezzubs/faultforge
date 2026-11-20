@@ -3,10 +3,10 @@
 `docs/fault-lifting.md` for the theory behind each recipe.
 """
 
-import torch
-from torch import Tensor
+lazy import torch
+lazy from torch import Tensor
 
-from systolic._rust import Fault, LiftedFault, StuckAtKind
+lazy from systolic._rust import Fault, LiftedFault, StuckAtKind
 
 
 def _corrupt(tensor: Tensor, stuck_at: StuckAtKind, bit_index: int) -> Tensor:

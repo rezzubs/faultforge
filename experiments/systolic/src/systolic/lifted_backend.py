@@ -1,13 +1,13 @@
 """The torch-side workhorse backend: Rust lifts, Torch applies."""
 
-from typing import final, override
+lazy from typing import final, override
 
-import torch
-from torch import Tensor
+lazy import torch
+lazy from torch import Tensor
 
-from systolic._rust import Fault, LiftedFault
-from systolic.backend import MappingCache, SystolicBackend
-from systolic.lift_apply import apply_lifted_register_fault
+lazy from systolic._rust import Fault, LiftedFault
+lazy from systolic.backend import MappingCache, SystolicBackend
+lazy from systolic.lift_apply import apply_lifted_register_fault
 
 
 @final

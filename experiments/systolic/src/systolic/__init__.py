@@ -30,7 +30,7 @@ column, or PE rather than for the array as a whole. `build_gap_heatmap_figure`
 draws the result.
 """
 
-from systolic._rust import (
+lazy from systolic._rust import (
     AccumulatorFaultPart,
     ArrayConfig,
     Fault,
@@ -41,28 +41,28 @@ from systolic._rust import (
     PeRegisterKind,
     StuckAtKind,
 )
-from systolic.backend import SystolicBackend
-from systolic.experiment import (
+lazy from systolic.backend import SystolicBackend
+lazy from systolic.experiment import (
     BackendKind,
     ReliabilityMetric,
     SavedResult,
     SystolicFaultInjection,
 )
-from systolic.fault import RegisterFaults
-from systolic.layers import MappedConv2d, MappedLinear
-from systolic.lifted_backend import LiftedBackend
-from systolic.model import BackendModel
-from systolic.profiling import (
+lazy from systolic.fault import RegisterFaults
+lazy from systolic.layers import MappedConv2d, MappedLinear
+lazy from systolic.lifted_backend import LiftedBackend
+lazy from systolic.model import BackendModel
+lazy from systolic.profiling import (
     ProfilingMetadata,
     load_profiling_artifact,
     save_profiling_artifact,
 )
-from systolic.profiling_backend import ProfilingBackend
-from systolic.profiling_driver import run_profiling
-from systolic.profiling_plots import build_gap_heatmap_figure
-from systolic.profiling_similarity import GapGrid, Regime, Variable, gap_grids
-from systolic.simulated_backend import SimulatedBackend
-from systolic.torch_backend import TorchBackend
+lazy from systolic.profiling_backend import ProfilingBackend
+lazy from systolic.profiling_driver import run_profiling
+lazy from systolic.profiling_plots import build_gap_heatmap_figure
+lazy from systolic.profiling_similarity import GapGrid, Regime, Variable, gap_grids
+lazy from systolic.simulated_backend import SimulatedBackend
+lazy from systolic.torch_backend import TorchBackend
 
 __all__ = [
     "AccumulatorFaultPart",

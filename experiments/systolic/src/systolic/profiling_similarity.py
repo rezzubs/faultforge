@@ -27,13 +27,13 @@ gap against the pooled reference is clearly larger than its gap against
 itself.
 """
 
-import enum
-from dataclasses import dataclass
+lazy import enum
+lazy from dataclasses import dataclass
 
-import numpy as np
-import numpy.typing as npt
+lazy import numpy as np
+lazy import numpy.typing as npt
 
-from systolic.profiling import ProfilingArrays
+lazy from systolic.profiling import ProfilingArrays
 
 
 class Regime(enum.StrEnum):

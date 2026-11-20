@@ -1,5 +1,5 @@
-from systolic.commands import app
-from systolic.logging import setup_logging
+lazy from systolic.commands import app
+lazy from systolic.logging import setup_logging
 
 
 def main() -> None:

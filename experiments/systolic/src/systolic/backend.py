@@ -3,13 +3,13 @@
 See `systolic` for a general overview.
 """
 
-import abc
-from typing import final
+lazy import abc
+lazy from typing import final
 
-import torch
-from torch import Tensor
+lazy import torch
+lazy from torch import Tensor
 
-from systolic._rust import Fault, Mapping
+lazy from systolic._rust import Fault, Mapping
 
 
 class SystolicBackend(abc.ABC):

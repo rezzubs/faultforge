@@ -1,14 +1,14 @@
 """Walk a model's mapped layers over a dataset subsample, producing a profiling artifact."""
 
-import torch
+lazy import torch
 
-from faultforge.dataset import DEFAULT_DEVICE, DeviceLike
-from faultforge.loading import DEFAULT_DTYPE, ModelBundle
-from faultforge.progress import Progress, stage
-from systolic._rust import ProfilingArtifact
-from systolic.model import BackendModel
-from systolic.profiling import ProfilingMetadata
-from systolic.profiling_backend import ProfilingBackend
+lazy from faultforge.dataset import DEFAULT_DEVICE, DeviceLike
+lazy from faultforge.loading import DEFAULT_DTYPE, ModelBundle
+lazy from faultforge.progress import Progress, stage
+lazy from systolic._rust import ProfilingArtifact
+lazy from systolic.model import BackendModel
+lazy from systolic.profiling import ProfilingMetadata
+lazy from systolic.profiling_backend import ProfilingBackend
 
 
 def run_profiling(

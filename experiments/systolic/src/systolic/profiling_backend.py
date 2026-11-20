@@ -1,12 +1,12 @@
 """A backend that records per-PE logic inputs instead of faulting anything."""
 
-from typing import final, override
+lazy from typing import final, override
 
-import torch
-from torch import Tensor
+lazy import torch
+lazy from torch import Tensor
 
-from systolic._rust import Fault, Profiler, ProfilingArtifact
-from systolic.backend import MappingCache, SystolicBackend
+lazy from systolic._rust import Fault, Profiler, ProfilingArtifact
+lazy from systolic.backend import MappingCache, SystolicBackend
 
 
 @final

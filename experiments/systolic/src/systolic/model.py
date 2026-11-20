@@ -1,12 +1,12 @@
 """Recursively map a model's layers onto a SystolicBackend."""
 
-from typing import Any, final, override
+lazy from typing import Any, final, override
 
-from torch import nn
+lazy from torch import nn
 
-from faultforge.progress import Progress, stage
-from systolic.backend import SystolicBackend
-from systolic.layers import MappedConv2d, MappedLinear
+lazy from faultforge.progress import Progress, stage
+lazy from systolic.backend import SystolicBackend
+lazy from systolic.layers import MappedConv2d, MappedLinear
 
 
 def _qualified_name(prefix: str, name: str) -> str:

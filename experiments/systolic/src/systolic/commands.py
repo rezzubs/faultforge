@@ -1,30 +1,30 @@
 """The `systolic` CLI commands (recording register-fault campaigns and reporting backend agreement)."""
 
-import enum
-import logging
-from collections.abc import Sequence
-from pathlib import Path
-from typing import Annotated
+lazy import enum
+lazy import logging
+lazy from collections.abc import Sequence
+lazy from pathlib import Path
+lazy from typing import Annotated
 
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-import typer
-from matplotlib.backends.registry import BackendFilter, backend_registry
-from matplotlib.figure import Figure
+lazy import matplotlib.pyplot as plt
+lazy import numpy as np
+lazy import torch
+lazy import typer
+lazy from matplotlib.backends.registry import BackendFilter, backend_registry
+lazy from matplotlib.figure import Figure
 
-from faultforge import Picker
-from faultforge.dataset import DEFAULT_BATCH_SIZE
-from faultforge.experiment import (
+lazy from faultforge import Picker
+lazy from faultforge.dataset import DEFAULT_BATCH_SIZE
+lazy from faultforge.experiment import (
     AdditionalRuns,
     MaxRuns,
     SaveConfig,
     Stability,
     StopCondition,
 )
-from faultforge.fingerprint import FingerprintError
-from faultforge.io import is_compressed
-from faultforge.loading import (
+lazy from faultforge.fingerprint import FingerprintError
+lazy from faultforge.io import is_compressed
+lazy from faultforge.loading import (
     Cifar,
     CifarDataset,
     CifarModel,
@@ -32,19 +32,19 @@ from faultforge.loading import (
     ImageNetModel,
     ModelBundle,
 )
-from faultforge.progress import Progress
-from systolic._rust import ArrayConfig, PeRegisterKind
-from systolic.agreement import compare_matmul, summarize
-from systolic.experiment import ReliabilityMetric, SystolicFaultInjection
-from systolic.fault import RegisterFaults
-from systolic.profiling import load_profiling_artifact, save_profiling_artifact
-from systolic.profiling_driver import run_profiling
-from systolic.profiling_plots import (
+lazy from faultforge.progress import Progress
+lazy from systolic._rust import ArrayConfig, PeRegisterKind
+lazy from systolic.agreement import compare_matmul, summarize
+lazy from systolic.experiment import ReliabilityMetric, SystolicFaultInjection
+lazy from systolic.fault import RegisterFaults
+lazy from systolic.profiling import load_profiling_artifact, save_profiling_artifact
+lazy from systolic.profiling_driver import run_profiling
+lazy from systolic.profiling_plots import (
     build_ecdf_spread_figure,
     build_gap_heatmap_figure,
     build_pe_ecdf_figure,
 )
-from systolic.profiling_similarity import Regime, gap_grids
+lazy from systolic.profiling_similarity import Regime, gap_grids
 
 app = typer.Typer(
     pretty_exceptions_enable=False,

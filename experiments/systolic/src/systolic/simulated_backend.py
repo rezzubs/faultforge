@@ -1,12 +1,12 @@
 """The cycle-accurate systolic-array oracle backend."""
 
-from typing import final, override
+lazy from typing import final, override
 
-import torch
-from torch import Tensor
+lazy import torch
+lazy from torch import Tensor
 
-from systolic._rust import Fault, simulated_matmul
-from systolic.backend import MappingCache, SystolicBackend
+lazy from systolic._rust import Fault, simulated_matmul
+lazy from systolic.backend import MappingCache, SystolicBackend
 
 
 @final

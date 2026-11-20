@@ -1,9 +1,9 @@
 """The register fault-space configuration."""
 
-from dataclasses import dataclass, field
-from typing import final
+lazy from dataclasses import dataclass, field
+lazy from typing import final
 
-from systolic._rust import ArrayConfig, Fault, PeRegisterKind, fault_radix
+lazy from systolic._rust import ArrayConfig, Fault, PeRegisterKind, fault_radix
 
 _ALL_REGISTERS = frozenset(
     {PeRegisterKind.Activation, PeRegisterKind.Weight, PeRegisterKind.Accumulator}
