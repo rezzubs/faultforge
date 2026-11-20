@@ -54,6 +54,15 @@ match the tag.
 - The project also uses nix. You can run `nix develop` to get access to project
   tooling if not already in a nix development shell.
 
+## Code conventions
+
+- Module-level imports use `lazy import`/`lazy from ... import` unless there's
+  a reason not to (e.g. `from __future__` imports, which can't be lazy).
+  A lazy import still loads its module when a name is used at import time,
+  such as a base class, a default value or a dataclass field type. Code that
+  needs to be cheap to import, like a CLI option's default, shouldn't share a
+  module with such uses of heavy dependencies.
+
 ## Testing conventions
 
 - Rust: `proptest` for property-based tests.
