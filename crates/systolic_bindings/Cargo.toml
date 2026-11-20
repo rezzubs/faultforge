@@ -2,14 +2,23 @@
 name = "systolic_bindings"
 edition.workspace = true
 version.workspace = true
+publish = false
 
 [lib]
 crate-type = ["cdylib"]
-# This name will be used for the .so file that is used by Python.
-name = "_rust"
+# Python finds the module as `systolic._rust` through maturin's `module-name`
+# in `experiments/systolic/pyproject.toml`, so this name is only Cargo's. It
+# differs from the `bindings` crate's `_rust` so `cargo doc` output doesn't
+# collide.
+name = "systolic_rust"
 
 [dependencies]
 systolic = { path = "../systolic" }
 numpy.workspace = true
-pyo3.workspace = true
+# Builds against the stable ABI, so one extension works on all CPython versions
+# from 3.15. `abi3t` also covers free-threaded builds, which can't load plain
+# `abi3` extensions. The minimum must match `requires-python` in
+# `experiments/systolic/pyproject.toml`.
+# See https://pyo3.rs/v0.30.1/building-and-distribution.html#py_limited_apiabi3abi3t
+pyo3 = { workspace = true, features = ["abi3t-py315"] }
 rand.workspace = true
