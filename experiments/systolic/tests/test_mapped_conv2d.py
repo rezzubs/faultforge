@@ -6,9 +6,8 @@ import hypothesis.strategies as st
 import pytest
 import torch
 from hypothesis import given, settings
-from torch import nn
-
 from systolic import MappedConv2d, TorchBackend
+from torch import nn
 
 _DTYPES = st.sampled_from([torch.float32, torch.float16])
 

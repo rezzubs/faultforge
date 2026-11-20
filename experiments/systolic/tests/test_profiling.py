@@ -4,7 +4,6 @@ Also covers the `systolic.profiling` save/load round trip.
 """
 
 import numpy as np
-
 from systolic._rust import Mapping, Profiler
 from systolic.profiling import (
     ProfilingMetadata,

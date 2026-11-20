@@ -6,7 +6,6 @@ import pytest
 import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
 from systolic._rust import StuckAtKind
 from systolic.lift_apply import _corrupt
 

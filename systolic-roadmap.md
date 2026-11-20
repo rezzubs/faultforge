@@ -108,10 +108,10 @@ Rough shape (names are suggestions):
 
 ```python
 SystolicFaultInjection(
-    bundle,                       # ModelBundle, reused as-is
+    bundle,  # ModelBundle, reused as-is
     array=(nrows, ncols),
     fault=RegisterFaults(registers={Weight, Accumulator}),  # or LogicFaults(...)
-    backend="lifted",             # or "simulated"
+    backend="lifted",  # or "simulated"
     metric=ReliabilityMetric.Accuracy,
 )
 ```

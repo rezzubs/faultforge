@@ -7,10 +7,11 @@ of pytest/CI: downloads a real model and dataset. Run by hand.
 import copy
 
 import torch
-from faultforge.dataset import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, BatchedDataset
-from faultforge.loading import Cifar, CifarDataset, CifarModel
 from systolic import BackendModel, TorchBackend
 from torch import nn
+
+from faultforge.dataset import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, BatchedDataset
+from faultforge.loading import Cifar, CifarDataset, CifarModel
 
 
 def _accuracy(model: nn.Module, dataset: BatchedDataset) -> float:

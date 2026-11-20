@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import typer
+from matplotlib.backends.registry import BackendFilter, backend_registry
+from matplotlib.figure import Figure
+
 from faultforge import Picker
 from faultforge.dataset import DEFAULT_BATCH_SIZE
 from faultforge.experiment import (
@@ -30,9 +33,6 @@ from faultforge.loading import (
     ModelBundle,
 )
 from faultforge.progress import Progress
-from matplotlib.backends.registry import BackendFilter, backend_registry
-from matplotlib.figure import Figure
-
 from systolic._rust import ArrayConfig, PeRegisterKind
 from systolic.agreement import compare_matmul, summarize
 from systolic.experiment import ReliabilityMetric, SystolicFaultInjection

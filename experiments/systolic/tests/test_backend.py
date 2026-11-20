@@ -1,7 +1,6 @@
 """Tests for `MappingCache`."""
 
 import torch
-
 from systolic.backend import MappingCache
 
 

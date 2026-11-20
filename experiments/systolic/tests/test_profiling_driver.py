@@ -4,14 +4,14 @@ from typing import override
 
 import numpy as np
 import torch
+from systolic.profiling_driver import run_profiling
+from torch import nn
+from torch.utils.data import TensorDataset
+
 from faultforge import Fingerprint
 from faultforge.dataset import BatchedDataset, DeviceLike
 from faultforge.loading import ModelBundle
 from faultforge.progress import Progress
-from torch import nn
-from torch.utils.data import TensorDataset
-
-from systolic.profiling_driver import run_profiling
 
 # `_` prefixed to not interpret it as a Test class.
 

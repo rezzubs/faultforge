@@ -2,9 +2,9 @@
 
 from typing import Any, final, override
 
-from faultforge.progress import Progress, stage
 from torch import nn
 
+from faultforge.progress import Progress, stage
 from systolic.backend import SystolicBackend
 from systolic.layers import MappedConv2d, MappedLinear
 

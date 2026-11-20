@@ -1,7 +1,6 @@
 import math
 
 import torch
-
 from systolic.agreement import Agreement, BackendResult, _compare, summarize
 
 _UNUSED_OUTPUT = torch.zeros(1)

@@ -5,7 +5,6 @@ since nothing above this layer builds a `Mapping` any other way yet.
 
 import numpy as np
 import pytest
-
 from systolic._rust import (
     Fault,
     Index2,

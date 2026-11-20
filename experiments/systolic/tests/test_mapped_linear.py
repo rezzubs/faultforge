@@ -5,9 +5,8 @@ import copy
 import hypothesis.strategies as st
 import torch
 from hypothesis import given, settings
-from torch import nn
-
 from systolic import MappedLinear, TorchBackend
+from torch import nn
 
 _DTYPES = st.sampled_from([torch.float32, torch.float16])
 

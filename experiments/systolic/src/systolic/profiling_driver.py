@@ -1,10 +1,10 @@
 """Walk a model's mapped layers over a dataset subsample, producing a profiling artifact."""
 
 import torch
+
 from faultforge.dataset import DEFAULT_DEVICE, DeviceLike
 from faultforge.loading import DEFAULT_DTYPE, ModelBundle
 from faultforge.progress import Progress, stage
-
 from systolic._rust import ProfilingArtifact
 from systolic.model import BackendModel
 from systolic.profiling import ProfilingMetadata

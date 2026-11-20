@@ -5,10 +5,10 @@ import logging
 
 import pytest
 import torch
-from faultforge.progress import Progress
+from systolic import BackendModel, MappedConv2d, MappedLinear, TorchBackend
 from torch import nn
 
-from systolic import BackendModel, MappedConv2d, MappedLinear, TorchBackend
+from faultforge.progress import Progress
 
 
 def _make_model() -> nn.Sequential:

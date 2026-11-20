@@ -2,7 +2,6 @@
 
 import pytest
 import torch
-
 from systolic.profiling_backend import ProfilingBackend
 
 

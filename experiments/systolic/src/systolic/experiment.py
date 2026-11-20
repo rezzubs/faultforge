@@ -11,15 +11,15 @@ from dataclasses import dataclass
 from typing import Literal, final, override
 
 import torch
+from pydantic import BaseModel
+from torch import Tensor
+
 from faultforge import Fingerprint, Picker
 from faultforge.dataset import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DeviceLike
 from faultforge.experiment import Experiment, ExperimentDisplay, StopCondition
 from faultforge.io import AnyPath, is_compressed, open_text
 from faultforge.loading import DEFAULT_DTYPE, ModelBundle
 from faultforge.progress import Progress, stage
-from pydantic import BaseModel
-from torch import Tensor
-
 from systolic._rust import ArrayConfig, Fault
 from systolic.backend import SystolicBackend
 from systolic.fault import RegisterFaults

@@ -17,9 +17,9 @@ from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
-from faultforge.io import AnyPath
 from pydantic import BaseModel
 
+from faultforge.io import AnyPath
 from systolic._rust import ProfilingArtifact
 
 _METADATA_ARRAY_NAME = "metadata_json"

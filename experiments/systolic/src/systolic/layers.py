@@ -3,9 +3,9 @@
 from typing import final, override
 
 import torch.nn.functional as F
-from faultforge.progress import Progress, stage
 from torch import Tensor, nn
 
+from faultforge.progress import Progress, stage
 from systolic.backend import SystolicBackend
 
 
