@@ -57,11 +57,11 @@ match the tag.
 ## Code conventions
 
 - Module-level imports use `lazy import`/`lazy from ... import` unless there's
-  a reason not to (e.g. `from __future__` imports, which can't be lazy).
-  A lazy import still loads its module when a name is used at import time,
-  such as a base class, a default value or a dataclass field type. Code that
-  needs to be cheap to import, like a CLI option's default, shouldn't share a
-  module with such uses of heavy dependencies.
+  a good reason not to. A lazy import still loads its module when a name is used
+  at import time, such as a base class, a default value or a dataclass field
+  type. Code that needs to be cheap to import, like a CLI option's default,
+  shouldn't share a module with such uses of heavy dependencies; if a file is
+  split for this reason, the decision should be commented.
 
 ## Testing conventions
 
