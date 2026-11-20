@@ -14,11 +14,11 @@ lazy import torch
 lazy from pydantic import BaseModel
 lazy from torch import Tensor
 
-lazy from faultforge import Fingerprint, Picker
+lazy from faultforge import Fingerprint, Picker, tensor_list_dtype
 lazy from faultforge.dataset import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DeviceLike
 lazy from faultforge.experiment import Experiment, ExperimentDisplay, StopCondition
 lazy from faultforge.io import AnyPath, is_compressed, open_text
-lazy from faultforge.loading import DEFAULT_DTYPE, ModelBundle
+lazy from faultforge.loading import ModelBundle
 lazy from faultforge.progress import Progress, stage
 lazy from systolic._rust import ArrayConfig, Fault
 lazy from systolic.backend import SystolicBackend
@@ -223,14 +223,8 @@ class SystolicFaultInjection(Experiment):
         dataset_batch_limit: int | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
         device: DeviceLike = DEFAULT_DEVICE,
-        dtype: torch.dtype = DEFAULT_DTYPE,
         progress: Progress | None = None,
     ) -> None:
-        if dtype != torch.float32:
-            raise ValueError(
-                f"SystolicFaultInjection only supports float32, got {dtype}"
-            )
-
         self._progress = progress
         self._golden_results: list[Tensor] = []
         self._total_items: int | None = None
@@ -238,12 +232,16 @@ class SystolicFaultInjection(Experiment):
         self._fault_ids: list[int] = []
         self._reliability_metric = reliability_metric
         self._fault_config = fault if fault is not None else RegisterFaults()
-        self._dtype = dtype
 
         nrows, ncols = array
         self._array = ArrayConfig(nrows, ncols, 32)
 
-        model = bundle.load_model(device, dtype=dtype, progress=progress)
+        model = bundle.load_model(device, progress=progress)
+        dtype = tensor_list_dtype(list(model.parameters()))
+        if dtype != torch.float32:
+            raise ValueError(
+                f"SystolicFaultInjection only supports float32, got {dtype}"
+            )
         self._golden_model = copy.deepcopy(model)
 
         backend_instance: SystolicBackend
@@ -304,25 +302,20 @@ class SystolicFaultInjection(Experiment):
         """Populate the golden results and set `_total_items`."""
         total_items = 0
 
-        try:
-            with (
-                stage(
-                    self._progress,
-                    "Computing golden results",
-                    total=self._dataset.batch_count(),
-                ) as s,
-                torch.no_grad(),
-            ):
-                for batch in self._dataset:
-                    logits = self._golden_model.forward(
-                        batch.inputs.to(dtype=self._dtype)
-                    )
-                    processed = self._process_golden(logits)
-                    total_items += processed.numel()
-                    self._golden_results.append(processed)
-                    s.advance()
-        finally:
-            self._dataset.reset()
+        with (
+            stage(
+                self._progress,
+                "Computing golden results",
+                total=self._dataset.batch_count(),
+            ) as s,
+            torch.no_grad(),
+        ):
+            for batch in self._dataset:
+                logits = self._golden_model.forward(batch.inputs)
+                processed = self._process_golden(logits)
+                total_items += processed.numel()
+                self._golden_results.append(processed)
+                s.advance()
 
         if self._total_items is None:
             self._total_items = total_items
@@ -393,7 +386,7 @@ class SystolicFaultInjection(Experiment):
             torch.no_grad(),
         ):
             for batch_index, batch in enumerate(self._dataset):
-                logits = self._model.forward(batch.inputs.to(dtype=self._dtype))
+                logits = self._model.forward(batch.inputs)
 
                 match self._reliability_metric:
                     case ReliabilityMetric.Accuracy:
@@ -414,7 +407,6 @@ class SystolicFaultInjection(Experiment):
                 result += batch_result
                 s.advance()
 
-        self._dataset.reset()
         return result
 
     def _record_result(self, fault_id: int, result: BatchReliability) -> None:

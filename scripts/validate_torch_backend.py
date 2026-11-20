@@ -15,7 +15,6 @@ from faultforge.loading import Cifar, CifarDataset, CifarModel
 
 
 def _accuracy(model: nn.Module, dataset: BatchedDataset) -> float:
-    dataset.reset()
     correct = 0
     total = 0
     with torch.no_grad():

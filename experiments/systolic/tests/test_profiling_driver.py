@@ -35,14 +35,13 @@ class _FakeBundle(ModelBundle):
         self,
         device: DeviceLike,
         *,
-        dtype: torch.dtype = torch.float32,
         progress: Progress | None = None,
     ) -> nn.Module:
         _ = progress
         return nn.Sequential(
             nn.Linear(self._in_features, 6),
             nn.Linear(6, self._out_features),
-        ).to(device=device, dtype=dtype)
+        ).to(device=device)
 
     @override
     def load_dataset(
