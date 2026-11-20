@@ -1,0 +1,6 @@
+[fused]
+path = "xor3.v"
+activation = "a"
+weight = "b"
+partial_sum = "c"
+output = "z"

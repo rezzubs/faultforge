@@ -20,6 +20,16 @@ fault-injection experiments, and a reference experiment built on it.
   consumed as PyO3 extension modules.
   - `crates/bindings` - A PyO3 extension exposed to python as
     `faultforge._rust`.
+  - `crates/systolic` - A weight-stationary systolic-array simulator with
+    register fault injection.
+  - `crates/systolic_bindings` - A PyO3 extension exposed to python as
+    `systolic._rust`.
+  - `crates/logic_simulation` - Gate-level digital logic simulation with
+    faults.
+  - `crates/syndromes` - A CLI that builds stuck-at fault syndrome histograms
+    for a netlist. See `crates/syndromes/DESIGN.md`.
+  - `crates/float_mac_faults` - A CLI that tests floating point adder and
+    multiplier netlists against the CPU.
   - The crates are internal and unpublished. Breaking changes in them don't
     need a version bump unless they change the public Python API.
 - `experiments/encoded_memory` - The reference experiment built on
@@ -30,6 +40,9 @@ fault-injection experiments, and a reference experiment built on it.
   - It's a uv workspace member, so it uses the local `faultforge` source and
     library changes are checked against it immediately. uv checks the range
     against the local version. It must stay in the workspace.
+- `experiments/systolic` - An experiment measuring model reliability under
+  systolic-array register faults. It depends on `faultforge` the same way as
+  `encoded_memory`.
 - `benches/` - Python benchmarks using `pytest-benchmark`. The files are named
   `bench_*.py` so plain `pytest` skips them. Run them with `just bench-python`.
 - `docs/` - User-facing documentation. `README.md` uses absolute GitHub URLs

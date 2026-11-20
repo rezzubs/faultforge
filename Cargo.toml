@@ -5,9 +5,15 @@ members = ["./crates/*"]
 [workspace.package]
 version = "0.4.0"
 edition = "2024"
+authors = ["Marten Roots"]
 
 
 [workspace.dependencies]
+ariadne = "0.6.0"
+clap = { version = "4.6.1", features = ["derive"] }
+color-eyre = "0.6.5"
+eyre = "0.6.12"
+ndarray = "0.17.2"
 # Must use the same `pyo3` version as the workspace. `pyo3-ffi` sets
 # `links = "python"` and Cargo allows only one package per `links` value.
 # See https://doc.rust-lang.org/cargo/reference/build-scripts.html#the-links-manifest-key
