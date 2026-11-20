@@ -47,19 +47,19 @@ root rather than in their own submodule:
   (floats bitcast to same-width integers first).
 """
 
-import sys
+lazy import sys
 
-from faultforge._impl.fault import BitFlip, Fault, StuckAt
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.tensor import (
+lazy from faultforge._impl.fault import BitFlip, Fault, StuckAt
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.tensor import (
     bitwise_xor,
     tensor_list_dtype,
     tensor_list_fault,
     tensor_list_faults,
 )
-from faultforge._rust import Picker
+lazy from faultforge._rust import Picker
 
-from . import _rust
+lazy from . import _rust
 
 __all__ = [
     "BitFlip",

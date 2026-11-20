@@ -1,20 +1,20 @@
 """Sequencing encoders."""
 
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import override
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from typing import override
 
-from torch import Tensor
+lazy from torch import Tensor
 
-from faultforge._impl.encoding.abc import (
+lazy from faultforge._impl.encoding.abc import (
     Encoder,
     Encoding,
     TensorEncoder,
     TensorEncoding,
 )
-from faultforge._impl.fault import Fault
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.progress import Progress
+lazy from faultforge._impl.fault import Fault
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.progress import Progress
 
 
 @dataclass(slots=True)

@@ -1,12 +1,12 @@
 """See [`faultforge.metric`]"""
 
-import abc
-import enum
+lazy import abc
+lazy import enum
 
-from torch import Tensor
+lazy from torch import Tensor
 
-from faultforge._impl.experiment.config import ScoreDisplay
-from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.experiment.config import ScoreDisplay
+lazy from faultforge._impl.fingerprint import Fingerprint
 
 
 class ScoreDirection(enum.Enum):

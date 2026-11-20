@@ -1,8 +1,8 @@
 """Bit-level faults that can be injected into tensors or encoded memory."""
 
-import enum
+lazy import enum
 
-from faultforge import _rust
+lazy from faultforge import _rust
 
 
 class BitFlip:

@@ -3,12 +3,12 @@
 See `faultforge.progress` for a general overview.
 """
 
-import abc
-import logging
-import threading
-import time
-from types import TracebackType
-from typing import Self, final, override
+lazy import abc
+lazy import logging
+lazy import threading
+lazy import time
+lazy from types import TracebackType
+lazy from typing import Self, final, override
 
 _logger = logging.getLogger(__name__)
 

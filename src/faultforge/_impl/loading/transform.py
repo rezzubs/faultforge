@@ -1,10 +1,10 @@
 """Transform steps shared by the bundled image datasets."""
 
-from collections.abc import Callable
+lazy from collections.abc import Callable
 
-import torch
-from torch import Tensor
-from torchvision.transforms import v2
+lazy import torch
+lazy from torch import Tensor
+lazy from torchvision.transforms import v2
 
 type _TensorTransform = Callable[[Tensor], Tensor]
 

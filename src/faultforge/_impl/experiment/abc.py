@@ -1,21 +1,21 @@
-import abc
-import logging
-import os
-import signal
-import tempfile
-import time
-import types
-from collections.abc import Sequence
-from pathlib import Path
-from typing import IO, Self
+lazy import abc
+lazy import logging
+lazy import os
+lazy import signal
+lazy import tempfile
+lazy import time
+lazy import types
+lazy from collections.abc import Sequence
+lazy from pathlib import Path
+lazy from typing import IO, Self
 
-from faultforge._impl.experiment.config import SaveConfig
-from faultforge._impl.experiment.recorded import RecordedRuns
-from faultforge._impl.experiment.stop import (
+lazy from faultforge._impl.experiment.config import SaveConfig
+lazy from faultforge._impl.experiment.recorded import RecordedRuns
+lazy from faultforge._impl.experiment.stop import (
     StatusReporter,
     StopCondition,
 )
-from faultforge._impl.io import (
+lazy from faultforge._impl.io import (
     AnyPath,
     is_compressed,
     open_text,

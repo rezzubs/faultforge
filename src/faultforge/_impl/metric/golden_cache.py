@@ -1,17 +1,17 @@
 """See [`faultforge.metric`]"""
 
-from collections.abc import Generator
-from typing import final
+lazy from collections.abc import Generator
+lazy from typing import final
 
-import torch
-from torch import Tensor, nn
+lazy import torch
+lazy from torch import Tensor, nn
 
-from faultforge._impl.dataset import (
+lazy from faultforge._impl.dataset import (
     BatchedDataset,
     DataBatch,
 )
-from faultforge._impl.metric.base import Metric
-from faultforge._impl.progress import Progress, stage
+lazy from faultforge._impl.metric.base import Metric
+lazy from faultforge._impl.progress import Progress, stage
 
 
 @final

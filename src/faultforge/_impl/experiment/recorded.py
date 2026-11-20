@@ -1,8 +1,8 @@
-import abc
-from collections.abc import Sequence
+lazy import abc
+lazy from collections.abc import Sequence
 
-from faultforge._impl.experiment.config import ExperimentDisplay
-from faultforge._impl.experiment.estimate import (
+lazy from faultforge._impl.experiment.config import ExperimentDisplay
+lazy from faultforge._impl.experiment.estimate import (
     Estimate,
     Estimator,
 )

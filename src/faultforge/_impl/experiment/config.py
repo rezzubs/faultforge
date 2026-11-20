@@ -1,8 +1,8 @@
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Protocol
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from typing import Protocol
 
-from faultforge._impl.io import AnyPath
+lazy from faultforge._impl.io import AnyPath
 
 
 @dataclass(slots=True)

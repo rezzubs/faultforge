@@ -1,26 +1,26 @@
 """Check whether saved results still need more runs."""
 
-import enum
-from collections.abc import Sequence
-from dataclasses import dataclass
-from pathlib import Path
-from typing import override
+lazy import enum
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from pathlib import Path
+lazy from typing import override
 
-import faultforge.metric as m
-from encoded_memory.experiment import (
+lazy import faultforge.metric as m
+lazy from encoded_memory.experiment import (
     EncodedFaultInjectionDisplay,
     SavedResult,
 )
-from encoded_memory.stability import StabilityLimits
-from faultforge import Fingerprint
-from faultforge.experiment import (
+lazy from encoded_memory.stability import StabilityLimits
+lazy from faultforge import Fingerprint
+lazy from faultforge.experiment import (
     Estimate,
     ExperimentDisplay,
     MaxRuns,
     RecordedRuns,
 )
-from faultforge.io import AnyPath
-from faultforge.metric import Metric
+lazy from faultforge.io import AnyPath
+lazy from faultforge.metric import Metric
 
 
 class CheckStatus(enum.StrEnum):

@@ -1,11 +1,11 @@
 """Margin of error limits that don't depend on the metric."""
 
-from dataclasses import (
+lazy from dataclasses import (
     dataclass,
     field,
 )
 
-from faultforge.experiment import (
+lazy from faultforge.experiment import (
     AbsoluteThreshold,
     Estimator,
     FailureRate,
@@ -14,7 +14,7 @@ from faultforge.experiment import (
     RelativeThreshold,
     Stability,
 )
-from faultforge.metric import Metric
+lazy from faultforge.metric import Metric
 
 
 @dataclass(frozen=True, kw_only=True)

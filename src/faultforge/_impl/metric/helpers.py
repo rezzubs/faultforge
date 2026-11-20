@@ -1,6 +1,6 @@
 """See [`faultforge.metric`]"""
 
-from torch import Tensor
+lazy from torch import Tensor
 
 
 def ratio_to_percent(ratio: float) -> float:

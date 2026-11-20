@@ -1,25 +1,25 @@
 """Loading CIFAR-10/CIFAR-100 models and datasets."""
 
-import enum
-from dataclasses import dataclass
-from pathlib import Path
-from typing import override
+lazy import enum
+lazy from dataclasses import dataclass
+lazy from pathlib import Path
+lazy from typing import override
 
-import torch
-import torchvision
-from torch import nn
+lazy import torch
+lazy import torchvision
+lazy from torch import nn
 
-from faultforge._impl.dataset import (
+lazy from faultforge._impl.dataset import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DEVICE,
     BatchedDataset,
     DeviceLike,
 )
-from faultforge._impl.dtype import dtype_name
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.loading.abc import ModelBundle
-from faultforge._impl.loading.transform import dtype_transforms
-from faultforge._impl.progress import Progress, stage
+lazy from faultforge._impl.dtype import dtype_name
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.loading.abc import ModelBundle
+lazy from faultforge._impl.loading.transform import dtype_transforms
+lazy from faultforge._impl.progress import Progress, stage
 
 _CACHE_DIRECTORY = Path("~/.cache/faultforge/").expanduser()
 

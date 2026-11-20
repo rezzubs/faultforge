@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass
-from typing import final, override
+lazy import logging
+lazy from dataclasses import dataclass
+lazy from typing import final, override
 
-import numpy as np
-import torch
-from torch import Tensor
+lazy import numpy as np
+lazy import torch
+lazy from torch import Tensor
 
-from faultforge._impl.dtype import EncodingDtype
-from faultforge._impl.encoding.abc import (
+lazy from faultforge._impl.dtype import EncodingDtype
+lazy from faultforge._impl.encoding.abc import (
     InPlaceEncoder,
     InPlaceEncoding,
     TensorEncoding,
 )
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.tensor import to_owned_numpy
-from faultforge._rust import mset
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.tensor import to_owned_numpy
+lazy from faultforge._rust import mset
 
 _logger = logging.getLogger(__name__)
 

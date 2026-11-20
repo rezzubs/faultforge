@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import enum
+lazy import enum
 
-import torch
+lazy import torch
 
 
 def dtype_name(dtype: torch.dtype) -> str:

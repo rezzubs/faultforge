@@ -8,12 +8,12 @@ scores the result according to a `faultforge.metric.Metric`.
 loading the model or dataset.
 """
 
-from encoded_memory.check import (
+lazy from encoded_memory.check import (
     CheckResult,
     CheckStatus,
     check_saved,
 )
-from encoded_memory.experiment import (
+lazy from encoded_memory.experiment import (
     DetailedResults,
     DetailedRunResult,
     EncodedFaultInjection,
@@ -22,7 +22,7 @@ from encoded_memory.experiment import (
     SimpleResults,
     discard_bitmasks_in_file,
 )
-from encoded_memory.stability import StabilityLimits
+lazy from encoded_memory.stability import StabilityLimits
 
 __all__ = [
     "CheckResult",

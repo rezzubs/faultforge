@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** Python 3.15 or newer is required.
 - Wheels are built for Python's stable ABI, so they work on newer Python
   versions without a new release.
+- Importing `faultforge` is faster. Modules and dependencies such as PyTorch
+  are loaded on first use.
+- `encoded-memory` starts faster.
 
 ## [0.4.0] - 2026-11-19
 

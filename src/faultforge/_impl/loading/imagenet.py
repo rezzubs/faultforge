@@ -1,31 +1,31 @@
 """Loading ImageNet models and the ImageNet validation dataset."""
 
-import copy
-import enum
-import typing
-from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
-from typing import override
+lazy import copy
+lazy import enum
+lazy import typing
+lazy from collections.abc import Callable
+lazy from dataclasses import dataclass
+lazy from pathlib import Path
+lazy from typing import override
 
-import timm
-import torch
-import torchvision
-from PIL import Image
-from torch import (
+lazy import timm
+lazy import torch
+lazy import torchvision
+lazy from PIL import Image
+lazy from torch import (
     Tensor,
     nn,
 )
-from torch.utils.data import Dataset
-from torchvision import datasets, transforms
+lazy from torch.utils.data import Dataset
+lazy from torchvision import datasets, transforms
 
-from faultforge._impl.dataset import BatchedDataset, DeviceLike
-from faultforge._impl.dtype import dtype_name
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.io import AnyPath
-from faultforge._impl.loading.abc import ModelBundle
-from faultforge._impl.loading.transform import dtype_transforms
-from faultforge._impl.progress import Progress, stage
+lazy from faultforge._impl.dataset import BatchedDataset, DeviceLike
+lazy from faultforge._impl.dtype import dtype_name
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.io import AnyPath
+lazy from faultforge._impl.loading.abc import ModelBundle
+lazy from faultforge._impl.loading.transform import dtype_transforms
+lazy from faultforge._impl.progress import Progress, stage
 
 type Transform = Callable[[Image.Image], Tensor]
 
