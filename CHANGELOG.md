@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Python 3.15 or newer is required.
+
 ## [0.4.0] - 2026-11-19
 
 0.4 adds language model support (WikiText, perplexity), configurable stop

@@ -53,7 +53,7 @@ uvx --from 'git+https://github.com/rezzubs/faultforge.git#subdirectory=experimen
 Swap in `@latest`, `@vX.Y.Z`, or `@<commit-sha>` the same way as the `pip
 install` variants above to pin a revision.
 
-Requires Python 3.14 or newer.
+Requires Python 3.15 or newer.
 
 ## Encoding techniques
 

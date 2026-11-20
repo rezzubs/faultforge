@@ -1,6 +1,6 @@
 # Installation
 
-FaultForge requires Python 3.14 or newer.
+FaultForge requires Python 3.15 or newer.
 
 ## From PyPI
 

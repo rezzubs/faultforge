@@ -34,7 +34,7 @@
           # clippy`/`test` on the `bindings` crate. Being nix-native, it's
           # correctly RPATH-linked, so cargo's test binaries can find libpython
           # at runtime without any LD_LIBRARY_PATH help.
-          python314
+          python315
         ];
 
         # Attributes not recognized by mkShell (packages, shellHook, etc.)
@@ -42,7 +42,7 @@
         RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
 
         # Without a uv-managed Python installed, uv would otherwise pick up
-        # `python314` from above. Being nix-native, it doesn't go through
+        # `python315` from above. Being nix-native, it doesn't go through
         # nix-ld or the system library paths, so wheels that need e.g.
         # libstdc++ fail to load.
         UV_PYTHON_PREFERENCE = "only-managed";

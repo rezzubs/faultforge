@@ -11,7 +11,7 @@ authors = [
 ]
 # The Rust extension is built per Python minor. A new Python minor needs a
 # `pyo3` version that supports it, see `Cargo.toml`.
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 # Upper bounds exclude the next breaking release. Packages that don't follow
 # semver have a comment explaining their bound.
 dependencies = [
@@ -50,7 +50,7 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Rust",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -107,4 +107,4 @@ python-source = "src"
 missing-override-decorator = "warn"
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py315"
