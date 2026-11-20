@@ -216,7 +216,7 @@ class SystolicFaultInjection(Experiment):
         bundle: ModelBundle,
         array: tuple[int, int],
         *,
-        fault: RegisterFaults = RegisterFaults(),
+        fault: RegisterFaults | None = None,
         backend: BackendKind = "lifted",
         reliability_metric: ReliabilityMetric = ReliabilityMetric.Accuracy,
         preload_dataset: bool = True,
@@ -237,7 +237,7 @@ class SystolicFaultInjection(Experiment):
         self._correct_counts: list[int] = []
         self._fault_ids: list[int] = []
         self._reliability_metric = reliability_metric
-        self._fault_config = fault
+        self._fault_config = fault if fault is not None else RegisterFaults()
         self._dtype = dtype
 
         nrows, ncols = array
@@ -273,7 +273,7 @@ class SystolicFaultInjection(Experiment):
                 "backend": backend,
                 "array_nrows": nrows,
                 "array_ncols": ncols,
-                "registers": fault.fingerprint_scalar(),
+                "registers": self._fault_config.fingerprint_scalar(),
                 "dtype": "f32",
             },
             children={"bundle": [bundle.fingerprint()]},

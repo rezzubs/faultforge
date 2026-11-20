@@ -17,7 +17,7 @@ def conv2d_output_height(conv2d: nn.Conv2d, input_height: int) -> int:
     times the stride fits.
     """
     if isinstance(conv2d.padding, str):
-        raise ValueError("string padding is not supported")
+        raise NotImplementedError("string padding is not supported")
     padding_height = 2 * conv2d.padding[0]
     effective_input_height = padding_height + input_height
     kernel_height = conv2d.kernel_size[0]
@@ -34,7 +34,7 @@ def conv2d_output_width(conv2d: nn.Conv2d, input_width: int) -> int:
     along the width axis.
     """
     if isinstance(conv2d.padding, str):
-        raise ValueError("string padding is not supported")
+        raise NotImplementedError("string padding is not supported")
     padding_width = 2 * conv2d.padding[1]
     effective_input_width = padding_width + input_width
     kernel_width = conv2d.kernel_size[1]
@@ -151,7 +151,7 @@ class MappedConv2d(nn.Module):
         if x.dim() != 4:
             raise ValueError(f"Expected a 4d input, got {x.dim()}d")
         if isinstance(self.inner.padding, str):
-            raise ValueError("string padding is not supported by F.unfold")
+            raise NotImplementedError("string padding is not supported by F.unfold")
 
         # x: (batch_size, input_channels, input_height, input_width)
         batch_size = x.shape[0]

@@ -77,7 +77,9 @@ _REGISTER_MAP = {
 }
 
 
-def _resolve_registers(values: Sequence[RegisterChoice]) -> RegisterFaults:
+def _resolve_registers(values: Sequence[RegisterChoice] | None) -> RegisterFaults:
+    if values is None:
+        return RegisterFaults()
     return RegisterFaults(registers=frozenset(_REGISTER_MAP[v] for v in values))
 
 
@@ -206,13 +208,13 @@ def run(
         ),
     ] = BackendChoice.Lifted,
     registers: Annotated[
-        list[RegisterChoice],
+        list[RegisterChoice] | None,
         typer.Option(
             "--registers",
             help="Restrict faults to these registers. Repeat to select several. Defaults to all three.",
             rich_help_panel="Systolic Array",
         ),
-    ] = list(RegisterChoice),
+    ] = None,
     reliability_metric: Annotated[
         ReliabilityMetric,
         typer.Option(
@@ -373,13 +375,13 @@ def agreement(
         ),
     ],
     registers: Annotated[
-        list[RegisterChoice],
+        list[RegisterChoice] | None,
         typer.Option(
             "--registers",
             help="Restrict sampled faults to these registers. Repeat to select several. Defaults to all three.",
             rich_help_panel="Systolic Array",
         ),
-    ] = list(RegisterChoice),
+    ] = None,
     out_features: Annotated[
         int,
         typer.Option(min=1, rich_help_panel="Matmul Shape"),
