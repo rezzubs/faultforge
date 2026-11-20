@@ -48,7 +48,7 @@ faults first, then add logic faults as purely additive work.
   core.
 - `experiments/encoded_memory/src/encoded_memory/experiment.py` - the one
   existing built-in experiment. Mirror its shape (results model, fingerprint,
-  golden handling, serialize/deserialize, `_Display`).
+  golden handling, serialize/deserialize, `ExperimentDisplay`).
 
 ## Architectural spine (decided)
 
@@ -112,7 +112,7 @@ SystolicFaultInjection(
     array=(nrows, ncols),
     fault=RegisterFaults(registers={Weight, Accumulator}),  # or LogicFaults(...)
     backend="lifted",  # or "simulated"
-    metric=ReliabilityMetric.Accuracy,
+    metric=Accuracy(),  # a `faultforge.metric.Metric`
 )
 ```
 
@@ -514,9 +514,10 @@ backends, with the register-subset restriction and the first agreement report.
     subset, produces a `_rust.Fault` from an id, reports the radix).
   - `experiments/systolic/src/systolic/experiment.py`:
     `SystolicFaultInjection`. Mirror `EncodedFaultInjection`: golden handling,
-    `ReliabilityMetric` reuse (`Accuracy` / `AccuracyDegradation` / `Sdc` /
-    `Top1Sdc`), results pydantic model, `serialize`/`deserialize` with
-    `Fingerprint.raise_if_differs`, `_Display`. Draw faults with `Picker` over
+    `faultforge.metric` reuse (`Accuracy` / `AccuracyDegradation` / `Sdc` /
+    `Top1Sdc`) with a `GoldenCache`, results pydantic model,
+    `serialize`/`deserialize` with `Fingerprint.raise_if_differs`, an
+    `ExperimentDisplay`. Draw faults with `Picker` over
     the fault radix (use `Picker.from_returned` on resume, like
     `EncodedFaultInjection`).
 - **CLI.** `experiments/systolic/src/systolic/commands.py` mirrors

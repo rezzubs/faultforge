@@ -4,7 +4,7 @@ register faults.
 `SystolicFaultInjection` runs a model whose `nn.Linear`/`nn.Conv2d` layers
 are routed through a `SystolicBackend`, injects a stuck-at register fault
 into one processing element, and scores the result according to a
-`ReliabilityMetric`.
+`faultforge.metric.Metric`.
 
 `SystolicBackend` is a weight-stationary systolic-array evaluation strategy
 (not a generic matmul backend): `matmul` takes `weights (out_features,
@@ -44,9 +44,10 @@ lazy from systolic._rust import (
 lazy from systolic.backend import SystolicBackend
 lazy from systolic.experiment import (
     BackendKind,
-    ReliabilityMetric,
+    RunResult,
     SavedResult,
     SystolicFaultInjection,
+    SystolicFaultInjectionDisplay,
 )
 lazy from systolic.fault import RegisterFaults
 lazy from systolic.layers import MappedConv2d, MappedLinear
@@ -83,12 +84,13 @@ __all__ = [
     "ProfilingMetadata",
     "Regime",
     "RegisterFaults",
-    "ReliabilityMetric",
+    "RunResult",
     "SavedResult",
     "SimulatedBackend",
     "StuckAtKind",
     "SystolicBackend",
     "SystolicFaultInjection",
+    "SystolicFaultInjectionDisplay",
     "TorchBackend",
     "Variable",
     "build_gap_heatmap_figure",

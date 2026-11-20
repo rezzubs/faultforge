@@ -13,6 +13,7 @@ lazy import typer
 lazy from matplotlib.backends.registry import BackendFilter, backend_registry
 lazy from matplotlib.figure import Figure
 
+lazy import faultforge.metric as m
 lazy from faultforge import Picker
 lazy from faultforge.dataset import DEFAULT_BATCH_SIZE
 lazy from faultforge.experiment import (
@@ -32,10 +33,11 @@ lazy from faultforge.loading import (
     ImageNetModel,
     ModelBundle,
 )
+lazy from faultforge.metric import Metric
 lazy from faultforge.progress import Progress
 lazy from systolic._rust import ArrayConfig, PeRegisterKind
 lazy from systolic.agreement import compare_matmul, summarize
-lazy from systolic.experiment import ReliabilityMetric, SystolicFaultInjection
+lazy from systolic.experiment import SystolicFaultInjection
 lazy from systolic.fault import RegisterFaults
 lazy from systolic.profiling import load_profiling_artifact, save_profiling_artifact
 lazy from systolic.profiling_driver import run_profiling
@@ -57,6 +59,24 @@ class DatasetChoice(enum.StrEnum):
     Cifar10 = "cifar10"
     Cifar100 = "cifar100"
     ImageNet = "imagenet"
+
+
+class MetricChoice(enum.StrEnum):
+    Accuracy = "accuracy"
+    AccuracyDegradation = "accuracy-degradation"
+    Sdc = "sdc"
+    Top1Sdc = "top1-sdc"
+
+    def into_metric(self) -> Metric:
+        match self:
+            case MetricChoice.Accuracy:
+                return m.Accuracy()
+            case MetricChoice.AccuracyDegradation:
+                return m.AccuracyDegradation()
+            case MetricChoice.Sdc:
+                return m.Sdc()
+            case MetricChoice.Top1Sdc:
+                return m.Top1Sdc()
 
 
 class BackendChoice(enum.StrEnum):
@@ -216,12 +236,12 @@ def run(
         ),
     ] = None,
     reliability_metric: Annotated[
-        ReliabilityMetric,
+        MetricChoice,
         typer.Option(
             help="Which metric to use for reliability measurements",
             rich_help_panel="Reliability",
         ),
-    ] = ReliabilityMetric.Accuracy,
+    ] = MetricChoice.Accuracy,
     output: Annotated[
         Path | None,
         typer.Option(
@@ -300,9 +320,9 @@ def run(
     experiment = SystolicFaultInjection(
         bundle,
         (array_rows, array_cols),
+        reliability_metric.into_metric(),
         fault=fault,
         backend=backend.value,
-        reliability_metric=reliability_metric,
         preload_dataset=preload_batches,
         dataset_batch_limit=batch_limit,
         batch_size=batch_size,
