@@ -9,8 +9,8 @@ authors = [
     { name = "Marten Roots", email = "marten.roots@gmail.com" },
     { name = "Sven-Markus Loorits", email = "sven.loorits@proton.me" },
 ]
-# The Rust extension is built per Python minor. A new Python minor needs a
-# `pyo3` version that supports it, see `Cargo.toml`.
+# Must match the stable ABI minimum of the Rust extension, see
+# `crates/bindings/Cargo.toml`.
 requires-python = ">=3.15"
 # Upper bounds exclude the next breaking release. Packages that don't follow
 # semver have a comment explaining their bound.

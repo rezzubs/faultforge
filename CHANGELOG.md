@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** Python 3.15 or newer is required.
+- Wheels are built for Python's stable ABI, so they work on newer Python
+  versions without a new release.
 
 ## [0.4.0] - 2026-11-19
 
