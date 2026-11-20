@@ -63,6 +63,7 @@ lazy from systolic.profiling_driver import run_profiling
 lazy from systolic.profiling_plots import build_gap_heatmap_figure
 lazy from systolic.profiling_similarity import GapGrid, Regime, Variable, gap_grids
 lazy from systolic.simulated_backend import SimulatedBackend
+lazy from systolic.stability import StabilityLimits
 lazy from systolic.torch_backend import TorchBackend
 
 __all__ = [
@@ -87,6 +88,7 @@ __all__ = [
     "RunResult",
     "SavedResult",
     "SimulatedBackend",
+    "StabilityLimits",
     "StuckAtKind",
     "SystolicBackend",
     "SystolicFaultInjection",
