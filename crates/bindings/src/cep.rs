@@ -103,7 +103,7 @@ where
     Ok(())
 }
 
-#[pyclass(eq, skip_from_py_object, name = "Scheme")]
+#[pyclass(eq, name = "Scheme")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PyScheme {
     D3P1,
