@@ -1,14 +1,14 @@
 """Operations on tensors."""
 
-from collections.abc import Sequence
+lazy from collections.abc import Sequence
 
-import numpy as np
-import torch
-from torch import Tensor
+lazy import numpy as np
+lazy import torch
+lazy from torch import Tensor
 
-from faultforge import _rust
-from faultforge._impl.dtype import FiDtype
-from faultforge._impl.fault import (
+lazy from faultforge import _rust
+lazy from faultforge._impl.dtype import FiDtype
+lazy from faultforge._impl.fault import (
     Fault,
     fault_to_rust,
 )

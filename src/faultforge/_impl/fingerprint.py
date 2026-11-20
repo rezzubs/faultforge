@@ -1,9 +1,9 @@
 """Structural fingerprints for identifying experiments and their components."""
 
-from dataclasses import dataclass
-from typing import override
+lazy from dataclasses import dataclass
+lazy from typing import override
 
-from pydantic import BaseModel, ConfigDict
+lazy from pydantic import BaseModel, ConfigDict
 
 type Scalar = str | int | float | bool | None
 """A semantic value simple enough to live directly inside a `Fingerprint`."""

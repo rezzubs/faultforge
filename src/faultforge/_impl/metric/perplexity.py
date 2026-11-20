@@ -1,15 +1,15 @@
 """See [`faultforge.metric`]"""
 
-import math
-from collections.abc import Iterable
-from dataclasses import dataclass
-from typing import ClassVar, final, override
+lazy import math
+lazy from collections.abc import Iterable
+lazy from dataclasses import dataclass
+lazy from typing import ClassVar, final, override
 
-import torch
-from torch import Tensor, nn
+lazy import torch
+lazy from torch import Tensor, nn
 
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.metric.base import Metric, ScoreDirection
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.metric.base import Metric, ScoreDirection
 
 
 @final

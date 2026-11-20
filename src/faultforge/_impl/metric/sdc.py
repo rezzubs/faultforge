@@ -1,13 +1,13 @@
 """See [`faultforge.metric`]"""
 
-from dataclasses import dataclass
-from typing import final, override
+lazy from dataclasses import dataclass
+lazy from typing import final, override
 
-from torch import Tensor
+lazy from torch import Tensor
 
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.metric.base import Metric, ScoreDirection
-from faultforge._impl.metric.helpers import ratio_to_percent
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.metric.base import Metric, ScoreDirection
+lazy from faultforge._impl.metric.helpers import ratio_to_percent
 
 
 @final

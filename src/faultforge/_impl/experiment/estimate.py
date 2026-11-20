@@ -1,18 +1,18 @@
-import abc
-import math
-import statistics
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import (
+lazy import abc
+lazy import math
+lazy import statistics
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from typing import (
     Final,
     final,
     override,
 )
 
-import scipy.stats
+lazy import scipy.stats
 
-from faultforge._impl.experiment.config import ScoreDisplay
-from faultforge._impl.metric.base import ScoreDirection
+lazy from faultforge._impl.experiment.config import ScoreDisplay
+lazy from faultforge._impl.metric.base import ScoreDirection
 
 CONFIDENCE_LEVEL: Final = 0.95
 """The confidence level of every [`Estimate`]'s bounds (95%)."""

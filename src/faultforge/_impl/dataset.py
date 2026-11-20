@@ -1,17 +1,17 @@
 """Types related to datasets."""
 
-import abc
-import logging
-import math
-from collections.abc import Iterable, Iterator, Sized
-from dataclasses import dataclass
-from typing import Any, Self, final, override
+lazy import abc
+lazy import logging
+lazy import math
+lazy from collections.abc import Iterable, Iterator, Sized
+lazy from dataclasses import dataclass
+lazy from typing import Any, Self, final, override
 
-import torch
-from torch import Tensor
-from torch.utils.data import DataLoader, Dataset
+lazy import torch
+lazy from torch import Tensor
+lazy from torch.utils.data import DataLoader, Dataset
 
-from faultforge._impl.progress import Progress, stage
+lazy from faultforge._impl.progress import Progress, stage
 
 _logger = logging.getLogger(__name__)
 

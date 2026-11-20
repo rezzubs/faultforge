@@ -1,12 +1,12 @@
 """Abstract interface for loading a model together with its dataset."""
 
-import abc
+lazy import abc
 
-from torch import nn
+lazy from torch import nn
 
-from faultforge._impl.dataset import BatchedDataset, DeviceLike
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.progress import Progress
+lazy from faultforge._impl.dataset import BatchedDataset, DeviceLike
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.progress import Progress
 
 
 class ModelBundle(abc.ABC):

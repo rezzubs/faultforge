@@ -1,18 +1,18 @@
-import abc
-import math
-from collections.abc import Callable
-from dataclasses import (
+lazy import abc
+lazy import math
+lazy from collections.abc import Callable
+lazy from dataclasses import (
     dataclass,
     field,
 )
-from typing import override
+lazy from typing import override
 
-from faultforge._impl.experiment.config import ScoreDisplay
-from faultforge._impl.experiment.estimate import (
+lazy from faultforge._impl.experiment.config import ScoreDisplay
+lazy from faultforge._impl.experiment.estimate import (
     CONFIDENCE_LEVEL,
     Estimator,
 )
-from faultforge._impl.experiment.recorded import RecordedRuns
+lazy from faultforge._impl.experiment.recorded import RecordedRuns
 
 type StopCondition = Callable[[RecordedRuns], str | None]
 """Decides whether a series of runs should stop.

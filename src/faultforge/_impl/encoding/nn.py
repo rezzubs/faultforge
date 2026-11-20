@@ -1,18 +1,18 @@
 """PyTorch Modules with encoded parameters"""
 
-import copy
-from collections.abc import Sequence
-from typing import override
+lazy import copy
+lazy from collections.abc import Sequence
+lazy from typing import override
 
-import torch
-from torch import Tensor, nn
+lazy import torch
+lazy from torch import Tensor, nn
 
-from faultforge._impl.encoding.abc import (
+lazy from faultforge._impl.encoding.abc import (
     Encoder,
     Encoding,
 )
-from faultforge._impl.fault import Fault
-from faultforge._impl.progress import Progress
+lazy from faultforge._impl.fault import Fault
+lazy from faultforge._impl.progress import Progress
 
 
 class EncodedModule(nn.Module):

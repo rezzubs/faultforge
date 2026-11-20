@@ -1,9 +1,9 @@
 """File I/O helpers."""
 
-from compression import zstd
-from os import PathLike
-from pathlib import Path
-from typing import IO, Literal
+lazy from compression import zstd
+lazy from os import PathLike
+lazy from pathlib import Path
+lazy from typing import IO, Literal
 
 type AnyPath = str | PathLike[str]
 

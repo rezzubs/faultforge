@@ -3,19 +3,19 @@
 See `faultforge.encoding` for a general overview.
 """
 
-import abc
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import override
+lazy import abc
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from typing import override
 
-import torch
-from torch import Tensor
+lazy import torch
+lazy from torch import Tensor
 
-from faultforge._impl.dtype import EncodingDtype
-from faultforge._impl.fault import Fault
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.progress import Progress, stage
-from faultforge._impl.tensor import (
+lazy from faultforge._impl.dtype import EncodingDtype
+lazy from faultforge._impl.fault import Fault
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.progress import Progress, stage
+lazy from faultforge._impl.tensor import (
     tensor_list_dtype,
     tensor_list_fault,
     tensor_list_faults,

@@ -1,13 +1,13 @@
 """See [`faultforge.metric`]"""
 
-from typing import final, override
+lazy from typing import final, override
 
-from torch import Tensor
+lazy from torch import Tensor
 
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.metric.base import Metric, ScoreDirection
-from faultforge._impl.metric.helpers import top1_logit_from_output
-from faultforge._impl.metric.sdc import Sdc, SdcResult
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.metric.base import Metric, ScoreDirection
+lazy from faultforge._impl.metric.helpers import top1_logit_from_output
+lazy from faultforge._impl.metric.sdc import Sdc, SdcResult
 
 
 @final

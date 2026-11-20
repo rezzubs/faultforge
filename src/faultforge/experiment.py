@@ -4,13 +4,13 @@ See `Experiment` for the full overview. `RecordedRuns` is the part of it that
 stop conditions see.
 """
 
-from faultforge._impl.experiment.abc import Experiment
-from faultforge._impl.experiment.config import (
+lazy from faultforge._impl.experiment.abc import Experiment
+lazy from faultforge._impl.experiment.config import (
     ExperimentDisplay,
     SaveConfig,
     ScoreDisplay,
 )
-from faultforge._impl.experiment.estimate import (
+lazy from faultforge._impl.experiment.estimate import (
     AbsoluteThreshold,
     Estimate,
     Estimator,
@@ -19,8 +19,8 @@ from faultforge._impl.experiment.estimate import (
     NonFiniteRate,
     RelativeThreshold,
 )
-from faultforge._impl.experiment.recorded import RecordedRuns
-from faultforge._impl.experiment.stop import (
+lazy from faultforge._impl.experiment.recorded import RecordedRuns
+lazy from faultforge._impl.experiment.stop import (
     AdditionalRuns,
     MaxRuns,
     Stability,

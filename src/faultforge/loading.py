@@ -1,9 +1,9 @@
 """Loading models and datasets."""
 
-from faultforge._impl.loading.abc import ModelBundle
-from faultforge._impl.loading.cifar import Cifar, CifarDataset, CifarModel
-from faultforge._impl.loading.imagenet import ImageNet, ImageNetModel, Transform
-from faultforge._impl.loading.wikitext import (
+lazy from faultforge._impl.loading.abc import ModelBundle
+lazy from faultforge._impl.loading.cifar import Cifar, CifarDataset, CifarModel
+lazy from faultforge._impl.loading.imagenet import ImageNet, ImageNetModel, Transform
+lazy from faultforge._impl.loading.wikitext import (
     WikiTextBundle,
     WikiTextConfig,
     WikiTextSplit,

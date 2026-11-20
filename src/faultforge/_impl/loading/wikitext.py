@@ -1,33 +1,33 @@
 """The WikiText dataset with HuggingFace causal LMs."""
 
-import enum
-import re
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Final, final, override
+lazy import enum
+lazy import re
+lazy from dataclasses import dataclass
+lazy from pathlib import Path
+lazy from typing import Final, final, override
 
-import datasets
-import torch
-from huggingface_hub import (
+lazy import datasets
+lazy import torch
+lazy from huggingface_hub import (
     CacheNotFound,
     HfApi,
     is_offline_mode,
     scan_cache_dir,
 )
-from torch import Tensor, nn
-from torch.utils.data import Dataset
-from transformers import (
+lazy from torch import Tensor, nn
+lazy from torch.utils.data import Dataset
+lazy from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     PreTrainedTokenizerBase,
 )
 
-from faultforge._impl.dataset import BatchedDataset, DeviceLike
-from faultforge._impl.dtype import dtype_name
-from faultforge._impl.fingerprint import Fingerprint
-from faultforge._impl.loading.abc import ModelBundle
-from faultforge._impl.metric.perplexity import Perplexity
-from faultforge._impl.progress import Progress, stage
+lazy from faultforge._impl.dataset import BatchedDataset, DeviceLike
+lazy from faultforge._impl.dtype import dtype_name
+lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.loading.abc import ModelBundle
+lazy from faultforge._impl.metric.perplexity import Perplexity
+lazy from faultforge._impl.progress import Progress, stage
 
 _WIKITEXT_REPOSITORY = "Salesforce/wikitext"
 """The HuggingFace dataset repository of WikiText."""

@@ -5,7 +5,7 @@
 zstd compression - useful directly when writing your own save-file format.
 """
 
-from faultforge._impl.io import AnyPath, is_compressed, open_text
+lazy from faultforge._impl.io import AnyPath, is_compressed, open_text
 
 __all__ = [
     "AnyPath",

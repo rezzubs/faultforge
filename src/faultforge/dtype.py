@@ -1,6 +1,6 @@
 """Data types for various operations."""
 
-from faultforge._impl.dtype import (
+lazy from faultforge._impl.dtype import (
     EncodingDtype,
     FiDtype,
     dtype_from_name,
