@@ -1,5 +1,5 @@
-from encoded_memory.commands import app
-from encoded_memory.logging import setup_logging
+lazy from encoded_memory.commands import app
+lazy from encoded_memory.logging import setup_logging
 
 
 def main() -> None:

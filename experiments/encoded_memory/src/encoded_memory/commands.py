@@ -1,22 +1,22 @@
 """The `encoded-memory` CLI commands."""
 
-import enum
-import json
-import logging
-from pathlib import Path
-from typing import Annotated
+lazy import enum
+lazy import json
+lazy import logging
+lazy from pathlib import Path
+lazy from typing import Annotated
 
-import torch
-import typer
+lazy import torch
+lazy import typer
 
-import faultforge.metric as m
-from encoded_memory import (
+lazy import faultforge.metric as m
+lazy from encoded_memory import (
     EncodedFaultInjection,
     StabilityLimits,
     check_saved,
     discard_bitmasks_in_file,
 )
-from faultforge.encoding import (
+lazy from faultforge.encoding import (
     CepEncoder,
     CepScheme,
     Encoder,
@@ -25,7 +25,7 @@ from faultforge.encoding import (
     MsetEncoder,
     SecdedEncoder,
 )
-from faultforge.experiment import (
+lazy from faultforge.experiment import (
     AbsoluteThreshold,
     AdditionalRuns,
     MaxRuns,
@@ -35,9 +35,9 @@ from faultforge.experiment import (
     SaveConfig,
     StopCondition,
 )
-from faultforge.fingerprint import FingerprintError
-from faultforge.io import is_compressed
-from faultforge.loading import (
+lazy from faultforge.fingerprint import FingerprintError
+lazy from faultforge.io import is_compressed
+lazy from faultforge.loading import (
     Cifar,
     CifarDataset,
     CifarModel,
@@ -47,8 +47,8 @@ from faultforge.loading import (
     WikiTextBundle,
     resolve_huggingface_revision,
 )
-from faultforge.metric import Metric
-from faultforge.progress import Progress
+lazy from faultforge.metric import Metric
+lazy from faultforge.progress import Progress
 
 app = typer.Typer(
     pretty_exceptions_enable=False,

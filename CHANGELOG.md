@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   versions without a new release.
 - Importing `faultforge` is faster. Modules and dependencies such as PyTorch
   are loaded on first use.
+- `encoded-memory` starts faster.
 
 ## [0.4.0] - 2026-11-19
 

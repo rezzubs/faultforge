@@ -3,37 +3,37 @@
 See `encoded_memory` for a general overview.
 """
 
-import copy
-import logging
-import os
-import tempfile
-from collections.abc import Sequence
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Annotated, Literal, final, override
+lazy import copy
+lazy import logging
+lazy import os
+lazy import tempfile
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from pathlib import Path
+lazy from typing import Annotated, Literal, final, override
 
-import torch
-from pydantic import BaseModel, ConfigDict, Field
-from torch import nn
+lazy import torch
+lazy from pydantic import BaseModel, ConfigDict, Field
+lazy from torch import nn
 
-from faultforge import (
+lazy from faultforge import (
     BitFlip,
     Fingerprint,
     Picker,
     bitwise_xor,
     tensor_list_dtype,
 )
-from faultforge.dataset import (
+lazy from faultforge.dataset import (
     DEFAULT_DEVICE,
     DeviceLike,
 )
-from faultforge.dtype import FiDtype
-from faultforge.encoding import EncodedModule, Encoder
-from faultforge.experiment import Experiment, ExperimentDisplay, ScoreDisplay
-from faultforge.io import AnyPath, is_compressed, open_text
-from faultforge.loading import ModelBundle
-from faultforge.metric import GoldenCache, Metric
-from faultforge.progress import Progress, stage
+lazy from faultforge.dtype import FiDtype
+lazy from faultforge.encoding import EncodedModule, Encoder
+lazy from faultforge.experiment import Experiment, ExperimentDisplay, ScoreDisplay
+lazy from faultforge.io import AnyPath, is_compressed, open_text
+lazy from faultforge.loading import ModelBundle
+lazy from faultforge.metric import GoldenCache, Metric
+lazy from faultforge.progress import Progress, stage
 
 logger = logging.getLogger(__name__)
 

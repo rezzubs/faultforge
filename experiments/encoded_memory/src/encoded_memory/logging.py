@@ -1,9 +1,9 @@
-import logging
-import os
-import sys
-from typing import override
+lazy import logging
+lazy import os
+lazy import sys
+lazy from typing import override
 
-from rich.console import Console
+lazy from rich.console import Console
 
 _console = Console()
 
