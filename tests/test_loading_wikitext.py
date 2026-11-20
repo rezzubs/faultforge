@@ -382,7 +382,7 @@ def test_wrapper_returns_only_the_logits() -> None:
 
     class FakeModel(torch.nn.Module):
         @override
-        def forward(self, input_ids: torch.Tensor) -> SimpleNamespace:  # ty: ignore[invalid-mutable-override]
+        def forward(self, input_ids: torch.Tensor) -> SimpleNamespace:
             _ = input_ids
             return SimpleNamespace(logits=logits, other_metadata="ignored")
 

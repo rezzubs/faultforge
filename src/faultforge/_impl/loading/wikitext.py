@@ -187,9 +187,8 @@ class _HuggingFaceLmWrapper(nn.Module):
         super().__init__()
         self._model = model
 
-    # torch types `forward` as a mutable `Callable[..., Any]`; narrowing it is intended.
     @override
-    def forward(self, input_ids: Tensor) -> Tensor:  # ty: ignore[invalid-mutable-override]
+    def forward(self, input_ids: Tensor) -> Tensor:
         return self._model(input_ids).logits
 
 
