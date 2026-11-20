@@ -31,6 +31,19 @@ systolic = "systolic.main:main"
 [tool.uv.sources]
 faultforge = { workspace = true }
 
+[tool.uv]
+# Rebuild the extension when Rust sources change, not only when
+# `pyproject.toml` does.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "../../Cargo.toml" },
+    { file = "../../Cargo.lock" },
+    { file = "../../crates/systolic/**/*.rs" },
+    { file = "../../crates/systolic/Cargo.toml" },
+    { file = "../../crates/systolic_bindings/**/*.rs" },
+    { file = "../../crates/systolic_bindings/Cargo.toml" },
+]
+
 [build-system]
 requires = ["maturin>=1.12,<2.0"]
 build-backend = "maturin"
