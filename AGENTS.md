@@ -54,6 +54,8 @@ The library, the reference experiment and the Rust crates share one version,
 bumped together on release. The release workflow checks that all of them
 match the tag.
 
+`experiments/systolic` is versioned on its own and isn't part of releases.
+
 ## Commands
 
 - Common project commands are exposed in a `justfile`. Prefer these over running
