@@ -34,8 +34,8 @@ lazy from faultforge._impl.encoding.abc import (
 lazy from faultforge._impl.encoding.cep import (
     CepEncoder,
     CepEncoding,
-    CepScheme,
 )
+lazy from faultforge._impl.encoding.cep_scheme import CepScheme
 lazy from faultforge._impl.encoding.identity import (
     IdentityEncoder,
     IdentityEncoding,
