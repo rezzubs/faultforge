@@ -130,7 +130,8 @@ impl From<IoBuilder> for NamedIo {
 /// A helper for building singular [`NamedIo`] elements.
 ///
 /// Construct with [`input_bus`] or [`output_bus`] and select the target with
-/// [`map`](IoBusBuilder::map). Can be inserted into a [`SimulationBuilder`]
+/// [`map`](IoBusBuilder::map). Can be inserted into a
+/// [`SimulationBuilder`](crate::simulation::builder::SimulationBuilder)
 /// with [`SimulationBuilder::add_io_fallible`](crate::simulation::builder::SimulationBuilder::add_io_fallible).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IoBusBuilder {
