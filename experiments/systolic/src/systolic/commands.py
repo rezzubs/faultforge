@@ -15,7 +15,6 @@ lazy from matplotlib.figure import Figure
 
 lazy import faultforge.metric as m
 lazy from faultforge import Picker
-lazy from faultforge.dataset import DEFAULT_BATCH_SIZE
 lazy from faultforge.experiment import (
     AbsoluteThreshold,
     AdditionalRuns,
@@ -49,7 +48,8 @@ lazy from systolic.profiling_plots import (
     build_gap_heatmap_figure,
     build_pe_ecdf_figure,
 )
-lazy from systolic.profiling_similarity import Regime, gap_grids
+lazy from systolic.profiling_similarity import gap_grids
+lazy from systolic.regime import Regime
 lazy from systolic.stability import StabilityLimits
 
 app = typer.Typer(
@@ -93,18 +93,22 @@ class RegisterChoice(enum.StrEnum):
     Weight = "weight"
     Accumulator = "accumulator"
 
-
-_REGISTER_MAP = {
-    RegisterChoice.Activation: PeRegisterKind.Activation,
-    RegisterChoice.Weight: PeRegisterKind.Weight,
-    RegisterChoice.Accumulator: PeRegisterKind.Accumulator,
-}
+    def into_register_kind(self) -> PeRegisterKind:
+        match self:
+            case RegisterChoice.Activation:
+                return PeRegisterKind.Activation
+            case RegisterChoice.Weight:
+                return PeRegisterKind.Weight
+            case RegisterChoice.Accumulator:
+                return PeRegisterKind.Accumulator
 
 
 def _resolve_registers(values: Sequence[RegisterChoice] | None) -> RegisterFaults:
     if values is None:
         return RegisterFaults()
-    return RegisterFaults(registers=frozenset(_REGISTER_MAP[v] for v in values))
+    return RegisterFaults(
+        registers=frozenset(value.into_register_kind() for value in values)
+    )
 
 
 class EstimateChoice(enum.StrEnum):
@@ -336,6 +340,15 @@ def record(
             rich_help_panel="Systolic Array",
         ),
     ],
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            help="The number of samples per batch. Larger batches use more memory "
+            "but only run faster until the device is fully utilized.",
+            rich_help_panel="Model Setup",
+        ),
+    ],
     dataset: Annotated[
         DatasetChoice,
         typer.Option(
@@ -350,13 +363,6 @@ def record(
             rich_help_panel="Model Setup",
         ),
     ] = None,
-    batch_size: Annotated[
-        int,
-        typer.Option(
-            help="The batch size of the dataset",
-            rich_help_panel="Model Setup",
-        ),
-    ] = DEFAULT_BATCH_SIZE,
     preload_batches: Annotated[
         bool,
         typer.Option(
