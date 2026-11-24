@@ -288,6 +288,57 @@ def test_fingerprint_is_filled_in() -> None:
     }
 
 
+@pytest.mark.parametrize("attention", list(wikitext.AttentionImplementation))
+def test_fingerprint_includes_an_explicit_attention_implementation(
+    attention: wikitext.AttentionImplementation,
+) -> None:
+    default = wikitext.WikiTextBundle(
+        model_id="model", revision=REVISION, sequence_length=8
+    )
+    explicit = wikitext.WikiTextBundle(
+        model_id="model", revision=REVISION, sequence_length=8, attention=attention
+    )
+
+    assert explicit.fingerprint().scalars == {
+        **default.fingerprint().scalars,
+        "attention": attention.value,
+    }
+
+
+@pytest.mark.parametrize(
+    ("attention", "expected_options"),
+    [
+        (None, {}),
+        (
+            wikitext.AttentionImplementation.Eager,
+            {"attn_implementation": "eager"},
+        ),
+        (
+            wikitext.AttentionImplementation.Sdpa,
+            {"attn_implementation": "sdpa"},
+        ),
+    ],
+)
+def test_loading_forwards_only_an_explicit_attention_implementation(
+    attention: wikitext.AttentionImplementation | None,
+    expected_options: dict[str, str],
+) -> None:
+    bundle = wikitext.WikiTextBundle(
+        model_id="model", revision=REVISION, sequence_length=8, attention=attention
+    )
+
+    with patch.object(
+        wikitext.AutoModelForCausalLM,
+        "from_pretrained",
+        return_value=torch.nn.Identity(),
+    ) as model_loader:
+        _ = bundle.load_model("cpu")
+
+    model_loader.assert_called_once_with(
+        "model", revision=REVISION, dtype=torch.float32, **expected_options
+    )
+
+
 def test_resolving_a_commit_hash_returns_it_unchanged() -> None:
     with patch.object(wikitext.HfApi, "model_info") as model_info:
         assert wikitext.resolve_huggingface_revision("model", REVISION) == REVISION

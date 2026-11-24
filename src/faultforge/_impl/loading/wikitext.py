@@ -24,7 +24,7 @@ lazy from transformers import (
 
 lazy from faultforge._impl.dataset import BatchedDataset, DeviceLike
 lazy from faultforge._impl.dtype import dtype_name
-lazy from faultforge._impl.fingerprint import Fingerprint
+lazy from faultforge._impl.fingerprint import Fingerprint, Scalar
 lazy from faultforge._impl.loading.abc import ModelBundle
 lazy from faultforge._impl.metric.perplexity import Perplexity
 lazy from faultforge._impl.progress import Progress, stage
@@ -61,6 +61,20 @@ class WikiTextConfig(enum.StrEnum):
     Tokenized103 = "wikitext-103-v1"
     Raw2 = "wikitext-2-raw-v1"
     Raw103 = "wikitext-103-raw-v1"
+
+
+@final
+class AttentionImplementation(enum.StrEnum):
+    """How a HuggingFace model computes attention.
+
+    The implementations compute the same formula with different PyTorch
+    operations. Results can differ by rounding.
+    """
+
+    Eager = "eager"
+    """Separate matrix multiplications and a softmax."""
+    Sdpa = "sdpa"
+    """PyTorch's `scaled_dot_product_attention`."""
 
 
 @final
@@ -105,6 +119,8 @@ class WikiTextBundle(ModelBundle):
     """Which dataset split to load."""
     dtype: torch.dtype = torch.float32
     """Parameter dtype the model is loaded with."""
+    attention: AttentionImplementation | None = None
+    """How the model computes attention. `None` leaves the choice to HuggingFace."""
 
     def __post_init__(self) -> None:
         if _COMMIT_HASH_PATTERN.fullmatch(self.revision) is None:
@@ -122,19 +138,21 @@ class WikiTextBundle(ModelBundle):
 
     @override
     def fingerprint(self) -> Fingerprint:
-        return Fingerprint(
-            kind="wikitext",
-            scalars={
-                "model": self.model_id,
-                "model_revision": self.revision,
-                "dataset_revision": _WIKITEXT_REVISION,
-                "dataset_config": self.dataset_config.value,
-                "split": self.split.value,
-                "sequence_length": self.sequence_length,
-                "stride": self._resolved_stride(),
-                "dtype": dtype_name(self.dtype),
-            },
-        )
+        scalars: dict[str, Scalar] = {
+            "model": self.model_id,
+            "model_revision": self.revision,
+            "dataset_revision": _WIKITEXT_REVISION,
+            "dataset_config": self.dataset_config.value,
+            "split": self.split.value,
+            "sequence_length": self.sequence_length,
+            "stride": self._resolved_stride(),
+            "dtype": dtype_name(self.dtype),
+        }
+        # Left out when unset so that results saved before this field existed
+        # still match.
+        if self.attention is not None:
+            scalars["attention"] = self.attention.value
+        return Fingerprint(kind="wikitext", scalars=scalars)
 
     @override
     def load_model(
@@ -144,9 +162,19 @@ class WikiTextBundle(ModelBundle):
         progress: Progress | None = None,
     ) -> nn.Module:
         _ensure_not_local_model(self.model_id)
+        # Omitted instead of passing `None` because an explicit `None` overrides
+        # a choice stored in the model's own config.
+        attention_options = (
+            {}
+            if self.attention is None
+            else {"attn_implementation": self.attention.value}
+        )
         with stage(progress, f"Loading model {self.model_id}"):
             model = AutoModelForCausalLM.from_pretrained(
-                self.model_id, revision=self.revision, dtype=self.dtype
+                self.model_id,
+                revision=self.revision,
+                dtype=self.dtype,
+                **attention_options,
             )
         return _HuggingFaceLmWrapper(model).to(device=device)
 
