@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `AttentionImplementation` and `WikiTextBundle.attention`, which choose how the
+  model computes attention. The default leaves loading and fingerprints
+  unchanged.
+
 ### Changed
 
 - **Breaking:** Python 3.15 or newer is required.
