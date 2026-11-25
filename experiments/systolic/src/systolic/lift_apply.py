@@ -37,8 +37,8 @@ def _weight_fault_matmul(
     for part in lifted.parts:
         start, end = part.for_activations
         row = part.affected_output_row
-        weights[row, start:end] = _corrupt(
-            weights[row, start:end], fault.stuck_at, fault.bit_index
+        weights[..., row, start:end] = _corrupt(
+            weights[..., row, start:end], fault.stuck_at, fault.bit_index
         )
     return weights @ activations
 
@@ -53,13 +53,13 @@ def _activation_fault_matmul(
 
     activations_faulty = activations.clone()
     for row_index in lifted.affected_activation_rows:
-        activations_faulty[row_index, :] = _corrupt(
-            activations_faulty[row_index, :], fault.stuck_at, fault.bit_index
+        activations_faulty[..., row_index, :] = _corrupt(
+            activations_faulty[..., row_index, :], fault.stuck_at, fault.bit_index
         )
     output_faulty = weights @ activations_faulty
 
     for row_index in lifted.affected_output_rows:
-        output[row_index, :] = output_faulty[row_index, :]
+        output[..., row_index, :] = output_faulty[..., row_index, :]
 
     return output
 
@@ -81,16 +81,16 @@ def _accumulator_fault_matmul(
         # "faulty zero" rather than a separate case. See
         # `docs/fault-lifting.md`'s accumulator section.
         if start == end:
-            partial_sums = torch.zeros(
-                activations.shape[1], dtype=activations.dtype, device=activations.device
-            )
+            partial_sums = torch.zeros_like(output[..., row, :])
         else:
-            partial_sum_weights = weights[row, start:end]
-            partial_sum_activations = activations[start:end, :]
-            partial_sums = partial_sum_weights @ partial_sum_activations
+            # A one-row matrix instead of a vector, because a stack of vectors
+            # would be mistaken for a matrix.
+            partial_sum_weights = weights[..., row : row + 1, start:end]
+            partial_sum_activations = activations[..., start:end, :]
+            partial_sums = (partial_sum_weights @ partial_sum_activations).squeeze(-2)
 
         corrupted = _corrupt(partial_sums, fault.stuck_at, fault.bit_index)
-        output[row, :] = output[row, :] - partial_sums + corrupted
+        output[..., row, :] = output[..., row, :] - partial_sums + corrupted
 
     return output
 
@@ -99,6 +99,9 @@ def apply_lifted_register_fault(
     lifted: LiftedFault, fault: Fault, weights: Tensor, activations: Tensor
 ) -> Tensor:
     """Apply a lifted register fault to a matmul.
+
+    The matmul may be a stack of matmuls, with one leading dimension on both
+    operands. The fault applies to each of them.
 
     Produces a result equivalent to running the same fault through the
     literal systolic array (`SimulatedBackend`), without simulating the

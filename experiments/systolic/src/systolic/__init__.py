@@ -44,6 +44,7 @@ lazy from systolic._rust import (
 )
 lazy from systolic.array import Array, ArrayMatmul
 lazy from systolic.backend import SystolicBackend
+lazy from systolic.evaluator import Evaluator
 lazy from systolic.experiment import (
     BackendKind,
     RunResult,
@@ -54,6 +55,7 @@ lazy from systolic.experiment import (
 lazy from systolic.fault import RegisterFaults
 lazy from systolic.layers import MappedConv2d, MappedLinear
 lazy from systolic.lifted_backend import LiftedBackend
+lazy from systolic.lifted_evaluator import LiftedEvaluator
 lazy from systolic.model import BackendModel
 lazy from systolic.profiling import (
     ProfilingMetadata,
@@ -76,10 +78,12 @@ __all__ = [
     "ArrayMatmul",
     "BackendKind",
     "BackendModel",
+    "Evaluator",
     "Fault",
     "GapGrid",
     "Index2",
     "LiftedBackend",
+    "LiftedEvaluator",
     "LiftedFault",
     "MappedConv2d",
     "MappedLinear",
