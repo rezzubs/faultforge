@@ -11,6 +11,7 @@ from systolic._rust import (
     ArrayConfig,
     Fault,
     Index2,
+    LiftedFault,
     Mapping,
     Pass,
     PeRegisterKind,
@@ -141,3 +142,22 @@ def test_mapping_validate_detects_duplicate_connections() -> None:
     )
     with pytest.raises(ValueError):
         mapping.validate()
+
+
+def test_weight_lift_has_a_part_per_pass() -> None:
+    """Passes that only use rows above the fault have no part."""
+    fault = Fault.Register(
+        target=Index2(x=1, y=1),
+        register=PeRegisterKind.Weight,
+        stuck_at=StuckAtKind.One,
+        bit_index=0,
+    )
+    lifted = Mapping.auto(7, 3, 3, 2).lift(fault)
+
+    assert isinstance(lifted, LiftedFault.Weight)
+    assert [
+        (part.affected_output_row, part.for_activations) for part in lifted.parts
+    ] == [
+        (1, (1, 3)),
+        (1, (4, 6)),
+    ]

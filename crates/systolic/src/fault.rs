@@ -8,5 +8,7 @@ pub use register::{
     PeRegister, PeRegisterFault, RegisterFault, RegisterFaultContext, RegisterHook, RegisterSubset,
     StuckAt, TargetedFault,
 };
-pub use register_lift::{AccumulatorFaultPart, LiftedRegisterFault, LiftedRegisterFaultData};
+pub use register_lift::{
+    AccumulatorFaultPart, LiftedRegisterFault, LiftedRegisterFaultData, WeightFaultPart,
+};
 pub use simulated::{SimulatedFault, SimulatedFaultContext, SimulatedMulAddHook};

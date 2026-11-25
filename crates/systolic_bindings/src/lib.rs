@@ -37,6 +37,8 @@ mod _rust {
     #[pymodule_export]
     use crate::lift::LiftedFault;
     #[pymodule_export]
+    use crate::lift::WeightFaultPart;
+    #[pymodule_export]
     use crate::mapping::Mapping;
     #[pymodule_export]
     use crate::mapping::Pass;

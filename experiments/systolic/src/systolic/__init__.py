@@ -40,6 +40,7 @@ lazy from systolic._rust import (
     Pass,
     PeRegisterKind,
     StuckAtKind,
+    WeightFaultPart,
 )
 lazy from systolic.backend import SystolicBackend
 lazy from systolic.experiment import (
@@ -96,6 +97,7 @@ __all__ = [
     "SystolicFaultInjectionDisplay",
     "TorchBackend",
     "Variable",
+    "WeightFaultPart",
     "build_gap_heatmap_figure",
     "gap_grids",
     "load_profiling_artifact",

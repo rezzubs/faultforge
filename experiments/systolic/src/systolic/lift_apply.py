@@ -34,9 +34,11 @@ def _weight_fault_matmul(
     lifted: LiftedFault.Weight,
 ) -> Tensor:
     weights = weights.clone()
-    for index in lifted.affected_weights:
-        weights[index.y, index.x] = _corrupt(
-            weights[index.y, index.x], fault.stuck_at, fault.bit_index
+    for part in lifted.parts:
+        start, end = part.for_activations
+        row = part.affected_output_row
+        weights[row, start:end] = _corrupt(
+            weights[row, start:end], fault.stuck_at, fault.bit_index
         )
     return weights @ activations
 

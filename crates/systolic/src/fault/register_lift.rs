@@ -6,6 +6,19 @@ use crate::Index2;
 use crate::Mapping;
 use crate::fault::register::{PeRegister, PeRegisterFault, RegisterFault, TargetedFault};
 
+/// The weights of one output row that pass through a faulty weight register
+/// in one pass.
+///
+/// Every weight `W[affected_output_row, for_activations]` is corrupted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WeightFaultPart {
+    /// The row of the weight matrix that the affected weights are in.
+    pub affected_output_row: usize,
+    /// The activation rows that the affected weights are multiplied with.
+    /// Never empty.
+    pub for_activations: Range<usize>,
+}
+
 /// The accumulated-fault fix-up for one output row in one pass.
 ///
 /// The accumulator at the faulty PE holds the partial sum `P` over the
@@ -38,8 +51,10 @@ pub enum LiftedRegisterFaultData {
     /// the faulty PE picks up the stuck bit. This covers the weight that settles
     /// at the fault position and every weight destined for a row below it.
     Weight {
-        /// Indices into the weight matrix of the entries affected by the fault.
-        affected_weights: HashSet<Index2>,
+        /// One entry per pass in which weights pass through the faulty PE.
+        // One entry per pass rather than per weight, because a fault can
+        // affect millions of weights in a large matrix.
+        parts: Vec<WeightFaultPart>,
     },
     /// A fault in an activation register.
     ///
@@ -88,10 +103,11 @@ impl LiftedRegisterFault {
         T: ndarray::LinalgScalar + memory::BitBuffer,
     {
         match &self.data {
-            LiftedRegisterFaultData::Weight { affected_weights } => {
-                for &index in affected_weights {
-                    let weight = weights.get_mut(index).expect("weight index out of bounds");
-                    *weight = self.fault.apply(*weight);
+            LiftedRegisterFaultData::Weight { parts } => {
+                for part in parts {
+                    weights
+                        .slice_mut(s![part.affected_output_row, part.for_activations.clone()])
+                        .mapv_inplace(|weight| self.fault.apply(weight));
                 }
                 weights.dot(&activations)
             }
@@ -154,7 +170,7 @@ impl LiftedRegisterFault {
 
 impl Mapping {
     fn lift_weight_fault(&self, fault: RegisterFault, index: Index2) -> LiftedRegisterFault {
-        let mut affected_weights = HashSet::new();
+        let mut parts = Vec::new();
 
         for pass in self {
             let Some(output_row) = pass.output_row_from_array_col(index.x.into()) else {
@@ -166,18 +182,20 @@ impl Mapping {
             let Some(number_to_skip) = (index.y as usize).checked_sub(pass.array_row_start) else {
                 continue;
             };
-            for activation_row in pass.activation_rows.clone().skip(number_to_skip) {
-                let fresh = affected_weights.insert(Index2 {
-                    y: u16::try_from(output_row).expect("output_row must fit in u16"),
-                    x: u16::try_from(activation_row).expect("activation_row must fit in u16"),
-                });
-                debug_assert!(fresh, "duplicate weight index in affected_weights");
+            let affected_start = pass.activation_rows.start + number_to_skip;
+            if affected_start >= pass.activation_rows.end {
+                // The fault is below the rows that this pass uses.
+                continue;
             }
+            parts.push(WeightFaultPart {
+                affected_output_row: output_row,
+                for_activations: affected_start..pass.activation_rows.end,
+            });
         }
 
         LiftedRegisterFault {
             fault,
-            data: LiftedRegisterFaultData::Weight { affected_weights },
+            data: LiftedRegisterFaultData::Weight { parts },
         }
     }
 
@@ -260,10 +278,13 @@ mod tests {
     use ndarray::Array2;
     use proptest::prelude::*;
 
+    use super::{LiftedRegisterFaultData, WeightFaultPart};
     use crate::fault::register::{PeRegister, PeRegisterFault, RegisterHook, TargetedFault};
+    use crate::fault::{RegisterFault, StuckAt};
     use crate::test_utilities::{
         ArrItem, generate_array_with_register_fault, generate_weights_and_activations,
     };
+    use crate::{Index2, Mapping};
 
     fn make_targeted_fault(
         index: crate::Index2,
@@ -273,6 +294,21 @@ mod tests {
         TargetedFault {
             target: index,
             fault: PeRegisterFault { register, fault },
+        }
+    }
+
+    fn weight_fault_parts(mapping: Mapping, target: Index2) -> Vec<WeightFaultPart> {
+        let targeted = make_targeted_fault(
+            target,
+            PeRegister::Weight,
+            RegisterFault {
+                stuck_at: StuckAt::One,
+                bit_index: 0,
+            },
+        );
+        match mapping.lift_register_fault(&targeted).data {
+            LiftedRegisterFaultData::Weight { parts } => parts,
+            data => panic!("expected a weight lift, got {data:?}"),
         }
     }
 
@@ -332,15 +368,62 @@ mod tests {
         }
     }
 
+    /// One part per pass, covering the faulty row and every row below it. Passes
+    /// that only use rows above the fault have no part.
+    #[test]
+    fn weight_fault_parts_cover_the_rows_from_the_fault_down() {
+        assert_eq!(
+            weight_fault_parts(Mapping::auto(7, 3, 3, 2), Index2 { x: 1, y: 1 }),
+            [
+                WeightFaultPart {
+                    affected_output_row: 1,
+                    for_activations: 1..3,
+                },
+                WeightFaultPart {
+                    affected_output_row: 1,
+                    for_activations: 4..6,
+                },
+            ]
+        );
+    }
+
+    /// Weight matrices can be much larger than any array. For example, an LLM's
+    /// output layer has one row per vocabulary entry.
+    #[test]
+    fn weight_fault_lifts_when_indices_exceed_u16() {
+        let row_count = 70_000;
+
+        // Odd output rows land on the second column of a 1x2 array.
+        assert_eq!(
+            weight_fault_parts(Mapping::auto(1, row_count, 1, 2), Index2 { x: 1, y: 0 }),
+            (1..row_count)
+                .step_by(2)
+                .map(|row| WeightFaultPart {
+                    affected_output_row: row,
+                    for_activations: 0..1,
+                })
+                .collect::<Vec<_>>()
+        );
+        // Odd activation rows land on the second row of a 2x1 array.
+        assert_eq!(
+            weight_fault_parts(Mapping::auto(row_count, 1, 2, 1), Index2 { x: 0, y: 1 }),
+            (1..row_count)
+                .step_by(2)
+                .map(|row| WeightFaultPart {
+                    affected_output_row: 0,
+                    for_activations: row..row + 1,
+                })
+                .collect::<Vec<_>>()
+        );
+    }
+
     /// An accumulator fault above the used band has an empty contributing range
     /// (a "faulty zero"). Auto mappings never use offsets, so the proptests
     /// above cannot reach this position; here we build an offset mapping by hand
     /// to exercise the empty range through the general code path.
     #[test]
     fn accumulator_fault_above_used_band_is_a_faulty_zero() {
-        use super::LiftedRegisterFaultData;
-        use crate::fault::{RegisterFault, StuckAt};
-        use crate::{Index2, Mapping, Pass};
+        use crate::Pass;
         use ndarray::array;
 
         // 2x1 array. The single 1x1 block is placed at row offset 1, leaving

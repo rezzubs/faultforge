@@ -81,6 +81,17 @@ def fault_radix(array: ArrayConfig, allowed_registers: set[PeRegisterKind]) -> i
     Restricted to `allowed_registers`.
     """
 
+class WeightFaultPart:
+    """The weights of one output row that a faulty weight register corrupts
+    in one pass.
+
+    `for_activations` is `(start, end)`, the half-open range of activation
+    rows that the corrupted weights are multiplied with. Never empty.
+    """
+
+    affected_output_row: int
+    for_activations: tuple[int, int]
+
 class AccumulatorFaultPart:
     """The accumulated-fault fix-up for one output row in one pass.
 
@@ -100,7 +111,7 @@ class LiftedFault:
     """
 
     class Weight(LiftedFault):
-        affected_weights: set[Index2]
+        parts: list[WeightFaultPart]
 
     class Activation(LiftedFault):
         affected_activation_rows: set[int]

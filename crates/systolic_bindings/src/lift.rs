@@ -1,9 +1,32 @@
 use std::collections::HashSet;
 
 use pyo3::prelude::*;
-use systolic::fault::{AccumulatorFaultPart as RustAccumulatorFaultPart, LiftedRegisterFaultData};
+use systolic::fault::{
+    AccumulatorFaultPart as RustAccumulatorFaultPart, LiftedRegisterFaultData,
+    WeightFaultPart as RustWeightFaultPart,
+};
 
-use super::index::Index2;
+/// The weights of one output row that pass through a faulty weight register
+/// in one pass. `for_activations` is `(start, end)`, a half-open range.
+// See `systolic::fault::WeightFaultPart`'s doc comment. The range is a tuple
+// for the same reason as in `AccumulatorFaultPart`.
+#[pyclass(eq, from_py_object, name = "WeightFaultPart")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WeightFaultPart {
+    #[pyo3(get)]
+    pub affected_output_row: usize,
+    #[pyo3(get)]
+    pub for_activations: (usize, usize),
+}
+
+impl From<RustWeightFaultPart> for WeightFaultPart {
+    fn from(value: RustWeightFaultPart) -> Self {
+        Self {
+            affected_output_row: value.affected_output_row,
+            for_activations: (value.for_activations.start, value.for_activations.end),
+        }
+    }
+}
 
 /// The accumulated-fault fix-up for one output row in one pass.
 /// `for_activations` is `(start, end)`, a half-open range.
@@ -38,7 +61,7 @@ impl From<RustAccumulatorFaultPart> for AccumulatorFaultPart {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiftedFault {
     Weight {
-        affected_weights: HashSet<Index2>,
+        parts: Vec<WeightFaultPart>,
     },
     Activation {
         affected_activation_rows: HashSet<usize>,
@@ -52,8 +75,8 @@ pub enum LiftedFault {
 impl From<LiftedRegisterFaultData> for LiftedFault {
     fn from(value: LiftedRegisterFaultData) -> Self {
         match value {
-            LiftedRegisterFaultData::Weight { affected_weights } => LiftedFault::Weight {
-                affected_weights: affected_weights.into_iter().map(Index2::from).collect(),
+            LiftedRegisterFaultData::Weight { parts } => LiftedFault::Weight {
+                parts: parts.into_iter().map(WeightFaultPart::from).collect(),
             },
             LiftedRegisterFaultData::Activation {
                 affected_activation_rows,
