@@ -64,6 +64,7 @@ lazy from systolic.profiling import (
 )
 lazy from systolic.profiling_backend import ProfilingBackend
 lazy from systolic.profiling_driver import run_profiling
+lazy from systolic.profiling_evaluator import ProfilingEvaluator
 lazy from systolic.profiling_plots import build_gap_heatmap_figure
 lazy from systolic.profiling_similarity import GapGrid, gap_grids
 lazy from systolic.regime import Regime, Variable
@@ -92,6 +93,7 @@ __all__ = [
     "Pass",
     "PeRegisterKind",
     "ProfilingBackend",
+    "ProfilingEvaluator",
     "ProfilingMetadata",
     "Regime",
     "RegisterFaults",
