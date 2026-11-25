@@ -42,6 +42,7 @@ lazy from systolic._rust import (
     StuckAtKind,
     WeightFaultPart,
 )
+lazy from systolic.array import Array, ArrayMatmul
 lazy from systolic.backend import SystolicBackend
 lazy from systolic.experiment import (
     BackendKind,
@@ -70,7 +71,9 @@ lazy from systolic.torch_backend import TorchBackend
 
 __all__ = [
     "AccumulatorFaultPart",
+    "Array",
     "ArrayConfig",
+    "ArrayMatmul",
     "BackendKind",
     "BackendModel",
     "Fault",
