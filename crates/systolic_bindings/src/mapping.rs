@@ -76,17 +76,49 @@ impl Mapping {
             .ok_or_else(|| PyValueError::new_err("a mapping needs at least one pass"))
     }
 
-    /// Automatically map `weights` (`out_features, in_features`) onto an
-    /// `array_nrows x array_ncols` array, splitting into multiple passes if
-    /// the weights don't fit in one.
+    /// Automatically map a matmul with `(out_features, in_features)` weights
+    /// onto an `array_nrows x array_ncols` array, splitting into multiple
+    /// passes if the weights don't fit in one.
+    ///
+    /// Raises `ValueError` if any argument is zero.
     #[staticmethod]
-    fn auto_for(weights: PyReadonlyArray2<f32>, array_nrows: usize, array_ncols: usize) -> Self {
-        let weights = weights.as_array();
-        Self(systolic::Mapping::auto_for(
-            &weights,
+    fn auto(
+        in_features: usize,
+        out_features: usize,
+        array_nrows: usize,
+        array_ncols: usize,
+    ) -> PyResult<Self> {
+        if in_features == 0 || out_features == 0 {
+            return Err(PyValueError::new_err(format!(
+                "cannot map empty weights with shape ({out_features}, {in_features})"
+            )));
+        }
+        if array_nrows == 0 || array_ncols == 0 {
+            return Err(PyValueError::new_err(format!(
+                "cannot map onto an empty {array_nrows}x{array_ncols} array"
+            )));
+        }
+
+        Ok(Self(systolic::Mapping::auto(
+            in_features,
+            out_features,
             array_nrows,
             array_ncols,
-        ))
+        )))
+    }
+
+    /// Automatically map `weights` (`out_features, in_features`) onto an
+    /// `array_nrows x array_ncols` array.
+    ///
+    /// Only the shape of `weights` matters. See `auto`.
+    #[staticmethod]
+    fn auto_for(
+        weights: PyReadonlyArray2<f32>,
+        array_nrows: usize,
+        array_ncols: usize,
+    ) -> PyResult<Self> {
+        let (out_features, in_features) = weights.as_array().dim();
+        Self::auto(in_features, out_features, array_nrows, array_ncols)
     }
 
     /// Check that every input row is connected to every output row exactly

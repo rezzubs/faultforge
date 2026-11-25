@@ -146,14 +146,26 @@ class Mapping:
         """
 
     @staticmethod
+    def auto(
+        in_features: int, out_features: int, array_nrows: int, array_ncols: int
+    ) -> Mapping:
+        """Automatically map a matmul onto an array.
+
+        The weights are `(out_features, in_features)`; the array is
+        `array_nrows x array_ncols`. Splits into multiple passes if the
+        weights don't fit in one.
+
+        Raises `ValueError` if any argument is zero.
+        """
+
+    @staticmethod
     def auto_for(
         weights: npt.NDArray[np.float32], array_nrows: int, array_ncols: int
     ) -> Mapping:
         """Automatically map `weights` onto an array.
 
-        `weights` is `(out_features, in_features)`; the array is
-        `array_nrows x array_ncols`. Splits into multiple passes if the
-        weights don't fit in one.
+        `weights` is `(out_features, in_features)`. Only its shape matters.
+        See `auto`.
         """
 
     def validate(self) -> None:

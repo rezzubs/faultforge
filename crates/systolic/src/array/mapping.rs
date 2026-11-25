@@ -233,6 +233,10 @@ impl Mapping {
     /// each row, then shift down to the next row.
     ///
     /// See also [`Self::auto_for`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if any argument is zero.
     pub fn auto(
         in_features: usize,
         out_features: usize,

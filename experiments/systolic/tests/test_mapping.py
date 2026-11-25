@@ -5,13 +5,17 @@ since nothing above this layer builds a `Mapping` any other way yet.
 
 import numpy as np
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from systolic._rust import (
+    ArrayConfig,
     Fault,
     Index2,
     Mapping,
     Pass,
     PeRegisterKind,
     StuckAtKind,
+    fault_radix,
     simulated_matmul,
 )
 
@@ -61,6 +65,57 @@ def test_mapping_new_single_pass_matches_auto_for() -> None:
         bit_index=5,
     )
     assert type(custom.lift(fault)) is type(auto.lift(fault))
+
+
+@given(
+    in_features=st.integers(min_value=1, max_value=12),
+    out_features=st.integers(min_value=1, max_value=12),
+    array_nrows=st.integers(min_value=1, max_value=5),
+    array_ncols=st.integers(min_value=1, max_value=5),
+    data=st.data(),
+)
+def test_mapping_auto_matches_auto_for(
+    in_features: int,
+    out_features: int,
+    array_nrows: int,
+    array_ncols: int,
+    data: st.DataObject,
+) -> None:
+    from_shape = Mapping.auto(in_features, out_features, array_nrows, array_ncols)
+    from_weights = Mapping.auto_for(
+        np.zeros((out_features, in_features), dtype=np.float32),
+        array_nrows,
+        array_ncols,
+    )
+    from_shape.validate()
+
+    # Passes can't be compared directly from Python, but two mappings which
+    # lift every fault identically are the same for our purposes.
+    array = ArrayConfig(array_nrows, array_ncols, 32)
+    registers = {
+        PeRegisterKind.Activation,
+        PeRegisterKind.Weight,
+        PeRegisterKind.Accumulator,
+    }
+    fault_id = data.draw(
+        st.integers(min_value=0, max_value=fault_radix(array, registers) - 1)
+    )
+    fault = Fault.from_id(fault_id, array, registers)
+    assert from_shape.lift(fault) == from_weights.lift(fault)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [(0, 1, 1, 1), (1, 0, 1, 1), (1, 1, 0, 1), (1, 1, 1, 0)],
+)
+def test_mapping_auto_rejects_zero(shape: tuple[int, int, int, int]) -> None:
+    with pytest.raises(ValueError, match="empty"):
+        Mapping.auto(*shape)
+
+
+def test_mapping_auto_for_rejects_empty_weights() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        Mapping.auto_for(np.zeros((0, 3), dtype=np.float32), 2, 2)
 
 
 def test_mapping_validate_detects_missing_connections() -> None:
