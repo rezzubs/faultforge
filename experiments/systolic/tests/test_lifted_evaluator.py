@@ -1,5 +1,7 @@
 """Tests for `LiftedEvaluator`."""
 
+from dataclasses import dataclass
+
 import pytest
 import torch
 from hypothesis import given
@@ -15,6 +17,16 @@ from systolic import (
     RegisterFaults,
     StuckAtKind,
 )
+from systolic.lift_apply import _group_rows
+
+
+@dataclass(frozen=True)
+class _Part:
+    """Stands in for the lift parts, which can't be created from Python."""
+
+    affected_output_row: int
+    for_activations: tuple[int, int]
+
 
 _ARRAY = Array(2, 3)
 _ARRAY_CONFIG = ArrayConfig(nrows=2, ncols=3, dtype_bits=32)
@@ -82,3 +94,22 @@ def test_rejects_fault_outside_the_array() -> None:
     matmul = ArrayMatmul(torch.ones(4, 4), torch.ones(4, 4))
     with pytest.raises(ValueError, match="outside the 2x3 array"):
         LiftedEvaluator(_ARRAY).evaluate(matmul, fault)
+
+
+def test_group_rows_keeps_consecutive_parts_with_the_same_range() -> None:
+    parts = [
+        _Part(affected_output_row=0, for_activations=(0, 2)),
+        _Part(affected_output_row=1, for_activations=(0, 2)),
+        _Part(affected_output_row=0, for_activations=(2, 4)),
+        # The same range again, but not next to the first parts with it.
+        _Part(affected_output_row=2, for_activations=(0, 2)),
+        # A row that is already in the group.
+        _Part(affected_output_row=2, for_activations=(0, 2)),
+    ]
+
+    groups = [
+        (group.output_rows, group.activation_start, group.activation_end)
+        for group in _group_rows(parts)
+    ]
+
+    assert groups == [([0, 1], 0, 2), ([0], 2, 4), ([2], 0, 2), ([2], 0, 2)]
