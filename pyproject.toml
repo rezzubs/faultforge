@@ -36,7 +36,7 @@ dependencies = [
     "timm>=1.0.31,<1.1.0",
     # PyTorch removes deprecated APIs in minor releases.
     # See https://github.com/pytorch/pytorch/wiki/PyTorch's-Python-Frontend-Backward-and-Forward-Compatibility-Policy
-    # Bump together with torchvision.
+    # Bump together with torchvision and the pin in `experiments/systolic`.
     "torch>=2.15.0,<2.16.0",
     # Each torchvision minor is paired with one torch minor.
     # See https://github.com/pytorch/vision#installation

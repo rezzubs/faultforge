@@ -57,6 +57,7 @@ lazy from systolic.layers import MappedConv2d, MappedLinear
 lazy from systolic.lifted_backend import LiftedBackend
 lazy from systolic.lifted_evaluator import LiftedEvaluator
 lazy from systolic.model import BackendModel
+lazy from systolic.on_array import OnArray
 lazy from systolic.profiling import (
     ProfilingMetadata,
     load_profiling_artifact,
@@ -90,6 +91,7 @@ __all__ = [
     "MappedConv2d",
     "MappedLinear",
     "Mapping",
+    "OnArray",
     "Pass",
     "PeRegisterKind",
     "ProfilingBackend",
