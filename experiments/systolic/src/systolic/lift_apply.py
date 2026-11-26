@@ -163,7 +163,7 @@ def apply_lifted_register_fault(
     operands. The fault applies to each of them.
 
     Produces a result equivalent to running the same fault through the
-    literal systolic array (`SimulatedBackend`), without simulating the
+    literal systolic array (`SimulatedEvaluator`), without simulating the
     array.
     """
     if not isinstance(fault, Fault.Register):

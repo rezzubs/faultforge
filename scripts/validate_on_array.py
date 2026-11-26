@@ -1,13 +1,14 @@
-"""Validate that BackendModel(model, TorchBackend()) reproduces baseline accuracy.
+"""Validate that a model on a fault-free array reproduces baseline accuracy.
 
-Proof of Phase 0's "Done when" criterion from systolic-roadmap.md. Not part
-of pytest/CI: downloads a real model and dataset. Run by hand.
+Not part of pytest/CI: downloads a real model and dataset. Run by hand.
 """
 
-import copy
-
 import torch
-from systolic import BackendModel, TorchBackend
+from systolic import (
+    Array,
+    LiftedEvaluator,
+    OnArray,
+)
 from torch import nn
 
 from faultforge.dataset import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, BatchedDataset
@@ -27,7 +28,7 @@ def _accuracy(model: nn.Module, dataset: BatchedDataset) -> float:
 
 
 def main() -> None:
-    # ResNet20: groups=1 throughout. MappedConv2d does not support grouped
+    # ResNet20: groups=1 throughout. OnArray does not support grouped
     # convolutions yet (see systolic-roadmap.md's open questions), so
     # MobileNetV2/ShuffleNetV2 variants of this bundle can't be used here.
     bundle = Cifar(CifarModel.ResNet20, CifarDataset.Cifar10)
@@ -36,13 +37,13 @@ def main() -> None:
 
     reference_accuracy = _accuracy(reference, dataset)
 
-    wrapped = BackendModel(copy.deepcopy(reference), TorchBackend()).eval()
-    wrapped_accuracy = _accuracy(wrapped, dataset)
+    with OnArray(LiftedEvaluator(Array(16, 16)), None):
+        on_array_accuracy = _accuracy(reference, dataset)
 
     print(f"reference accuracy: {reference_accuracy:.4f}")
-    print(f"wrapped accuracy:   {wrapped_accuracy:.4f}")
-    assert reference_accuracy == wrapped_accuracy, (
-        "BackendModel(model, TorchBackend()) accuracy diverged from the reference model"
+    print(f"on array accuracy:  {on_array_accuracy:.4f}")
+    assert reference_accuracy == on_array_accuracy, (
+        "the accuracy on a fault-free array diverged from the reference model"
     )
 
 
