@@ -154,6 +154,60 @@ def test_lifted_matches_simulated(fault: Fault) -> None:
     torch.testing.assert_close(lifted, simulated, rtol=1e-5, atol=1e-3, equal_nan=True)
 
 
+def _batched(left: Tensor, right: Tensor, bias: Tensor) -> Tensor:
+    """Uses `bmm` through a 4D `matmul` and `baddbmm`."""
+    product = left.unsqueeze(0).expand(2, -1, -1, -1) @ right
+    return torch.baddbmm(bias, left, right) + product.sum(dim=0)
+
+
+def _batched_operands() -> tuple[Tensor, Tensor, Tensor]:
+    return _integers(3, 4, 5), _integers(3, 5, 2, seed=1), _integers(3, 4, 2, seed=2)
+
+
+def test_batched_without_a_fault_matches_torch() -> None:
+    operands = _batched_operands()
+
+    with torch.no_grad():
+        expected = _batched(*operands)
+        with OnArray(LiftedEvaluator(_ARRAY), None):
+            output = _batched(*operands)
+
+    assert torch.equal(output, expected)
+    assert output.is_contiguous()
+
+
+@settings(deadline=None)
+@given(fault=_FAULTS)
+def test_batched_lifted_matches_simulated(fault: Fault) -> None:
+    operands = _batched_operands()
+
+    with torch.no_grad():
+        with OnArray(LiftedEvaluator(_ARRAY), fault):
+            lifted = _batched(*operands)
+        with OnArray(SimulatedEvaluator(_ARRAY), fault):
+            simulated = _batched(*operands)
+
+    torch.testing.assert_close(lifted, simulated, rtol=1e-5, atol=1e-3, equal_nan=True)
+
+
+@given(fault=_FAULTS)
+def test_batch_matches_individual_matmuls(fault: Fault) -> None:
+    left, right, _ = _batched_operands()
+
+    with torch.no_grad(), OnArray(LiftedEvaluator(_ARRAY), fault):
+        batched = torch.bmm(left, right)
+        individual = torch.stack(
+            [
+                torch.mm(single_left, single_right)
+                for single_left, single_right in zip(left, right, strict=True)
+            ]
+        )
+
+    torch.testing.assert_close(
+        batched, individual, rtol=1e-5, atol=1e-3, equal_nan=True
+    )
+
+
 def test_bias_is_added_after_the_array() -> None:
     inputs = _integers(3, 5)
     weights = _integers(5, 4, seed=1)
@@ -162,6 +216,19 @@ def test_bias_is_added_after_the_array() -> None:
     with torch.no_grad(), OnArray(LiftedEvaluator(_ARRAY), _WEIGHT_FAULT):
         with_bias = torch.addmm(bias, inputs, weights)
         without_bias = inputs @ weights
+
+    # The fault makes some of the values infinite or NaN.
+    torch.testing.assert_close(
+        with_bias, without_bias + bias, rtol=0, atol=0, equal_nan=True
+    )
+
+
+def test_batched_bias_is_added_after_the_array() -> None:
+    left, right, bias = _batched_operands()
+
+    with torch.no_grad(), OnArray(LiftedEvaluator(_ARRAY), _WEIGHT_FAULT):
+        with_bias = torch.baddbmm(bias, left, right)
+        without_bias = torch.bmm(left, right)
 
     # The fault makes some of the values infinite or NaN.
     torch.testing.assert_close(
@@ -196,12 +263,27 @@ def test_rejects_a_fault_outside_the_array() -> None:
         lambda: torch.dot(torch.ones(3), torch.ones(3)),
         lambda: torch.addmm(torch.ones(2), torch.ones(2, 3), torch.ones(3, 2), beta=2),
         lambda: torch.mm(torch.ones(2, 3), torch.ones(3, 2), out=torch.empty(2, 2)),
+        lambda: torch.baddbmm(
+            torch.ones(1, 2, 2), torch.ones(1, 2, 3), torch.ones(1, 3, 2), alpha=2
+        ),
+        lambda: torch.bmm(
+            torch.ones(1, 2, 3), torch.ones(1, 3, 2), out=torch.empty(1, 2, 2)
+        ),
         lambda: F.scaled_dot_product_attention(
             torch.ones(1, 2, 3), torch.ones(1, 2, 3), torch.ones(1, 2, 3)
         ),
         lambda: F.conv2d(torch.ones(1, 1, 3, 3), torch.ones(1, 1, 2, 2)),
     ],
-    ids=["mv", "dot", "scaled addmm", "mm out", "attention", "conv2d"],
+    ids=[
+        "mv",
+        "dot",
+        "scaled addmm",
+        "mm out",
+        "scaled baddbmm",
+        "bmm out",
+        "attention",
+        "conv2d",
+    ],
 )
 def test_rejects_unsupported_matmuls(unsupported: Callable[[], Tensor]) -> None:
     with (

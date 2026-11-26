@@ -93,7 +93,9 @@ class OnArray(TorchDispatchMode):
     - A bias is added after the array, so the fault doesn't affect it.
     - Operations without a matrix multiplication run as usual.
 
-    Supported operations: `mm` and `addmm`.
+    Supported operations: `mm`, `addmm`, `bmm` and `baddbmm`. The
+    multiplications in a batch of `bmm` or `baddbmm` run one after another, all
+    with the same fault.
 
     Raises:
         TypeError: If the kind of `fault` isn't supported.
@@ -141,9 +143,9 @@ class OnArray(TorchDispatchMode):
         # example, `mm(self, mat2)` and
         # `addmm(self, mat1, mat2, *, beta=1, alpha=1)`, where `self` is the
         # first operand, or the bias for `addmm`.
-        if func is _aten.mm.default:
+        if func in (_aten.mm.default, _aten.bmm.default):
             return self._matmul(*args, **kwargs)
-        if func is _aten.addmm.default:
+        if func in (_aten.addmm.default, _aten.baddbmm.default):
             return self._added_to_bias(func, *args, **kwargs)
 
         # `overloadpacket` is the group that `func` belongs to, such as
@@ -171,7 +173,7 @@ class OnArray(TorchDispatchMode):
         beta: Any = 1,
         alpha: Any = 1,
     ) -> Tensor:
-        """`bias + left @ right`, for `addmm`."""
+        """`bias + left @ right`, for `addmm` and `baddbmm`."""
         if beta != 1 or alpha != 1:
             raise NotImplementedError(
                 f"{func} with beta={beta} and alpha={alpha} is not supported on "
@@ -187,7 +189,10 @@ class OnArray(TorchDispatchMode):
         return self._on_array(streamed=left, stationary=right)
 
     def _on_array(self, *, streamed: Tensor, stationary: Tensor) -> Tensor:
-        """`streamed @ stationary` on the array, with `stationary` held in it."""
+        """`streamed @ stationary` on the array, with `stationary` held in it.
+
+        Both operands have the same number of dimensions, 2 or 3.
+        """
         _check_inference_only()
         _check_full_precision()
 
