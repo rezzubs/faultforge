@@ -1,5 +1,5 @@
-"""Matmul-level agreement tooling: run the same fault through every backend
-on one weight shape and report how their outputs compare.
+"""Matmul-level agreement tooling: run the same fault through every evaluator
+on one matrix multiplication and report how their outputs compare.
 
 Not a unit test. Equality is only expected for integer arithmetic, so this
 reports similarity, not pass/fail; see the roadmap's oracle/workhorse ladder
@@ -15,14 +15,14 @@ lazy from dataclasses import dataclass
 lazy from torch import Tensor
 
 lazy from systolic._rust import Fault
-lazy from systolic.lifted_backend import LiftedBackend
-lazy from systolic.simulated_backend import SimulatedBackend
-lazy from systolic.torch_backend import TorchBackend
+lazy from systolic.array import Array, ArrayMatmul
+lazy from systolic.lifted_evaluator import LiftedEvaluator
+lazy from systolic.simulated_evaluator import SimulatedEvaluator
 
 
 @dataclass(slots=True, frozen=True)
-class BackendResult:
-    """One backend's output for one matmul call."""
+class Evaluation:
+    """One way's output for one matrix multiplication."""
 
     name: str
     output: Tensor
@@ -41,27 +41,15 @@ class Agreement:
     differs between `baseline` and `other`."""
 
 
-def _run(
-    name: str,
-    backend: SimulatedBackend | LiftedBackend,
-    weights: Tensor,
-    activations: Tensor,
-    fault: Fault | None,
-) -> BackendResult:
-    backend.set_fault(fault)
-    output = backend.matmul(weights, activations)
-    return BackendResult(name=name, output=output)
-
-
-def _compare(baseline: BackendResult, other: BackendResult) -> Agreement:
+def _compare(baseline: Evaluation, other: Evaluation) -> Agreement:
     diff = (baseline.output - other.output).abs()
 
     # A fault can saturate an output element to +-inf (or a bit pattern that's
-    # literally NaN); when both backends compute the exact same inf/NaN there
+    # literally NaN); when both compute the exact same inf/NaN there
     # they agree, but `inf - inf` and `nan - nan` both evaluate to NaN, which
     # would otherwise read as a divergence (and poison any later reduction,
     # since NaN propagates through `.max()`). Force those elements to zero
-    # difference; a real divergence (e.g. one backend saturates and the other
+    # difference; a real divergence (e.g. one saturates and the other
     # doesn't) still produces a large or infinite value here, which is the
     # signal this comparison exists to catch.
     both_nan = (baseline.output == other.output) | (
@@ -75,8 +63,9 @@ def _compare(baseline: BackendResult, other: BackendResult) -> Agreement:
     denominator = baseline.output.abs().clamp_min(1e-30)
     relative_error = (diff / denominator).masked_fill(both_nan, 0.0)
 
-    baseline_top1 = baseline.output.argmax(dim=0)
-    other_top1 = other.output.argmax(dim=0)
+    # The output is `([stack,] out_features, batch)`.
+    baseline_top1 = baseline.output.argmax(dim=-2)
+    other_top1 = other.output.argmax(dim=-2)
 
     return Agreement(
         baseline=baseline.name,
@@ -88,24 +77,21 @@ def _compare(baseline: BackendResult, other: BackendResult) -> Agreement:
 
 
 def compare_matmul(
-    array: tuple[int, int],
-    weights: Tensor,
-    activations: Tensor,
-    fault: Fault | None,
+    array: Array, matmul: ArrayMatmul, fault: Fault | None
 ) -> list[Agreement]:
-    """Run one matmul through the fault-free golden path plus every systolic
-    backend with `fault` applied, and report how each backend-under-test
-    (`torch`, `lifted`) agrees with `simulated` (the oracle).
+    """Run `matmul` fault-free in torch and through every evaluator with
+    `fault` in `array`, and report how each one under test (`torch`,
+    `lifted`) agrees with `simulated` (the oracle).
     """
-    nrows, ncols = array
-
     results = [
-        BackendResult(
-            name="torch",
-            output=TorchBackend().matmul(weights, activations),
+        Evaluation(name="torch", output=matmul.weights @ matmul.activations),
+        Evaluation(
+            name="simulated",
+            output=SimulatedEvaluator(array).evaluate(matmul, fault),
         ),
-        _run("simulated", SimulatedBackend(nrows, ncols), weights, activations, fault),
-        _run("lifted", LiftedBackend(nrows, ncols), weights, activations, fault),
+        Evaluation(
+            name="lifted", output=LiftedEvaluator(array).evaluate(matmul, fault)
+        ),
     ]
 
     oracle = next(result for result in results if result.name == "simulated")
@@ -114,7 +100,7 @@ def compare_matmul(
 
 @dataclass(slots=True, frozen=True)
 class AgreementSummary:
-    """One backend-under-test's aggregated agreement with the oracle.
+    """The aggregated agreement of one way under test with the oracle.
 
     Computed across several sampled faults on one weight shape.
     """
@@ -133,7 +119,7 @@ class AgreementSummary:
 def summarize(samples: Sequence[list[Agreement]]) -> list[AgreementSummary]:
     """Aggregate `compare_matmul` agreements from many faults.
 
-    Returns one `AgreementSummary` per backend-under-test.
+    Returns one `AgreementSummary` per way under test.
     """
     by_other: dict[str, list[Agreement]] = defaultdict(list)
 

@@ -1,4 +1,4 @@
-"""The `systolic` CLI commands (recording register-fault campaigns and reporting backend agreement)."""
+"""The `systolic` CLI commands (recording register-fault campaigns and reporting evaluator agreement)."""
 
 lazy import enum
 lazy import logging
@@ -39,6 +39,7 @@ lazy from faultforge.metric import Metric
 lazy from faultforge.progress import Progress
 lazy from systolic._rust import ArrayConfig, PeRegisterKind
 lazy from systolic.agreement import compare_matmul, summarize
+lazy from systolic.array import Array, ArrayMatmul
 lazy from systolic.experiment import SystolicFaultInjection
 lazy from systolic.fault import RegisterFaults
 lazy from systolic.profiling import load_profiling_artifact, save_profiling_artifact
@@ -577,7 +578,7 @@ def agreement(
         ),
     ] = None,
 ) -> None:
-    """Sample register faults and report how each backend agrees with the simulated oracle."""
+    """Sample register faults and report how each evaluator agrees with the simulated oracle."""
     array = ArrayConfig(array_rows, array_cols, 32)
     fault_config = _resolve_registers(registers)
     radix = fault_config.radix(array)
@@ -592,13 +593,12 @@ def agreement(
         rng.standard_normal((in_features, batch)).astype(np.float32)
     )
 
+    evaluator_array = Array(array_rows, array_cols)
+    matmul = ArrayMatmul(weights, activations)
     picker = Picker(radix)
     all_agreements = [
         compare_matmul(
-            (array_rows, array_cols),
-            weights,
-            activations,
-            fault_config.fault_from_id(fault_id, array),
+            evaluator_array, matmul, fault_config.fault_from_id(fault_id, array)
         )
         for fault_id in (next(picker) for _ in range(sample_count))
     ]

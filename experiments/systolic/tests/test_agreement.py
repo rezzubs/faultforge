@@ -1,10 +1,20 @@
 import math
 
 import torch
-from systolic.agreement import Agreement, BackendResult, _compare, summarize
+from systolic.agreement import (
+    Agreement,
+    Evaluation,
+    _compare,
+    compare_matmul,
+    summarize,
+)
+from systolic.array import (
+    Array,
+    ArrayMatmul,
+)
 
 _UNUSED_OUTPUT = torch.zeros(1)
-"""`BackendResult.output` isn't read by `summarize`, so a placeholder is fine."""
+"""`Evaluation.output` isn't read by `summarize`, so a placeholder is fine."""
 
 
 def _agreements(
@@ -41,8 +51,10 @@ def test_summarize_aggregates_mean_and_max() -> None:
 
 
 def test_compare_treats_matching_infinities_as_agreement() -> None:
-    baseline = BackendResult(name="simulated", output=torch.tensor([1.0, float("inf")]))
-    other = BackendResult(name="lifted", output=torch.tensor([1.0, float("inf")]))
+    baseline = Evaluation(
+        name="simulated", output=torch.tensor([[1.0], [float("inf")]])
+    )
+    other = Evaluation(name="lifted", output=torch.tensor([[1.0], [float("inf")]]))
 
     agreement = _compare(baseline, other)
 
@@ -51,8 +63,10 @@ def test_compare_treats_matching_infinities_as_agreement() -> None:
 
 
 def test_compare_treats_matching_nan_as_agreement() -> None:
-    baseline = BackendResult(name="simulated", output=torch.tensor([1.0, float("nan")]))
-    other = BackendResult(name="lifted", output=torch.tensor([1.0, float("nan")]))
+    baseline = Evaluation(
+        name="simulated", output=torch.tensor([[1.0], [float("nan")]])
+    )
+    other = Evaluation(name="lifted", output=torch.tensor([[1.0], [float("nan")]]))
 
     agreement = _compare(baseline, other)
 
@@ -61,12 +75,29 @@ def test_compare_treats_matching_nan_as_agreement() -> None:
 
 
 def test_compare_still_reports_real_divergence_at_infinity() -> None:
-    """One backend saturating while the other doesn't is a real disagreement,
+    """One evaluator saturating while the other doesn't is a real disagreement,
     not something to zero out - it must stay visible (as a large or infinite
     value), not be swallowed the way matching infinities/NaNs are."""
-    baseline = BackendResult(name="simulated", output=torch.tensor([1.0, float("inf")]))
-    other = BackendResult(name="lifted", output=torch.tensor([1.0, 2.0]))
+    baseline = Evaluation(
+        name="simulated", output=torch.tensor([[1.0], [float("inf")]])
+    )
+    other = Evaluation(name="lifted", output=torch.tensor([[1.0], [2.0]]))
 
     agreement = _compare(baseline, other)
 
     assert math.isinf(agreement.max_abs_error)
+
+
+def test_compare_matmul_agrees_without_a_fault_on_a_stack() -> None:
+    generator = torch.Generator().manual_seed(0)
+    matmul = ArrayMatmul(
+        weights=torch.randn(2, 5, 6, generator=generator),
+        activations=torch.randn(2, 6, 3, generator=generator),
+    )
+
+    agreements = compare_matmul(Array(4, 4), matmul, None)
+
+    assert [agreement.other for agreement in agreements] == ["torch", "lifted"]
+    for agreement in agreements:
+        assert agreement.max_abs_error < 1e-5
+        assert agreement.top1_flip_fraction == 0.0
