@@ -12,6 +12,7 @@ lazy from torch.utils._python_dispatch import TorchDispatchMode
 lazy from systolic._rust import Fault
 lazy from systolic.array import ArrayMatmul
 lazy from systolic.evaluator import Evaluator
+lazy from systolic.im2col import conv2d_as_matmul
 
 # ATen is torch's library of basic operations. Every torch function runs as
 # one or more of them, and these are the operations a dispatch mode sees.
@@ -90,12 +91,15 @@ class OnArray(TorchDispatchMode):
     fault-free array.
 
     - The right operand of a multiplication is stationary in the array.
+    - A convolution runs as one multiplication with its kernel stationary.
     - A bias is added after the array, so the fault doesn't affect it.
     - Operations without a matrix multiplication run as usual.
 
-    Supported operations: `mm`, `addmm`, `bmm` and `baddbmm`. The
-    multiplications in a batch of `bmm` or `baddbmm` run one after another, all
-    with the same fault.
+    Supported operations:
+
+    - `mm`, `addmm`, `bmm` and `baddbmm`. The multiplications in a batch of
+      `bmm` or `baddbmm` run one after another, all with the same fault.
+    - `convolution` in 2D, if it isn't transposed and has groups of one.
 
     Raises:
         TypeError: If the kind of `fault` isn't supported.
@@ -147,6 +151,8 @@ class OnArray(TorchDispatchMode):
             return self._matmul(*args, **kwargs)
         if func in (_aten.addmm.default, _aten.baddbmm.default):
             return self._added_to_bias(func, *args, **kwargs)
+        if func is _aten.convolution.default:
+            return self._convolution(*args, **kwargs)
 
         # `overloadpacket` is the group that `func` belongs to, such as
         # `_aten.mm` for `_aten.mm.out`. Any other overload of a matmul op
@@ -181,6 +187,47 @@ class OnArray(TorchDispatchMode):
             )
         return bias + self._matmul(left, right)
 
+    def _convolution(
+        self,
+        inputs: Tensor,
+        weight: Tensor,
+        bias: Tensor | None,
+        stride: list[int],
+        padding: list[int],
+        dilation: list[int],
+        transposed: bool,
+        output_padding: list[int],
+        groups: int,
+    ) -> Tensor:
+        # Each of these would need its own way of becoming a matmul.
+        if transposed:
+            raise NotImplementedError(
+                "transposed convolutions are not supported on the array"
+            )
+        if groups != 1:
+            raise NotImplementedError(
+                f"convolutions with groups={groups} are not supported on the "
+                "array, only groups=1"
+            )
+        if inputs.dim() != 4:
+            raise NotImplementedError(
+                "only 2D convolutions are supported on the array, got an input "
+                f"of shape {tuple(inputs.shape)}"
+            )
+
+        output = conv2d_as_matmul(
+            inputs,
+            weight,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            matmul=self._evaluate,
+        )
+        if bias is not None:
+            output = output + bias.view(1, -1, 1, 1)
+        # See `_on_array`.
+        return output.contiguous()
+
     def _matmul(self, left: Tensor, right: Tensor) -> Tensor:
         """`left @ right` on the array."""
         # Each row of `left` is one input, such as a token, and every input
@@ -193,19 +240,23 @@ class OnArray(TorchDispatchMode):
 
         Both operands have the same number of dimensions, 2 or 3.
         """
-        _check_inference_only()
-        _check_full_precision()
-
         # Torch multiplies row vectors: each row of `streamed` is one input,
         # and `stationary` maps it to a row of the output. The array
         # multiplies column vectors, with one input per column of the
         # activations. Transposing converts between the two, since
         # `(streamed @ stationary)^T = stationary^T @ streamed^T`.
-        matmul = ArrayMatmul(weights=stationary.mT, activations=streamed.mT)
-        output = self._evaluator.evaluate(matmul, self._fault).mT
+        output = self._evaluate(weights=stationary.mT, activations=streamed.mT).mT
         # The replaced ops return contiguous tensors, which callers rely on,
         # for example by calling `view` on them.
         return output.contiguous()
+
+    def _evaluate(self, weights: Tensor, activations: Tensor) -> Tensor:
+        """`weights @ activations` on the array, with `weights` stationary."""
+        _check_inference_only()
+        _check_full_precision()
+
+        matmul = ArrayMatmul(weights=weights, activations=activations)
+        return self._evaluator.evaluate(matmul, self._fault)
 
 
 def _check_inference_only() -> None:

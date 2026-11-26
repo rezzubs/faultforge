@@ -1,6 +1,7 @@
 """Tests for `OnArray`."""
 
 from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 import torch
@@ -208,6 +209,95 @@ def test_batch_matches_individual_matmuls(fault: Fault) -> None:
     )
 
 
+def _integer_conv2d(
+    in_channels: int, out_channels: int, kernel_size: int, **options: Any
+) -> nn.Conv2d:
+    conv2d = nn.Conv2d(in_channels, out_channels, kernel_size, **options)
+    with torch.no_grad():
+        conv2d.weight.copy_(_integers(*conv2d.weight.shape, seed=out_channels))
+        if conv2d.bias is not None:
+            conv2d.bias.copy_(_integers(out_channels, seed=in_channels))
+    return conv2d
+
+
+def _cnn() -> nn.Module:
+    """Uses `convolution` and `addmm`."""
+    return nn.Sequential(
+        _integer_conv2d(2, 3, 3, padding=1),
+        nn.ReLU(),
+        _integer_conv2d(3, 2, 2, stride=2, bias=False),
+        nn.Flatten(),
+        _integer_linear(18, 4, bias=True),
+    )
+
+
+def test_cnn_without_a_fault_matches_torch() -> None:
+    model = _cnn()
+    inputs = _integers(2, 2, 6, 6)
+
+    with torch.no_grad():
+        expected = model(inputs)
+        with OnArray(LiftedEvaluator(_ARRAY), None):
+            output = model(inputs)
+
+    assert torch.equal(output, expected)
+
+
+@settings(deadline=None, max_examples=50)
+@given(
+    in_channels=st.integers(min_value=1, max_value=3),
+    out_channels=st.integers(min_value=1, max_value=3),
+    kernel_size=st.integers(min_value=1, max_value=3),
+    stride=st.integers(min_value=1, max_value=2),
+    padding=st.integers(min_value=0, max_value=2),
+    dilation=st.integers(min_value=1, max_value=2),
+    batch_size=st.integers(min_value=1, max_value=3),
+    input_size=st.integers(min_value=5, max_value=8),
+)
+def test_convolution_without_a_fault_matches_torch(
+    in_channels: int,
+    out_channels: int,
+    kernel_size: int,
+    stride: int,
+    padding: int,
+    dilation: int,
+    batch_size: int,
+    input_size: int,
+) -> None:
+    conv2d = _integer_conv2d(
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+    )
+    inputs = _integers(batch_size, in_channels, input_size, input_size)
+
+    with torch.no_grad():
+        expected = conv2d(inputs)
+        with OnArray(LiftedEvaluator(_ARRAY), None):
+            output = conv2d(inputs)
+
+    assert torch.equal(output, expected)
+    assert output.is_contiguous()
+
+
+@settings(deadline=None)
+@given(fault=_FAULTS)
+def test_cnn_lifted_matches_simulated(fault: Fault) -> None:
+    model = _cnn()
+    inputs = _integers(2, 2, 6, 6)
+
+    with torch.no_grad():
+        with OnArray(LiftedEvaluator(_ARRAY), fault):
+            lifted = model(inputs)
+        with OnArray(SimulatedEvaluator(_ARRAY), fault):
+            simulated = model(inputs)
+
+    torch.testing.assert_close(lifted, simulated, rtol=1e-5, atol=1e-3, equal_nan=True)
+
+
 def test_bias_is_added_after_the_array() -> None:
     inputs = _integers(3, 5)
     weights = _integers(5, 4, seed=1)
@@ -233,6 +323,21 @@ def test_batched_bias_is_added_after_the_array() -> None:
     # The fault makes some of the values infinite or NaN.
     torch.testing.assert_close(
         with_bias, without_bias + bias, rtol=0, atol=0, equal_nan=True
+    )
+
+
+def test_convolution_bias_is_added_after_the_array() -> None:
+    inputs = _integers(2, 2, 5, 5)
+    weight = _integers(3, 2, 3, 3, seed=1)
+    bias = _integers(3, seed=2)
+
+    with torch.no_grad(), OnArray(LiftedEvaluator(_ARRAY), _WEIGHT_FAULT):
+        with_bias = F.conv2d(inputs, weight, bias)
+        without_bias = F.conv2d(inputs, weight)
+
+    # The fault makes some of the values infinite or NaN.
+    torch.testing.assert_close(
+        with_bias, without_bias + bias.view(1, -1, 1, 1), rtol=0, atol=0, equal_nan=True
     )
 
 
@@ -272,7 +377,10 @@ def test_rejects_a_fault_outside_the_array() -> None:
         lambda: F.scaled_dot_product_attention(
             torch.ones(1, 2, 3), torch.ones(1, 2, 3), torch.ones(1, 2, 3)
         ),
-        lambda: F.conv2d(torch.ones(1, 1, 3, 3), torch.ones(1, 1, 2, 2)),
+        lambda: F.conv2d(torch.ones(1, 2, 3, 3), torch.ones(2, 1, 2, 2), groups=2),
+        lambda: F.conv_transpose2d(torch.ones(1, 1, 3, 3), torch.ones(1, 1, 2, 2)),
+        lambda: F.conv1d(torch.ones(1, 1, 3), torch.ones(1, 1, 2)),
+        lambda: F.conv3d(torch.ones(1, 1, 3, 3, 3), torch.ones(1, 1, 2, 2, 2)),
     ],
     ids=[
         "mv",
@@ -282,7 +390,10 @@ def test_rejects_a_fault_outside_the_array() -> None:
         "scaled baddbmm",
         "bmm out",
         "attention",
-        "conv2d",
+        "grouped conv2d",
+        "conv_transpose2d",
+        "conv1d",
+        "conv3d",
     ],
 )
 def test_rejects_unsupported_matmuls(unsupported: Callable[[], Tensor]) -> None:
