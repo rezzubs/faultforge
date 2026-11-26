@@ -1,9 +1,9 @@
 """An experiment for measuring model reliability under systolic-array
 register faults.
 
-`SystolicFaultInjection` runs a model whose `nn.Linear`/`nn.Conv2d` layers
-are routed through a `SystolicBackend`, injects a stuck-at register fault
-into one processing element, and scores the result according to a
+`SystolicFaultInjection` runs the matrix multiplications of a model on a
+systolic array (see `OnArray`), injects a stuck-at register fault into one
+processing element, and scores the result according to a
 `faultforge.metric.Metric`.
 
 `SystolicBackend` is a weight-stationary systolic-array evaluation strategy
@@ -46,7 +46,7 @@ lazy from systolic.array import Array, ArrayMatmul
 lazy from systolic.backend import SystolicBackend
 lazy from systolic.evaluator import Evaluator
 lazy from systolic.experiment import (
-    BackendKind,
+    EvaluatorKind,
     RunResult,
     SavedResult,
     SystolicFaultInjection,
@@ -79,9 +79,9 @@ __all__ = [
     "Array",
     "ArrayConfig",
     "ArrayMatmul",
-    "BackendKind",
     "BackendModel",
     "Evaluator",
+    "EvaluatorKind",
     "Fault",
     "GapGrid",
     "Index2",

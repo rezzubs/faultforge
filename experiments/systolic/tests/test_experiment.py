@@ -2,15 +2,28 @@
 
 from typing import override
 
+import pytest
 import torch
-from systolic import PeRegisterKind, RegisterFaults, SystolicFaultInjection
+from systolic import (
+    EvaluatorKind,
+    Fault,
+    Index2,
+    PeRegisterKind,
+    RegisterFaults,
+    StuckAtKind,
+    SystolicFaultInjection,
+)
 from torch import nn
 from torch.utils.data import TensorDataset
 
 from faultforge import Fingerprint
 from faultforge.dataset import BatchedDataset, DeviceLike
 from faultforge.loading import ModelBundle
-from faultforge.metric import Accuracy
+from faultforge.metric import (
+    Accuracy,
+    Metric,
+    Sdc,
+)
 from faultforge.progress import Progress
 
 _IN_FEATURES = 4
@@ -63,13 +76,16 @@ class _FakeBundle(ModelBundle):
         return Fingerprint(kind="fake_bundle")
 
 
-def _make_experiment() -> SystolicFaultInjection:
+def _make_experiment(
+    metric: Metric | None = None, evaluator: EvaluatorKind = "lifted"
+) -> SystolicFaultInjection:
     # The smallest fault space that still has more than one fault.
     return SystolicFaultInjection(
         _FakeBundle(),
         (1, 1),
-        Accuracy(),
+        metric if metric is not None else Accuracy(),
         fault=RegisterFaults(registers=frozenset({PeRegisterKind.Weight})),
+        evaluator=evaluator,
         batch_size=4,
     )
 
@@ -116,3 +132,25 @@ def test_golden_score_is_saved_and_loaded() -> None:
     reloaded.deserialize(experiment.serialize())
     assert reloaded.golden_score() == golden_score
     assert not reloaded.has_unsaved_changes()
+
+
+@pytest.mark.parametrize("evaluator", ["lifted", "simulated"])
+def test_fault_free_array_matches_the_golden_model(evaluator: EvaluatorKind) -> None:
+    # The golden model runs on the same array. The simulated array sums in a
+    # different order than torch, so a golden model off the array would
+    # differ from it in the last bits.
+    experiment = _make_experiment(Sdc(), evaluator)
+    assert experiment._reliability_metric.score(experiment._infer(None)) == 0.0
+
+
+@pytest.mark.parametrize("evaluator", ["lifted", "simulated"])
+def test_fault_reaches_the_model(evaluator: EvaluatorKind) -> None:
+    experiment = _make_experiment(Sdc(), evaluator)
+    # A high bit of the exponent changes every product it's part of.
+    fault = Fault.Register(
+        target=Index2(x=0, y=0),
+        register=PeRegisterKind.Weight,
+        stuck_at=StuckAtKind.One,
+        bit_index=30,
+    )
+    assert experiment._reliability_metric.score(experiment._infer(fault)) > 0.0

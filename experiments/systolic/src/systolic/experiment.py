@@ -3,11 +3,10 @@
 See `systolic` for a general overview.
 """
 
-lazy import copy
 lazy import logging
 lazy from collections.abc import Sequence
 lazy from pathlib import Path
-lazy from typing import Literal, final, override
+lazy from typing import Any, Literal, final, override
 
 lazy import torch
 lazy from pydantic import BaseModel
@@ -27,15 +26,16 @@ lazy from faultforge.loading import ModelBundle
 lazy from faultforge.metric import GoldenCache, Metric
 lazy from faultforge.progress import Progress, stage
 lazy from systolic._rust import ArrayConfig, Fault
-lazy from systolic.backend import SystolicBackend
+lazy from systolic.array import Array
+lazy from systolic.evaluator import Evaluator
 lazy from systolic.fault import RegisterFaults
-lazy from systolic.lifted_backend import LiftedBackend
-lazy from systolic.model import BackendModel
-lazy from systolic.simulated_backend import SimulatedBackend
+lazy from systolic.lifted_evaluator import LiftedEvaluator
+lazy from systolic.on_array import OnArray
+lazy from systolic.simulated_evaluator import SimulatedEvaluator
 
 logger = logging.getLogger(__name__)
 
-BackendKind = Literal["simulated", "lifted"]
+EvaluatorKind = Literal["simulated", "lifted"]
 
 
 class RunResult(BaseModel):
@@ -98,9 +98,12 @@ class SystolicFaultInjection[R](Experiment):
 
     One fault is active per run (not several simultaneous faults, unlike
     `encoded_memory`'s `EncodedFaultInjection`): each run draws one fault id
-    from a `Picker` over `fault.radix(array)`, applies it via
-    `backend.set_fault`, and scores one inference pass over the dataset. How
-    many runs happen is controlled entirely by stop conditions.
+    from a `Picker` over `fault.radix(array)` and scores one inference pass
+    over the dataset with that fault in the array. How many runs happen is
+    controlled entirely by stop conditions.
+
+    Every matrix multiplication of the model runs on the array, see `OnArray`.
+    The golden model is the same model on a fault-free array.
     """
 
     def __init__(
@@ -110,7 +113,7 @@ class SystolicFaultInjection[R](Experiment):
         reliability_metric: Metric[R],
         *,
         fault: RegisterFaults | None = None,
-        backend: BackendKind = "lifted",
+        evaluator: EvaluatorKind = "lifted",
         preload_dataset: bool = True,
         dataset_batch_limit: int | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
@@ -135,16 +138,14 @@ class SystolicFaultInjection[R](Experiment):
             raise ValueError(
                 f"SystolicFaultInjection only supports float32, got {dtype}"
             )
-        self._golden_model = copy.deepcopy(model)
+        self._model = model
 
-        backend_instance: SystolicBackend
-        match backend:
+        self._evaluator: Evaluator
+        match evaluator:
             case "simulated":
-                backend_instance = SimulatedBackend(nrows, ncols)
+                self._evaluator = SimulatedEvaluator(Array(nrows, ncols))
             case "lifted":
-                backend_instance = LiftedBackend(nrows, ncols)
-        self._backend = backend_instance
-        self._model = BackendModel(model, self._backend, progress=progress)
+                self._evaluator = LiftedEvaluator(Array(nrows, ncols))
 
         dataset = bundle.load_dataset(batch_size, device, progress=progress)
         if dataset_batch_limit is not None and not preload_dataset:
@@ -157,7 +158,7 @@ class SystolicFaultInjection[R](Experiment):
 
         self._golden_cache: GoldenCache = GoldenCache(
             metric=reliability_metric,
-            golden_model=self._golden_model,
+            golden_model=_FaultFree(model, self._evaluator),
             dataset=dataset,
             progress=progress,
         )
@@ -165,7 +166,7 @@ class SystolicFaultInjection[R](Experiment):
         fingerprint = Fingerprint(
             kind="systolic_fault_injection",
             scalars={
-                "backend": backend,
+                "evaluator": evaluator,
                 "array_nrows": nrows,
                 "array_ncols": ncols,
                 "registers": self._fault_config.fingerprint_scalar(),
@@ -236,9 +237,7 @@ class SystolicFaultInjection[R](Experiment):
         """
         if self._golden_score is None:
             with stage(self._progress, "Golden score"):
-                self._golden_score = self._reliability_metric.score(
-                    self._infer(self._golden_model)
-                )
+                self._golden_score = self._reliability_metric.score(self._infer(None))
             self._golden_score_unsaved = True
         return self._golden_score
 
@@ -259,8 +258,11 @@ class SystolicFaultInjection[R](Experiment):
             ) from None
         return fault_id, self._fault_config.fault_from_id(fault_id, self._array)
 
-    def _infer(self, model: nn.Module) -> R:
-        """Run inference on `model` over the dataset, scored by `self._reliability_metric`."""
+    def _infer(self, fault: Fault | None) -> R:
+        """Run inference over the dataset with `fault` in the array.
+
+        Scored by `self._reliability_metric`.
+        """
         result = None
 
         with (
@@ -270,7 +272,11 @@ class SystolicFaultInjection[R](Experiment):
             torch.no_grad(),
         ):
             for golden, data_batch in self._golden_cache:
-                logits = model.forward(data_batch.inputs)
+                # Only around the model: the golden cache computes the golden
+                # output of a batch while iterating, which needs the
+                # fault-free array.
+                with OnArray(self._evaluator, fault):
+                    logits = self._model.forward(data_batch.inputs)
 
                 result = self._reliability_metric.evaluate_and_accumulate(
                     logits,
@@ -289,9 +295,22 @@ class SystolicFaultInjection[R](Experiment):
     @override
     def run(self) -> None:
         fault_id, fault = self._draw_fault()
-        self._backend.set_fault(fault)
-
-        result = self._infer(self._model)
+        result = self._infer(fault)
         self._runs.append(
             RunResult(fault_id=fault_id, score=self._reliability_metric.score(result))
         )
+
+
+@final
+class _FaultFree(nn.Module):
+    """`model` on a fault-free array."""
+
+    def __init__(self, model: nn.Module, evaluator: Evaluator) -> None:
+        super().__init__()
+        self.model = model
+        self.evaluator = evaluator
+
+    @override
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
+        with OnArray(self.evaluator, None):
+            return self.model(*args, **kwargs)

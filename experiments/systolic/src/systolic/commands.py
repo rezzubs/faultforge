@@ -83,7 +83,7 @@ class MetricChoice(enum.StrEnum):
                 return m.Top1Sdc()
 
 
-class BackendChoice(enum.StrEnum):
+class EvaluatorChoice(enum.StrEnum):
     Simulated = "simulated"
     Lifted = "lifted"
 
@@ -377,13 +377,13 @@ def record(
             rich_help_panel="Model Setup",
         ),
     ] = None,
-    backend: Annotated[
-        BackendChoice,
+    evaluator: Annotated[
+        EvaluatorChoice,
         typer.Option(
             help="simulated is the cycle-accurate oracle; lifted is the fast torch-side workhorse.",
             rich_help_panel="Systolic Array",
         ),
-    ] = BackendChoice.Lifted,
+    ] = EvaluatorChoice.Lifted,
     registers: Annotated[
         list[RegisterChoice] | None,
         typer.Option(
@@ -475,7 +475,7 @@ def record(
         (array_rows, array_cols),
         metric,
         fault=fault,
-        backend=backend.value,
+        evaluator=evaluator.value,
         preload_dataset=preload_batches,
         dataset_batch_limit=batch_limit,
         batch_size=batch_size,
