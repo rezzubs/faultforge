@@ -73,6 +73,16 @@ def test_stack_matches_individual_matmuls(matmul: ArrayMatmul, fault: Fault) -> 
     )
 
 
+@given(matmul=_stacked_matmuls(), fault=st.none() | _FAULTS)
+def test_result_is_contiguous_in_torch_layout(
+    matmul: ArrayMatmul, fault: Fault | None
+) -> None:
+    output = LiftedEvaluator(_ARRAY).evaluate(matmul, fault)
+
+    # So `OnArray` doesn't have to copy it.
+    assert output.mT.is_contiguous()
+
+
 @given(matmul=_stacked_matmuls(), fault=_FAULTS)
 def test_operands_are_unchanged(matmul: ArrayMatmul, fault: Fault) -> None:
     weights = matmul.weights.clone()

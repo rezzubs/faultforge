@@ -248,6 +248,8 @@ class OnArray(TorchDispatchMode):
         output = self._evaluate(weights=stationary.mT, activations=streamed.mT).mT
         # The replaced ops return contiguous tensors, which callers rely on,
         # for example by calling `view` on them.
+        # It's free for an evaluator that computes in torch's layout, see
+        # `matmul_in_torch_layout`.
         return output.contiguous()
 
     def _evaluate(self, weights: Tensor, activations: Tensor) -> Tensor:

@@ -24,8 +24,8 @@ class Evaluator(abc.ABC):
         """Compute `matmul` on the array with `fault` present.
 
         `None` means a fault-free array. Returns
-        `([stack,] out_features, batch)` on the same device as the operands.
-        The operands are left unchanged.
+        `([stack,] out_features, batch)` on the same device as the operands,
+        in any memory layout. The operands are left unchanged.
 
         Raises:
             TypeError: If the kind of `fault` isn't supported.

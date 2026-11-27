@@ -7,7 +7,10 @@ lazy from torch import Tensor
 lazy from systolic._rust import Fault
 lazy from systolic.array import ArrayMatmul
 lazy from systolic.evaluator import Evaluator
-lazy from systolic.lift_apply import apply_lifted_register_fault
+lazy from systolic.lift_apply import (
+    apply_lifted_register_fault,
+    matmul_in_torch_layout,
+)
 
 
 @final
@@ -20,7 +23,7 @@ class LiftedEvaluator(Evaluator):
     @override
     def evaluate(self, matmul: ArrayMatmul, fault: Fault | None) -> Tensor:
         if fault is None:
-            return matmul.weights @ matmul.activations
+            return matmul_in_torch_layout(matmul.weights, matmul.activations)
 
         return apply_lifted_register_fault(
             self.array.lift(matmul, fault), fault, matmul.weights, matmul.activations

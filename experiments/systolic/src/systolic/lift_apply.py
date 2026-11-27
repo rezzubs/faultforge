@@ -35,6 +35,18 @@ def _corrupt(tensor: Tensor, stuck_at: StuckAtKind, bit_index: int) -> Tensor:
     return corrupted.view(tensor.dtype)
 
 
+def matmul_in_torch_layout(weights: Tensor, activations: Tensor) -> Tensor:
+    """`weights @ activations`, stored so that its transpose is contiguous.
+
+    So the result in torch's `([stack,] batch, out_features)` layout is
+    contiguous without a copy.
+    """
+    # `(weights @ activations)^T = activations^T @ weights^T`. The operands
+    # are usually transposed views of contiguous tensors, so this matmul runs
+    # on them without copying.
+    return (activations.mT @ weights.mT).mT
+
+
 class _LiftPart(Protocol):
     """A part of a weight or accumulator lift."""
 
@@ -101,7 +113,7 @@ def _weight_fault_matmul(
         weights[..., rows, columns] = _corrupt(
             weights[..., rows, columns], fault.stuck_at, fault.bit_index
         )
-    return weights @ activations
+    return matmul_in_torch_layout(weights, activations)
 
 
 def _activation_fault_matmul(
@@ -110,14 +122,14 @@ def _activation_fault_matmul(
     fault: Fault.Register,
     lifted: LiftedFault.Activation,
 ) -> Tensor:
-    output = weights @ activations
+    output = matmul_in_torch_layout(weights, activations)
 
     activations_faulty = activations.clone()
     activation_rows = _index(lifted.affected_activation_rows, activations)
     activations_faulty[..., activation_rows, :] = _corrupt(
         activations_faulty[..., activation_rows, :], fault.stuck_at, fault.bit_index
     )
-    output_faulty = weights @ activations_faulty
+    output_faulty = matmul_in_torch_layout(weights, activations_faulty)
 
     output_rows = _index(lifted.affected_output_rows, output)
     output[..., output_rows, :] = output_faulty[..., output_rows, :]
@@ -131,10 +143,20 @@ def _accumulator_fault_matmul(
     fault: Fault.Register,
     lifted: LiftedFault.Accumulator,
 ) -> Tensor:
-    output = weights @ activations
+    output = matmul_in_torch_layout(weights, activations)
+    groups = _group_rows(lifted.parts)
 
-    for group in _group_rows(lifted.parts):
+    # A row of `output` is strided in torch's layout, and the groups update
+    # rows many times over. So the groups update a contiguous copy of the
+    # affected rows, which is written back once at the end.
+    affected_rows = sorted({row for group in groups for row in group.output_rows})
+    position_of_row = {row: position for position, row in enumerate(affected_rows)}
+    affected_index = _index(affected_rows, output)
+    affected = output[..., affected_index, :].contiguous()
+
+    for group in groups:
         rows = _index(group.output_rows, output)
+        positions = _index((position_of_row[row] for row in group.output_rows), output)
         start, end = group.activation_start, group.activation_end
 
         # An empty range means no products had reached the faulty PE yet
@@ -142,15 +164,18 @@ def _accumulator_fault_matmul(
         # "faulty zero" rather than a separate case. See
         # `docs/fault-lifting.md`'s accumulator section.
         if start == end:
-            partial_sums = torch.zeros_like(output[..., rows, :])
+            partial_sums = torch.zeros_like(affected[..., positions, :])
         else:
             partial_sum_weights = weights[..., rows, start:end]
             partial_sum_activations = activations[..., start:end, :]
             partial_sums = partial_sum_weights @ partial_sum_activations
 
         corrupted = _corrupt(partial_sums, fault.stuck_at, fault.bit_index)
-        output[..., rows, :] = output[..., rows, :] - partial_sums + corrupted
+        affected[..., positions, :] = (
+            affected[..., positions, :] - partial_sums + corrupted
+        )
 
+    output[..., affected_index, :] = affected
     return output
 
 
