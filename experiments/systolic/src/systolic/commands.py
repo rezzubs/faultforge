@@ -28,12 +28,15 @@ lazy from faultforge.experiment import (
 lazy from faultforge.fingerprint import FingerprintError
 lazy from faultforge.io import is_compressed
 lazy from faultforge.loading import (
+    AttentionImplementation,
     Cifar,
     CifarDataset,
     CifarModel,
     ImageNet,
     ImageNetModel,
     ModelBundle,
+    WikiTextBundle,
+    resolve_huggingface_revision,
 )
 lazy from faultforge.metric import Metric
 lazy from faultforge.progress import Progress
@@ -64,6 +67,7 @@ class DatasetChoice(enum.StrEnum):
     Cifar10 = "cifar10"
     Cifar100 = "cifar100"
     ImageNet = "imagenet"
+    WikiText = "wikitext"
 
 
 class MetricChoice(enum.StrEnum):
@@ -71,6 +75,7 @@ class MetricChoice(enum.StrEnum):
     AccuracyDegradation = "accuracy-degradation"
     Sdc = "sdc"
     Top1Sdc = "top1-sdc"
+    Perplexity = "perplexity"
 
     def into_metric(self) -> Metric:
         match self:
@@ -82,6 +87,31 @@ class MetricChoice(enum.StrEnum):
                 return m.Sdc()
             case MetricChoice.Top1Sdc:
                 return m.Top1Sdc()
+            case MetricChoice.Perplexity:
+                return m.Perplexity()
+
+
+def _resolve_metric(
+    dataset: DatasetChoice, metric: MetricChoice | None
+) -> MetricChoice:
+    """Pick the dataset's default metric if none was given and reject unfitting pairs.
+
+    Perplexity needs a language model's per-token logits and next-token
+    targets. The other metrics compare top-1 predictions or whole outputs
+    against class labels. On WikiText they would count padding and window
+    overlap as wrong predictions.
+    """
+    is_language_dataset = dataset == DatasetChoice.WikiText
+    if metric is None:
+        return MetricChoice.Perplexity if is_language_dataset else MetricChoice.Accuracy
+
+    is_language_metric = metric == MetricChoice.Perplexity
+    if is_language_dataset != is_language_metric:
+        raise typer.BadParameter(
+            f"metric {metric.value} doesn't apply to dataset {dataset.value}",
+            param_hint="--reliability-metric",
+        )
+    return metric
 
 
 class EvaluatorChoice(enum.StrEnum):
@@ -263,10 +293,24 @@ def _init_model_bundle(
     dataset: DatasetChoice,
     model: str | None,
     imagenet_root: str | None,
+    model_revision: str | None = None,
+    sequence_length: int | None = None,
+    stride: int | None = None,
 ) -> ModelBundle:
     """Build the `ModelBundle` for the given CLI choices."""
     if model is None:
         raise typer.BadParameter("A --model must be specified.", param_hint="--model")
+
+    if dataset != DatasetChoice.WikiText:
+        for value, option in [
+            (model_revision, "--model-revision"),
+            (sequence_length, "--sequence-length"),
+            (stride, "--stride"),
+        ]:
+            if value is not None:
+                raise typer.BadParameter(
+                    f"{option} only applies to --dataset wikitext", param_hint=option
+                )
 
     bundle: ModelBundle
     match dataset:
@@ -295,6 +339,30 @@ def _init_model_bundle(
                     param_hint="--model",
                 ) from error
             bundle = ImageNet(kind=imagenet_model, root=imagenet_root)
+        case DatasetChoice.WikiText:
+            if sequence_length is None:
+                raise typer.BadParameter(
+                    "--sequence-length is required when --dataset wikitext.",
+                    param_hint="--sequence-length",
+                )
+            requested_revision = model_revision or "main"
+            try:
+                revision = resolve_huggingface_revision(model, requested_revision)
+                if revision != requested_revision:
+                    logger.info(
+                        f"Resolved revision {requested_revision} of {model} to {revision}"
+                    )
+                bundle = WikiTextBundle(
+                    model_id=model,
+                    revision=revision,
+                    sequence_length=sequence_length,
+                    stride=stride,
+                    # The fused attention of the other implementations can't
+                    # run on the array.
+                    attention=AttentionImplementation.Eager,
+                )
+            except ValueError as error:
+                raise typer.BadParameter(str(error)) from error
 
     return bundle
 
@@ -311,6 +379,11 @@ def list_models(
             models = [model.value for model in CifarModel]
         case DatasetChoice.ImageNet:
             models = [model.value for model in ImageNetModel]
+        case DatasetChoice.WikiText:
+            typer.echo(
+                "Any causal language model on the HuggingFace Hub, e.g. openai-community/gpt2"
+            )
+            return
 
     for model in models:
         typer.echo(model)
@@ -364,6 +437,33 @@ def record(
             rich_help_panel="Model Setup",
         ),
     ] = None,
+    model_revision: Annotated[
+        str | None,
+        typer.Option(
+            help="A branch, tag or commit hash of the model on the HuggingFace Hub. "
+            "Resolved to a commit hash, which is what gets recorded. "
+            "Defaults to main. Only for --dataset wikitext.",
+            rich_help_panel="Model Setup",
+        ),
+    ] = None,
+    sequence_length: Annotated[
+        int | None,
+        typer.Option(
+            help="The number of tokens per evaluation window. Shouldn't exceed the "
+            "model's maximum context length. Memory use grows with it. "
+            "Required for --dataset wikitext.",
+            rich_help_panel="Model Setup",
+        ),
+    ] = None,
+    stride: Annotated[
+        int | None,
+        typer.Option(
+            help="How many tokens each evaluation window moves forward. Must be "
+            "smaller than --sequence-length. Defaults to half of it. "
+            "Only for --dataset wikitext.",
+            rich_help_panel="Model Setup",
+        ),
+    ] = None,
     preload_batches: Annotated[
         bool,
         typer.Option(
@@ -394,12 +494,13 @@ def record(
         ),
     ] = None,
     reliability_metric: Annotated[
-        MetricChoice,
+        MetricChoice | None,
         typer.Option(
-            help="Which metric to use for reliability measurements",
+            help="Which metric to use for reliability measurements. Defaults to "
+            "perplexity for wikitext and accuracy for the other datasets.",
             rich_help_panel="Reliability",
         ),
-    ] = MetricChoice.Accuracy,
+    ] = None,
     output: Annotated[
         Path | None,
         typer.Option(
@@ -451,7 +552,7 @@ def record(
     ] = "cpu",
 ) -> None:
     """Run a systolic register-fault injection experiment and record the results."""
-    metric = reliability_metric.into_metric()
+    metric = _resolve_metric(dataset, reliability_metric).into_metric()
     stability_limits = _resolve_stability_limits(
         estimate=estimate,
         relative_failure_threshold=relative_failure_threshold,
@@ -461,7 +562,9 @@ def record(
         min_runs=min_runs,
     )
 
-    bundle = _init_model_bundle(dataset, model, imagenet_root)
+    bundle = _init_model_bundle(
+        dataset, model, imagenet_root, model_revision, sequence_length, stride
+    )
     fault = _resolve_registers(registers)
 
     if stability_limits is not None and runs is not None:
@@ -690,6 +793,10 @@ def profile(
     ] = "cpu",
 ) -> None:
     """Profile a model's per-PE logic inputs over a dataset and save the artifact."""
+    if dataset == DatasetChoice.WikiText:
+        raise typer.BadParameter(
+            "profile doesn't support --dataset wikitext", param_hint="--dataset"
+        )
     bundle = _init_model_bundle(dataset, model, imagenet_root)
 
     artifact, metadata = run_profiling(
