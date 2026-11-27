@@ -8,6 +8,7 @@ and is cheap enough to run per fault/shape, unlike a full model-level
 campaign comparison.
 """
 
+lazy import math
 lazy from collections import defaultdict
 lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass
@@ -56,12 +57,20 @@ def _compare(baseline: Evaluation, other: Evaluation) -> Agreement:
         baseline.output.isnan() & other.output.isnan()
     )
     diff = diff.masked_fill(both_nan, 0.0)
+    # A NaN on only one side is a divergence too. Left as NaN it would get
+    # lost in `summarize`, where Python's `max` may skip a NaN depending on
+    # where it is in the list. So count it as infinitely far.
+    diff = diff.masked_fill(diff.isnan(), math.inf)
 
     # `diff` is already zeroed at `both_nan` elements, but dividing by
     # `baseline.output`'s magnitude there can still be 0/inf or 0/NaN (NaN in
     # either case) - mask the ratio too rather than just the diff.
     denominator = baseline.output.abs().clamp_min(1e-30)
     relative_error = (diff / denominator).masked_fill(both_nan, 0.0)
+    # An infinite `diff` over an infinite baseline is `inf / inf`, which is
+    # NaN. That happens when one side overflows and the other doesn't.
+    relative_error = relative_error.masked_fill(diff.isinf(), math.inf)
+    assert not relative_error.isnan().any(), "the cases above cover every NaN"
 
     # The output is `([stack,] out_features, batch)`.
     baseline_top1 = baseline.output.argmax(dim=-2)

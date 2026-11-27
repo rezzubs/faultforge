@@ -86,6 +86,46 @@ def test_compare_still_reports_real_divergence_at_infinity() -> None:
     agreement = _compare(baseline, other)
 
     assert math.isinf(agreement.max_abs_error)
+    assert math.isinf(agreement.max_relative_error)
+
+
+def test_compare_reports_overflow_on_one_side_as_infinitely_far() -> None:
+    baseline = Evaluation(
+        name="simulated", output=torch.tensor([[1.0], [float("-inf")]])
+    )
+    other = Evaluation(name="lifted", output=torch.tensor([[1.0], [3e37]]))
+
+    agreement = _compare(baseline, other)
+
+    assert agreement.max_abs_error == math.inf
+    assert agreement.max_relative_error == math.inf
+
+
+def test_compare_reports_nan_on_one_side_as_infinitely_far() -> None:
+    baseline = Evaluation(name="simulated", output=torch.tensor([[1.0], [2.0]]))
+    other = Evaluation(name="lifted", output=torch.tensor([[1.0], [float("nan")]]))
+
+    agreement = _compare(baseline, other)
+
+    assert agreement.max_abs_error == math.inf
+    assert agreement.max_relative_error == math.inf
+
+
+def test_summarize_keeps_a_divergence_at_infinity() -> None:
+    # The divergence comes after an agreeing sample. Python's `max` skips a
+    # NaN in that position.
+    baseline = Evaluation(
+        name="simulated", output=torch.tensor([[1.0], [float("-inf")]])
+    )
+    diverged = Evaluation(name="lifted", output=torch.tensor([[1.0], [3e37]]))
+    agreed = Evaluation(name="lifted", output=torch.tensor([[1.0], [float("-inf")]]))
+
+    [summary] = summarize(
+        [[_compare(baseline, agreed)], [_compare(baseline, diverged)]]
+    )
+
+    assert summary.max_max_abs_error == math.inf
+    assert summary.max_max_relative_error == math.inf
 
 
 def test_compare_matmul_agrees_without_a_fault_on_a_stack() -> None:
