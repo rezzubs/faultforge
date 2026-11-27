@@ -1,5 +1,6 @@
 """Tests for `SystolicFaultInjection`'s bookkeeping (results, resuming, golden score)."""
 
+import math
 from typing import override
 
 import pytest
@@ -12,6 +13,10 @@ from systolic import (
     RegisterFaults,
     StuckAtKind,
     SystolicFaultInjection,
+)
+from systolic.experiment import (
+    RunResult,
+    SavedResult,
 )
 from torch import nn
 from torch.utils.data import TensorDataset
@@ -101,6 +106,27 @@ def test_serialize_deserialize_round_trip() -> None:
 
     assert reloaded.serialize() == serialized
     assert reloaded.scores() == experiment.scores()
+
+
+def test_non_finite_scores_round_trip() -> None:
+    saved = SavedResult(
+        fingerprint=Fingerprint(kind="fake"),
+        runs=[
+            RunResult(fault_id=0, score=math.inf),
+            RunResult(fault_id=1, score=math.nan),
+            RunResult(fault_id=2, score=-math.inf),
+        ],
+        metric_display_name="",
+        golden_score=math.inf,
+    )
+
+    reloaded = SavedResult.model_validate_json(saved.model_dump_json())
+
+    infinity, not_a_number, negative_infinity = reloaded.scores()
+    assert infinity == math.inf
+    assert math.isnan(not_a_number)
+    assert negative_infinity == -math.inf
+    assert reloaded.golden_score == math.inf
 
 
 def test_resumed_experiment_draws_each_fault_once() -> None:

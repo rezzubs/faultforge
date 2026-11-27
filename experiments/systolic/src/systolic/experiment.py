@@ -9,7 +9,7 @@ lazy from pathlib import Path
 lazy from typing import Any, Literal, final, override
 
 lazy import torch
-lazy from pydantic import BaseModel
+lazy from pydantic import BaseModel, ConfigDict
 lazy from torch import nn
 
 lazy from faultforge import Fingerprint, Picker, tensor_list_dtype
@@ -38,7 +38,19 @@ logger = logging.getLogger(__name__)
 EvaluatorKind = Literal["simulated", "lifted"]
 
 
-class RunResult(BaseModel):
+class _ResultModel(BaseModel):
+    """Base for models that hold scores."""
+
+    # A faulty model can score NaN or ±inf. The default writes them as `null`,
+    # which can't be loaded back. Strings keep the file valid JSON.
+    #
+    # Whether the setting applies depends on how models are nested. Through a
+    # union only the outermost model's setting counts, otherwise the innermost
+    # one's. Every model in the result file needs it to be safe.
+    model_config = ConfigDict(ser_json_inf_nan="strings")
+
+
+class RunResult(_ResultModel):
     """A single run's drawn fault and score."""
 
     fault_id: int
@@ -47,7 +59,7 @@ class RunResult(BaseModel):
     """The `score` as determined by the `Metric`."""
 
 
-class SavedResult(BaseModel):
+class SavedResult(_ResultModel):
     """The on-disk shape of a `SystolicFaultInjection`'s results.
 
     Standalone-loadable: everything needed to inspect the scores and resume
@@ -64,7 +76,8 @@ class SavedResult(BaseModel):
     """The metric's score for the fault-free golden model.
 
     Only computed when an estimator needs it (see
-    `SystolicFaultInjection.golden_score`), so it's `None` otherwise.
+    `SystolicFaultInjection.golden_score`), so it's `None` otherwise. Can be
+    non-finite, e.g. if the golden model's perplexity overflows.
     """
 
     @classmethod
